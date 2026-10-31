@@ -1,6 +1,9 @@
 # your own settings, themes and log (when running from a checkout)
 /config.json
 /themes/
+/quick.json
+/devices.json
+/twitch.bin
 *.log
 *.tmp
 

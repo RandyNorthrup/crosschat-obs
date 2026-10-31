@@ -2,123 +2,24 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0d141c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="CrossChat">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- the hub finds this window again by its title: keep it "CrossChat · chat" -->
 <title>CrossChat · chat</title>
 <link rel="icon" href="/web/crosschat.ico">
-<style>
-  /* The CrossChat window. Served by hub.py; it fills itself from /events. Dark, light, or whatever Windows uses.
-     Windows' own fonts: Segoe UI Variable for text, Cascadia Mono for labels and numbers. */
-  :root { --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; --display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
-          --mono: "Cascadia Mono", "Cascadia Code", Consolas, monospace; }
-  :root { --bg: #0d141c; --panel: #131d28; --line: #24384a; --accent: #b87045; --accent-hi: #e3a57b; --text: #f0e8dc; --strong: #fffdf9;
-          --muted: #8696a5; --head: linear-gradient(170deg, #1b2a39, #101922); --foot: #101922; --hint: #5d6e7e; --pill-off: #3a4a59;
-          --warn: #e8a34a; --retry: #d9a13b; --live: #c93a2b; --tag-ink: #0d141c; --flash: rgba(184,112,69,.22);
-          --twitch: #a970ff; --youtube: #ff5a4f; --kick: #53fc18; --x: #e7e9ea; --facebook: #5aa7ff; }
-  :root[data-theme="light"] { --bg: #f6f1e9; --panel: #ffffff; --line: #e1d6c6; --accent: #a35d33; --accent-hi: #8f4f2d; --text: #1d2733; --strong: #0d141c;
-          --muted: #66727f; --head: linear-gradient(170deg, #fffaf3, #f1e8db); --foot: #fbf7f1; --hint: #8a95a1; --pill-off: #c9c2b8;
-          --warn: #a8570b; --retry: #b7791f; --live: #c62f1f; --tag-ink: #ffffff; --flash: rgba(163,93,51,.16);
-          --twitch: #7a3fe0; --youtube: #d93025; --kick: #1f8f0a; --x: #1d2733; --facebook: #1668d8; }
-  @media (prefers-color-scheme: light) {
-    :root:not([data-theme]) { --bg: #f6f1e9; --panel: #ffffff; --line: #e1d6c6; --accent: #a35d33; --accent-hi: #8f4f2d; --text: #1d2733; --strong: #0d141c;
-          --muted: #66727f; --head: linear-gradient(170deg, #fffaf3, #f1e8db); --foot: #fbf7f1; --hint: #8a95a1; --pill-off: #c9c2b8;
-          --warn: #a8570b; --retry: #b7791f; --live: #c62f1f; --tag-ink: #ffffff; --flash: rgba(163,93,51,.16);
-          --twitch: #7a3fe0; --youtube: #d93025; --kick: #1f8f0a; --x: #1d2733; --facebook: #1668d8; }
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); overflow: hidden; }
-  body { display: flex; flex-direction: column; }
-  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-  header { padding: 14px 18px 12px; border-bottom: 1px solid var(--line); background: var(--head); }
-  .top { display: flex; align-items: center; gap: 12px; }
-  h1 { margin: 0; font: 800 22px var(--display); letter-spacing: .08em; color: var(--accent-hi); }
-  #live { font: 400 12px var(--mono); letter-spacing: .12em; padding: 3px 9px; border-radius: 9px; background: var(--line); color: var(--muted); }
-  #live.on { background: var(--live); color: #fff; }
-  #theme { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer;
-           font: 400 15px "Segoe UI Symbol", sans-serif; display: grid; place-items: center; padding: 0; }
-  #theme:hover { border-color: var(--accent); color: var(--accent-hi); }
-  #total { margin-left: auto; font: 800 34px var(--display); line-height: 1; color: var(--strong); }
-  #total small { font: 400 12px var(--mono); letter-spacing: .1em; color: var(--muted); margin-left: 8px; }
-  #platforms { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
-  .pill { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line);
-          font: 400 13px var(--mono); color: var(--muted); user-select: none; }
-  .pill i, .to i { width: 9px; height: 9px; border-radius: 50%; background: var(--pill-off); }
-  .pill.on i, .to:enabled i { background: var(--c); box-shadow: 0 0 8px var(--c); }
-  .pill.retry i { background: var(--retry); }
-  .pill b { font: 800 17px var(--display); color: var(--text); min-width: 14px; text-align: right; }
-  .pill span { color: var(--c); letter-spacing: .06em; }
-
-  #list { flex: 1; overflow-y: auto; padding: 10px 14px 18px; scroll-behavior: smooth; }
-  #list::-webkit-scrollbar { width: 8px; } #list::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
-  .m { position: relative; display: flex; gap: 10px; padding: 7px 8px; border-radius: 8px; font-size: 16.5px; line-height: 1.42; animation: in .25s ease-out; }
-  .m:hover, .m.picked { background: var(--panel); }
-  .m.picked { box-shadow: inset 3px 0 0 var(--accent); }
-  @keyframes in { from { opacity: 0; transform: translateY(6px); background: var(--flash); } to { opacity: 1; transform: none; } }
-  .tags { flex: none; display: flex; gap: 4px; }
-  .tag { flex: none; width: 26px; height: 22px; margin-top: 1px; border-radius: 5px; display: grid; place-items: center;
-         font: 800 11px var(--display); color: var(--tag-ink); background: var(--c); }
-  .body { min-width: 0; overflow-wrap: anywhere; }
-  .name { font-weight: 700; margin-right: 7px; }
-  .emote { height: 24px; vertical-align: middle; }
-  .badge { font: 400 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--accent-hi);
-           border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; margin-right: 6px; position: relative; top: -1px; }
-  .time { color: var(--muted); font: 400 11px var(--mono); margin-left: 8px; white-space: nowrap; }
-  .acts { display: none; position: absolute; right: 8px; top: 5px; gap: 6px; }
-  .m:hover .acts, .acts:focus-within { display: flex; }
-  .acts button { padding: 3px 10px; border-radius: 7px; border: 1px solid var(--accent); background: var(--foot);
-        color: var(--accent-hi); font: 400 12px var(--mono); cursor: pointer; }
-  .acts button:hover { background: var(--accent); color: #fff; }
-  .m.featured { box-shadow: inset 3px 0 0 var(--live); }
-  #featured { display: none; align-items: center; gap: 10px; padding: 8px 18px; border-bottom: 1px solid var(--line); background: var(--panel);
-              font: 400 12.5px var(--mono); color: var(--muted); }
-  #featured.on { display: flex; }
-  #featured b { color: var(--live); letter-spacing: .1em; font-weight: 400; flex: none; }
-  #featured span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
-  #featured button, #studio { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 3px 10px; cursor: pointer; }
-  #featured button:hover, #studio:hover { border-color: var(--accent); }
-  #studio { width: 30px; height: 30px; padding: 0; display: grid; place-items: center; color: var(--muted); }
-  .m.event .body { color: var(--accent-hi); }
-  .system { font-weight: 600; }
-  .m.note { justify-content: center; text-align: center; color: var(--muted); font: 400 12.5px var(--mono); letter-spacing: .04em; animation: none; }
-  .m.note.bad { color: var(--warn); }
-  .m.gone .body { text-decoration: line-through; opacity: .45; }
-  #empty { margin: auto; text-align: center; color: var(--muted); font: 400 13.5px var(--mono); line-height: 1.9; padding: 0 40px; }
-
-  footer { position: relative; padding: 10px 14px 12px; border-top: 1px solid var(--line); background: var(--foot); font: 400 12px var(--mono); color: var(--muted); }
-  #replying { display: none; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--accent-hi); letter-spacing: .03em; }
-  #replying.on { display: flex; }
-  #replying span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .entry { position: relative; }
-  #say { width: 100%; font: 400 16px var(--sans); color: var(--text); background: var(--panel); border: 1px solid var(--line);
-         border-radius: 10px; padding: 11px 13px; outline: none; }
-  #say:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--flash); }
-  #say::placeholder { color: var(--hint); }
-  #left { display: block; min-height: 15px; margin-top: 5px; text-align: right; }
-  #left.over { color: var(--warn); }
-  .row { display: flex; align-items: center; gap: 8px; margin-top: 2px; flex-wrap: wrap; }
-  footer button { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 11px; cursor: pointer; }
-  footer button:hover:enabled { border-color: var(--accent); }
-  footer button:disabled { opacity: .42; cursor: default; }
-  #all { background: var(--accent); border-color: var(--accent); color: #fff; font-family: var(--sans); font-weight: 700; font-size: 13px; padding: 7px 16px; }
-  #all:hover:enabled { filter: brightness(1.1); }
-  .to { display: inline-flex; align-items: center; gap: 7px; }
-  #only { margin-left: 6px; }
-  #ding { margin-left: auto; }
-  #cancel { padding: 2px 8px; }
-  #jump { display: none; position: absolute; left: 50%; top: -46px; transform: translateX(-50%); padding: 8px 16px; border-radius: 18px; border: 0;
-          background: var(--accent); color: #fff; font: 700 13px var(--sans); cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
-  #lost { display: none; color: var(--retry); }
-  #readonly { display: none; line-height: 1.6; }
-  footer.readonly #readonly { display: block; }
-  footer.readonly .entry, footer.readonly .row { display: none; }
-  /* YouTube's own chat, signed in and out of sight: the CrossChat extension types replies into it */
-  #yt { position: absolute; left: -3000px; top: 0; width: 420px; height: 600px; border: 0; }
-</style>
+<link rel="apple-touch-icon" href="/web/icon-192.png">
+<link rel="manifest" href="/web/manifest.webmanifest">
+<link rel="stylesheet" href="/web/app.css">
 <script>
-  // Before anything shows: the theme picked last time ("auto" follows Windows), or ?theme=light|dark.
+  // Before anything shows: the theme picked last time ("auto" follows the device), or ?theme=light|dark.
   (() => {
     let theme = (/[?&]theme=(light|dark)/.exec(location.search) || [])[1];
-    try { theme = theme || localStorage.getItem('theme'); } catch (e) { /* storage blocked: follow Windows */ }
+    try { theme = theme || localStorage.getItem('theme'); } catch (e) { /* storage blocked: follow the device */ }
     if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
   })();
 </script>
@@ -126,326 +27,130 @@
 <body>
 <header>
   <div class="top">
-    <h1>CROSSCHAT</h1><span id="live">OFF AIR</span>
-    <button id="theme" type="button"></button>
-    <button id="studio" type="button" title="Theme Studio: how chat looks on stream" aria-label="Open the Theme Studio">✎</button>
+    <h1>CROSSCHAT</h1>
+    <span id="live">OFF AIR</span>
+    <span id="device" hidden><i class="dot"></i><span></span></span>
     <div id="total">0<small>WATCHING</small></div>
+    <button id="theme" class="icon-btn" type="button"></button>
+    <button id="studio" class="icon-btn" type="button" title="Theme Studio: how chat looks on stream" aria-label="Open the Theme Studio">✎</button>
+    <button id="gear" class="icon-btn" type="button" title="Settings" aria-label="Settings" aria-haspopup="dialog">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+    </button>
   </div>
-  <div id="platforms"></div>
+  <div id="platforms" aria-label="Platforms"></div>
 </header>
-<div id="featured" aria-live="polite"><b>ON STREAM</b><span></span><button id="unfeature" type="button" title="Take it off the stream">Hide</button></div>
-<div id="list" role="log" aria-live="polite"><div id="empty">No messages yet.<br>Chat from every platform the stream goes to lands here.</div></div>
+<div id="featured" class="bar" aria-live="polite" hidden><b>ON STREAM</b><span></span><button id="unfeature" type="button" title="Take it off the stream">Hide</button></div>
+<div id="notice" class="bar" role="status" hidden><b>!</b><span></span></div>
+<div id="views" role="tablist" aria-label="Show">
+  <button type="button" role="tab" id="view-all" data-view="all" aria-selected="true" aria-controls="list">All</button>
+  <button type="button" role="tab" id="view-questions" data-view="questions" aria-selected="false" aria-controls="list">Questions <em id="count-questions"></em></button>
+  <button type="button" role="tab" id="view-starred" data-view="starred" aria-selected="false" aria-controls="list">Answer later <em id="count-starred"></em></button>
+</div>
+<div id="list" role="log" aria-live="polite" aria-label="Chat" data-view="all">
+  <div class="empty" id="empty">No messages yet.<br>Chat from every platform the stream goes to lands here.</div>
+</div>
 <footer>
-  <button id="jump">New messages ↓</button>
-  <div id="readonly">Read-only here. To answer chat, open this window in Chrome or Edge with the CrossChat extension:
-    Start menu → CrossChat → Open chat.</div>
-  <div id="replying"><span></span><button id="cancel" title="Stop replying to this message (Esc)">✕</button></div>
+  <button id="jump" type="button">New messages ↓</button>
+  <div id="quick" aria-label="Quick replies: tap to send to everyone, hold or right-click to put in the box"></div>
+  <div id="replying"><span></span><button id="cancel" type="button" title="Stop replying to this message (Esc)" aria-label="Stop replying">✕</button></div>
   <div class="entry">
-    <input id="say" type="text" maxlength="500" autocomplete="off" aria-label="Message to chat" placeholder="Say something to chat. Enter sends it.">
-    <span id="left"></span>
+    <input id="say" type="text" maxlength="500" autocomplete="off" enterkeyhint="send" aria-label="Message to chat" placeholder="Say something to chat. Enter sends it.">
+    <button id="send" type="button" aria-label="Send">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.4 20.4 21 12 3.4 3.6l-.02 6.5L15 12 3.38 13.9z"/></svg>
+    </button>
   </div>
+  <span id="left" aria-live="polite"></span>
   <div class="row">
-    <button id="all">Send to all</button>
+    <button id="all" type="button">Send to all</button>
     <span id="only">only:</span><span id="targets"></span>
-    <button id="ding" title="Plays through your speakers, so viewers hear it too">Ding: off</button>
+    <button id="ding" type="button" title="Plays through your speakers">Ding: off</button>
     <span id="lost">reconnecting…</span>
   </div>
 </footer>
-<script>
-  const NAMES = { twitch: ['Twitch', 'TW'], youtube: ['YouTube', 'YT'], kick: ['Kick', 'K'], x: ['X', 'X'], facebook: ['Facebook', 'FB'] };
-  const LIMIT = { twitch: 500, youtube: 200, x: 140 };          // platforms a reply can go to, and the longest message each takes
-  const $ = (id) => document.getElementById(id);
-  const list = $('list'), jump = $('jump'), say = $('say');
-  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue('--' + name).trim();
-  const store = (key, value) => { try { if (value === undefined) return localStorage.getItem(key); localStorage.setItem(key, value); } catch (e) { return null; } return null; };
-  let counts = {}, states = {}, pinned = true, ding = store('ding') === '1', audio;
-  let replyTo = null, sending = false, asked = 0;
-  const DRY = /[?&]dry/.test(location.search);   // address ends in ?dry: a test, nothing is posted anywhere
-  const DEMO = /[?&]demo/.test(location.search); // made-up chat, for screenshots
-  const BRIDGE = DEMO || !!document.documentElement.dataset.crosschat;   // the extension is here to post replies
-  const waiting = {}, echoes = [];                // replies on their way out; lines just sent to several platforms
 
-  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+<dialog id="sheet" aria-labelledby="sheet-title">
+  <div class="dhead"><h2 id="sheet-title">Message</h2><button class="icon-btn" type="button" data-close aria-label="Close">✕</button></div>
+  <div class="quote" id="sheet-quote"></div>
+  <div class="dbody"><ul class="menu" id="sheet-menu"></ul></div>
+</dialog>
 
-  // ---- light and dark ---------------------------------------------------------------------------------
-  const lightNow = () => document.documentElement.dataset.theme === 'light' ||
-    (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: light)').matches);
-  const THEMES = { auto: ['◐', 'Theme: follows Windows'], light: ['☀', 'Theme: light'], dark: ['☾', 'Theme: dark'] };
-  function showTheme() {
-    const now = document.documentElement.dataset.theme || 'auto';
-    $('theme').textContent = THEMES[now][0];
-    $('theme').title = THEMES[now][1] + ' (click to change)';
-    $('theme').setAttribute('aria-label', THEMES[now][1]);
-  }
-  $('theme').onclick = () => {
-    const order = ['auto', 'light', 'dark'], now = document.documentElement.dataset.theme || 'auto';
-    const next = order[(order.indexOf(now) + 1) % order.length];
-    if (next === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = next;
-    store('theme', next);
-    showTheme(); repaint();
-  };
-  matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => repaint());
+<dialog id="settings" aria-labelledby="settings-title">
+  <div class="dhead"><h2 id="settings-title">Settings</h2><button class="icon-btn" type="button" data-close aria-label="Close">✕</button></div>
+  <div class="dbody">
+    <section class="section">
+      <h3>Look and sound</h3>
+      <div class="seg" role="group" aria-label="Theme">
+        <button type="button" data-theme-pick="auto">Auto</button><button type="button" data-theme-pick="light">Light</button><button type="button" data-theme-pick="dark">Dark</button>
+      </div>
+      <label class="switch">Ding when a message arrives <input id="ding-switch" type="checkbox"></label>
+    </section>
+    <section class="section" id="twitch-section">
+      <h3>Twitch</h3>
+      <div class="status"><i class="dot" id="twitch-dot"></i><span id="twitch-state">Not connected</span></div>
+      <div id="twitch-pending" hidden>
+        <p>Go to <b>twitch.tv/activate</b> and enter</p>
+        <div class="code" id="twitch-code"></div>
+        <div class="buttons"><button class="btn primary" type="button" id="twitch-open">Open twitch.tv/activate</button></div>
+      </div>
+      <p class="hint" id="twitch-hint">Connected, CrossChat posts your Twitch replies and moderates Twitch chat itself, without the browser extension.</p>
+      <div class="buttons" id="twitch-buttons">
+        <button class="btn primary" type="button" id="twitch-connect">Connect Twitch</button>
+        <button class="btn" type="button" id="twitch-disconnect" hidden>Disconnect</button>
+      </div>
+    </section>
+    <section class="section" id="devices-section">
+      <h3>Paired devices</h3>
+      <p class="hint">Phones, tablets and other PCs on your home network that can read and answer chat.</p>
+      <ul class="devices" id="devices"></ul>
+      <div class="buttons"><button class="btn primary" type="button" id="pair-start">Pair a device</button></div>
+      <div class="pair" id="pair" hidden>
+        <div class="qr" id="pair-qr" role="img" aria-label="QR code with the pairing address"></div>
+        <div>
+          <p>Scan with the phone's camera, or open this address on the other device and enter the code.</p>
+          <div class="code" id="pair-code"></div>
+          <div class="url" id="pair-url"></div>
+          <div class="left" id="pair-left" aria-live="polite"></div>
+        </div>
+      </div>
+      <p class="hint">The first time, Windows asks whether CrossChat may use the network: allow it on <b>private networks</b>.</p>
+    </section>
+    <section class="section">
+      <h3>Check the stream</h3>
+      <p class="hint">Puts a made-up event on the widgets in OBS, so you can see them without going live.</p>
+      <div class="buttons">
+        <button class="btn" type="button" data-test="chat">Test chat</button>
+        <button class="btn" type="button" data-test="alert">Test alert</button>
+        <button class="btn" type="button" data-test="featured">Test featured</button>
+        <button class="btn" type="button" data-test="viewers">Test viewers</button>
+      </div>
+      <div class="buttons" id="studio-row"><button class="btn" type="button" id="studio-open">Open the Theme Studio</button></div>
+    </section>
+    <section class="section">
+      <h3>About</h3>
+      <p class="hint" id="about"></p>
+    </section>
+  </div>
+</dialog>
 
-  function readable(color) {                      // viewers pick their own name colour; keep it legible on this theme
-    const m = /^#([0-9a-f]{6})$/i.exec(color || '');
-    if (!m) return 'var(--text)';
-    let [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16));
-    const light = 0.299 * r + 0.587 * g + 0.114 * b;
-    if (!lightNow() && light < 110) { const k = (110 - light) / 255; [r, g, b] = [r, g, b].map((v) => Math.round(v + (255 - v) * (k + 0.25))); }
-    if (lightNow() && light > 140) { const k = (light - 140) / 255 + 0.25; [r, g, b] = [r, g, b].map((v) => Math.round(v * (1 - k))); }
-    return 'rgb(' + r + ',' + g + ',' + b + ')';
-  }
+<dialog id="quick-edit" aria-labelledby="quick-title">
+  <div class="dhead"><h2 id="quick-title">Quick replies</h2><button class="icon-btn" type="button" data-close aria-label="Close">✕</button></div>
+  <div class="dbody">
+    <p class="section hint" style="margin:0;padding-top:4px;padding-bottom:4px">Tap one to send it to every live chat. Hold it (or right-click) to put it in the box first. Up to 30, 100 characters each.</p>
+    <ul class="qlist" id="qlist"></ul>
+    <div class="qadd"><button class="btn" type="button" id="qadd">+ Add a reply</button></div>
+  </div>
+  <div class="dfoot"><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="button" id="qsave">Save</button></div>
+</dialog>
 
-  function repaint() {                            // after a theme change: platform colours and name colours
-    drawPlatforms();
-    list.querySelectorAll('.tag').forEach((t) => t.style.setProperty('--c', css(t.dataset.p)));
-    list.querySelectorAll('.name').forEach((n) => { n.style.color = readable(n.dataset.color); });
-    list.querySelectorAll('.emote').forEach((img) => { img.src = img.src.replace(/\/(dark|light)\//, lightNow() ? '/light/' : '/dark/'); });
-  }
+<dialog id="confirm" aria-labelledby="confirm-title">
+  <div class="dhead"><h2 id="confirm-title"></h2></div>
+  <div class="dbody"><p class="section" id="confirm-text" style="margin:0"></p>
+    <div class="section" id="confirm-field" hidden><label>Minutes <input id="confirm-input" type="number" min="1" max="20160" value="5" style="width:110px;min-height:40px;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:6px 10px"></label></div>
+  </div>
+  <div class="dfoot"><button class="btn" type="button" id="confirm-no">Cancel</button><button class="btn danger" type="button" id="confirm-yes">OK</button></div>
+</dialog>
 
-  function words(into, m) {                       // the message text, with Twitch emotes swapped for their pictures
-    const chars = [...m.text], ranges = [];
-    (m.emotes || '').split('/').filter(Boolean).forEach((e) => {
-      const [id, spots] = e.split(':');
-      (spots || '').split(',').forEach((s) => { const [a, z] = s.split('-').map(Number); ranges.push([a, z, id]); });
-    });
-    let at = 0;
-    ranges.sort((a, b) => a[0] - b[0]).forEach(([a, z, id]) => {
-      if (!/^\w+$/.test(id) || !(a >= at && z >= a && z < chars.length)) return;
-      if (a > at) into.append(chars.slice(at, a).join(''));
-      const img = el('img', 'emote'); img.alt = chars.slice(a, z + 1).join('');
-      img.src = 'https://static-cdn.jtvnw.net/emoticons/v2/' + id + '/default/' + (lightNow() ? 'light' : 'dark') + '/1.0';
-      into.append(img); at = z + 1;
-    });
-    if (at < chars.length) into.append(chars.slice(at).join(''));
-  }
-
-  // ---- who is watching, and where a reply can go ---------------------------------------------------
-  const open = () => Object.keys(LIMIT).filter((p) => states[p] === 'on');       // chats that can take a reply right now
-  const targets = () => (replyTo ? [replyTo.p] : open());
-
-  function drawPlatforms() {
-    const bar = $('platforms'), only = $('targets');
-    bar.textContent = ''; only.textContent = '';
-    Object.keys(states).forEach((p) => {
-      const pill = el('div', 'pill ' + (states[p] === 'on' ? 'on' : states[p] === 'retry' ? 'retry' : ''));
-      pill.style.setProperty('--c', css(p));
-      pill.title = NAMES[p][0] + ' chat: ' + ({ on: 'connected', waiting: 'waiting for the stream', retry: 'reconnecting', off: p === 'x' ? 'no livestream there (Go live on X starts one)' : 'off' }[states[p]] || states[p]);
-      pill.append(el('i'), el('span', '', NAMES[p][0]), el('b', '', counts[p] == null ? '–' : counts[p]));
-      bar.append(pill);
-      if (!LIMIT[p]) return;
-      const b = el('button', 'to'); b.style.setProperty('--c', css(p)); b.append(el('i'), NAMES[p][0]);
-      b.disabled = sending || states[p] !== 'on';
-      b.title = states[p] === 'on' ? 'Send what you typed to ' + NAMES[p][0] + ' only' : NAMES[p][0] + ' chat is not open right now';
-      b.onclick = () => post([p]);
-      only.append(b, ' ');
-    });
-    drawEntry();
-  }
-
-  function drawEntry() {
-    const to = targets(), n = say.value.trim().length, over = to.filter((p) => n > LIMIT[p]);
-    $('left').textContent = !n ? '' : over.length ? n + ' characters: too long for ' + over.map((p) => NAMES[p][0] + ' (' + LIMIT[p] + ')').join(', ') : n;
-    $('left').className = over.length ? 'over' : '';
-    $('all').textContent = sending ? 'Sending…' : replyTo ? 'Reply on ' + NAMES[replyTo.p][0] : 'Send to all';
-    $('all').disabled = sending || !to.length;
-    $('all').title = to.length ? 'Goes to: ' + to.map((p) => NAMES[p][0]).join(', ') : 'No chat is open right now';
-  }
-
-  // ---- replying -------------------------------------------------------------------------------------
-  function local(text) { add({ kind: 'note bad', id: 'local-' + Date.now() + Math.random(), text, t: Date.now(), p: 'system' }); }
-
-  function setReply(m) {                          // reply to one message: the answer goes to its platform only
-    list.querySelectorAll('.picked').forEach((row) => row.classList.remove('picked'));
-    replyTo = m ? { p: m.p, id: m.id.replace(/^[a-z]+-/, ''), name: m.name, handle: m.handle || '' } : null;
-    $('replying').className = m ? 'on' : '';
-    if (m) {
-      $('replying').firstChild.textContent = 'Replying to ' + m.name + ' on ' + NAMES[m.p][0];
-      const row = list.querySelector('[data-id="' + CSS.escape(m.id) + '"]'); if (row) row.classList.add('picked');
-      const who = m.handle || m.name, at = (who.startsWith('@') ? '' : '@') + who + ' ';
-      if (!say.value.startsWith(at)) say.value = at + say.value;
-      say.focus(); say.setSelectionRange(say.value.length, say.value.length);
-    }
-    drawPlatforms();
-  }
-
-  function post(to) {                             // the CrossChat extension does the posting, as the accounts logged in to this browser
-    const text = say.value.replace(/\s+/g, ' ').trim();
-    if (!text || sending) return;
-    if (!to.length) return local('No chat is open to post to right now.');
-    if (!document.documentElement.dataset.crosschat)
-      return local('Replies go out through the CrossChat extension, and it is not active in this window. Close the window and open it again from the Start menu (CrossChat → Open chat).');
-    sending = true;
-    const n = ++asked;
-    waiting[n] = { to, timer: setTimeout(() => finish(n, null), 25000) };
-    const reply = replyTo && to.length === 1 && to[0] === replyTo.p ? replyTo : null;
-    if (to.length > 1) { echoes.push({ text, to, t: Date.now() }); if (echoes.length > 20) echoes.shift(); }
-    window.postMessage({ crosschat: 'send', n, to, text, reply, dry: DRY }, location.origin);
-    drawPlatforms();
-  }
-
-  function finish(n, answer) {
-    const job = waiting[n];
-    if (!job) return;
-    delete waiting[n]; clearTimeout(job.timer); sending = false;
-    if (!answer) local('Not sent: the CrossChat extension did not answer. Close this window and open it again from the Start menu.');
-    else {
-      const failed = job.to.filter((p) => !(answer[p] && answer[p].ok));
-      failed.forEach((p) => local(NAMES[p][0] + ': not sent (' + ((answer[p] && answer[p].why) || 'no answer') + ')'));
-      if (failed.length < job.to.length) { say.value = ''; setReply(null); }
-    }
-    drawPlatforms(); say.focus();
-  }
-
-  window.addEventListener('message', (e) => { if (e.source === window && e.data && e.data.crosschat === 'sent') finish(e.data.n, e.data.answer); });
-  say.addEventListener('input', drawEntry);
-  say.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); post(targets()); }
-    else if (e.key === 'Escape' && replyTo) setReply(null);
-  });
-  $('all').onclick = () => post(targets());
-  $('cancel').onclick = () => { setReply(null); say.focus(); };
-
-  function youtubeBox(video) {
-    let frame = $('yt');
-    if (frame && frame.dataset.v === video) return;
-    if (frame) frame.remove();
-    if (!video || !BRIDGE || DEMO) return;
-    frame = el('iframe'); frame.id = 'yt'; frame.dataset.v = video; frame.tabIndex = -1; frame.title = 'YouTube chat (used to send replies)';
-    frame.src = 'https://www.youtube.com/live_chat?v=' + encodeURIComponent(video) + '&embed_domain=' + location.hostname;
-    document.body.append(frame);
-  }
-
-  // ---- the message list -----------------------------------------------------------------------------
-  function tagFor(p) { const tag = el('div', 'tag', NAMES[p] ? NAMES[p][1] : '?'); tag.dataset.p = p; tag.style.setProperty('--c', css(p)); return tag; }
-
-  function add(m) {
-    const empty = $('empty'); if (empty) empty.remove();
-    const row = el('div', 'm ' + m.kind); row.dataset.id = m.id; row.dataset.who = m.p + ':' + (m.name || '').toLowerCase();
-    if (m.kind.startsWith('note')) { row.textContent = m.text; }
-    else {
-      // My own line, sent to several platforms, comes back once from each: it stays one row and gains a tag.
-      const mine = m.kind === 'chat' && echoes.find((s) => s.text === m.text && s.to.includes(m.p) && Date.now() - s.t < 30000);
-      if (mine && mine.row && mine.row.isConnected) {
-        if (!mine.seen.includes(m.p)) { mine.seen.push(m.p); mine.row.firstChild.append(tagFor(m.p)); }
-        return;
-      }
-      if (mine) { mine.row = row; mine.seen = [m.p]; }
-      const tag = el('div', 'tags'); tag.append(tagFor(m.p));
-      const body = el('div', 'body');
-      (m.badges || []).filter((b) => /^(broadcaster|owner|moderator|vip|verified|member|subscriber|founder)$/.test(b))
-        .forEach((b) => body.append(el('span', 'badge', b === 'broadcaster' || b === 'owner' ? 'you' : b === 'moderator' ? 'mod' : b === 'subscriber' ? 'sub' : b)));
-      const name = el('span', 'name', m.name); name.dataset.color = m.color || ''; name.style.color = readable(m.color);
-      body.append(name);
-      if (m.system && m.system !== m.text) body.append(el('span', 'system', m.system + (m.text ? ' · ' : '')));
-      words(body, m);
-      body.append(el('span', 'time', new Date(m.t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })));
-      row.append(tag, body);
-      const acts = el('div', 'acts');
-      if (m.name && NAMES[m.p]) {
-        const show = el('button', 'show', 'show'); show.title = 'Show this message big on stream (featured message)';
-        show.onclick = () => featureIt(m.id);
-        acts.append(show);
-      }
-      if (LIMIT[m.p] && m.kind === 'chat' && m.name && BRIDGE) {
-        const re = el('button', 're', 'reply'); re.title = 'Reply to ' + m.name + ' on ' + NAMES[m.p][0];
-        re.onclick = () => setReply(m);
-        acts.append(re);
-      }
-      if (acts.childElementCount) row.append(acts);
-      if (featuredId === m.id) row.classList.add('featured');
-    }
-    list.append(row);
-    while (list.children.length > 400) list.firstChild.remove();
-    if (pinned) list.scrollTop = list.scrollHeight; else jump.style.display = 'block';
-    if (ding && !m.kind.startsWith('note') && Date.now() - m.t < 5000) beep();
-  }
-
-  function beep() {
-    audio = audio || new AudioContext();
-    const o = audio.createOscillator(), g = audio.createGain();
-    o.frequency.value = 880; o.type = 'sine'; g.gain.setValueAtTime(0.0001, audio.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.18, audio.currentTime + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + 0.35);
-    o.connect(g).connect(audio.destination); o.start(); o.stop(audio.currentTime + 0.4);
-  }
-
-  list.addEventListener('scroll', () => { pinned = list.scrollHeight - list.scrollTop - list.clientHeight < 60; if (pinned) jump.style.display = 'none'; });
-  jump.onclick = () => { list.scrollTop = list.scrollHeight; };
-  const dingButton = $('ding');
-  const showDing = () => { dingButton.textContent = 'Ding: ' + (ding ? 'on' : 'off'); };
-  dingButton.onclick = () => { ding = !ding; store('ding', ding ? '1' : '0'); showDing(); if (ding) beep(); };
-  showDing(); showTheme();
-
-  function handle(m) {
-    if (m.type === 'msg') add(m);
-    else if (m.type === 'status') {
-      states = m.status; drawPlatforms(); youtubeBox(m.yt || '');
-      const live = $('live'); live.className = m.live ? 'on' : ''; live.textContent = m.live ? 'LIVE' : 'OFF AIR';
-    } else if (m.type === 'viewers') {
-      counts = m.counts; drawPlatforms();
-      $('total').firstChild.textContent = m.total;
-    } else if (m.type === 'delete') {
-      const row = list.querySelector('[data-id="' + CSS.escape(m.id) + '"]'); if (row) row.classList.add('gone');
-    } else if (m.type === 'purge') {
-      list.querySelectorAll('[data-who="' + CSS.escape(m.p + ':' + m.name) + '"]').forEach((row) => row.classList.add('gone'));
-    } else if (m.type === 'clear') { list.querySelectorAll('.m').forEach((n) => n.remove()); setReply(null); }
-    else if (m.type === 'feature') showFeatured(m.msg);
-  }
-
-  // ---- the featured message: one line shown big on stream ---------------------------------------------
-  let featuredId = null;
-  function featureIt(id) {
-    if (DEMO) return showFeatured(id ? { id, name: list.querySelector('[data-id="' + CSS.escape(id) + '"] .name').textContent, text: '' } : null);
-    fetch(id ? '/feature?id=' + encodeURIComponent(id) : '/feature?clear=1', { cache: 'no-store' })
-      .then((r) => r.json()).then((a) => { if (!a.ok) local('That message is too old to show on stream.'); })
-      .catch(() => local('Could not reach CrossChat to show that message.'));
-  }
-  function showFeatured(m) {
-    featuredId = m ? m.id : null;
-    list.querySelectorAll('.m.featured').forEach((row) => row.classList.remove('featured'));
-    const row = m && list.querySelector('[data-id="' + CSS.escape(m.id) + '"]'); if (row) row.classList.add('featured');
-    $('featured').className = m ? 'on' : '';
-    $('featured').querySelector('span').textContent = m ? m.name + (m.text ? ': ' + m.text : '') : '';
-  }
-  $('unfeature').onclick = () => featureIt(null);
-  $('studio').onclick = () => window.open('/studio', '_blank');
-
-  if (!BRIDGE) document.querySelector('footer').classList.add('readonly');
-  if (DEMO) demo();
-  else {
-    const feed = new EventSource('/events');
-    feed.onopen = () => { $('lost').style.display = 'none'; list.querySelectorAll('.m').forEach((n) => n.remove()); setReply(null); };
-    feed.onerror = () => { $('lost').style.display = 'inline'; };
-    feed.onmessage = (e) => handle(JSON.parse(e.data));
-  }
-  if (DRY) say.placeholder = 'TEST MODE: nothing typed here is posted.';
-  drawEntry();
-
-  function demo() {                               // made-up people and lines, nothing real
-    const t = Date.now() - 9 * 60000, at = (min) => t + min * 60000;
-    handle({ type: 'status', live: true, status: { twitch: 'on', youtube: 'on', kick: 'on', x: 'on' } });
-    handle({ type: 'viewers', counts: { twitch: 128, youtube: 342, kick: 41, x: 87 }, total: 598 });
-    [{ kind: 'note', p: 'system', text: 'Stream started. Chat from every platform shows up here.', t: at(0) },
-     { p: 'twitch', name: 'pixel_pirate', color: '#ff7f50', text: 'first! what are we building today?', t: at(1) },
-     { p: 'youtube', name: 'Maya Chen', badges: ['member'], text: 'Watching from Lisbon 👋 love the new overlay', t: at(1.5) },
-     { p: 'x', name: 'Dev Daily', handle: 'devdaily', text: 'One chat for every platform, finally', t: at(2) },
-     { p: 'kick', name: 'turbo_kat', color: '#53fc18', text: 'W stream, audio sounds great', t: at(3) },
-     { p: 'twitch', kind: 'event', name: 'nightowl_42', system: 'subscribed for 6 months!', text: 'half a year already', t: at(4) },
-     { p: 'twitch', name: 'nightowl_42', color: '#1e90ff', badges: ['moderator'], text: 'welcome in, new folks 🙂', t: at(4.5) },
-     { p: 'youtube', name: 'Sam Ortiz', text: 'can you show how replies reach every platform?', t: at(6), id: 'yt-sam' },
-     { p: 'x', name: 'Lena Park', handle: 'lenapark', text: 'X chat shows up here too? nice', t: at(7) }]
-      .forEach((m, i) => add({ id: m.id || 'demo-' + i, kind: 'chat', color: '', badges: [], ...m }));
-    const both = add({ id: 'demo-mine', p: 'twitch', kind: 'chat', name: 'you', badges: ['broadcaster'], color: '#e3a57b', t: at(8),
-      text: 'Thanks all! Typing once here answers Twitch, YouTube and X together' });
-    const mine = list.querySelector('[data-id="demo-mine"] .tags');
-    if (mine) { mine.append(tagFor('youtube'), tagFor('x')); }
-    if (/[?&]demo=reply/.test(location.search)) {
-      const sam = { id: 'yt-sam', p: 'youtube', name: 'Sam Ortiz' };
-      setReply(sam); say.value = '@Sam Ortiz sure! hover a message, press reply, and it goes back to YouTube only'; drawEntry();
-      showFeatured({ id: 'yt-sam', name: 'Sam Ortiz', text: 'can you show how replies reach every platform?' });
-    }
-    return both;
-  }
-</script>
+<script src="/web/vendor/qrcode.js"></script>
+<script src="/web/app.js"></script>
 </body>
 </html>

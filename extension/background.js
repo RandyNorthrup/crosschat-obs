@@ -14,6 +14,10 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
     post(message.data || {}, sender.tab).then(respond, () => respond(null));
     return true;   // the answer comes later
   }
+  if (message.type === 'mod' && from.startsWith(HUB + '/')) {
+    moderate(message.data || {}, sender.tab).then(respond, () => respond({ ok: false, why: 'it failed' }));
+    return true;
+  }
   if (['state', 'result', 'feed'].includes(message.type) && from.startsWith('https://studio.x.com/')) {
     hub(message.type === 'state' ? '/x/state' : '/x/' + message.type + '?' + new URLSearchParams(message.data))
       .then((data) => respond({ reached: true, data }), () => respond({ reached: false }));
@@ -41,6 +45,16 @@ async function post(data, tab) {
     else out[p] = await jobs[p]().catch(() => ({ ok: false, why: 'it failed' }));
   }));
   return out;
+}
+
+// Moderation that has to go through the platform's own page. Only YouTube: the hub moderates Twitch itself through
+// Twitch's API, and X and Kick offer nothing CrossChat can do.
+async function moderate(data, tab) {
+  if (data.p !== 'youtube') return { ok: false, why: 'only YouTube moderation goes through the extension' };
+  const { youtube_video: video } = await hub('/targets');
+  if (!video) return { ok: false, why: 'the stream is not live on YouTube' };
+  const tabs = chrome.tabs.query({ url: 'https://www.youtube.com/live_chat*' }).then((found) => (tab ? [tab, ...found] : found));
+  return ask(tabs, { type: 'yt-mod', video, action: data.action, message_id: data.message_id }, 'YouTube chat is not loaded yet');
 }
 
 // Hand the message to the page script in one of these tabs; the first one that manages it wins.

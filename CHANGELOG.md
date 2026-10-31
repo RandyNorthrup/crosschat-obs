@@ -4,6 +4,36 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-31
+
+### Added
+
+- **Companion**: the chat app on a phone, tablet or another PC on your home network.
+  - Pair it with a QR code or a 6-digit code (5 minutes, 5 tries). Remove devices at any time.
+  - The phone needs no logins: replies and moderation are carried out on the streaming PC.
+  - The companion port (4467) only opens once a device is paired or a pairing is in progress.
+  - See [docs/COMPANION.md](docs/COMPANION.md).
+- **Moderation**:
+  - Twitch: delete, timeout (10 minutes, 1 hour or any length up to 14 days), ban and unban.
+  - YouTube: remove, 5-minute timeout, hide user.
+  - Bans ask first.
+- **Twitch through its official API**: **Connect Twitch** in Settings uses Twitch's device sign-in, and the code is pre-filled at twitch.tv/activate.
+  - CrossChat asks for three permissions: write chat, delete messages, ban/unban.
+  - The token is encrypted for your Windows account (DPAPI). Disconnecting revokes it at Twitch.
+  - Once connected, Twitch replies no longer need the browser extension.
+- **Quick replies**: one-tap lines and emoji, shared by every device and edited in the app.
+- **Answer later**: star messages. A **Questions** view picks out messages that look like questions.
+- **Settings dialog**: theme, ding, Twitch connection, paired devices, test alerts for the widgets in OBS.
+- The chat app works at phone width with touch: tap a message for its actions.
+
+### Changed
+
+- Every reply and moderation goes through the hub as a job.
+  - Twitch is done by the hub itself once connected.
+  - YouTube and X are handed to the CrossChat window on the streaming PC, which has the extension.
+  - Paired devices see when that window isn't open.
+- Paired devices learn within seconds when the CrossChat window on the streaming PC closes.
+
 ## [1.0.0] - 2026-10-31
 
 First public release.
@@ -56,5 +86,6 @@ First public release.
 - Overlays are served by the hub over `http://127.0.0.1`. OBS 33 blocks local-file overlays from reaching the hub.
 - Fonts are Windows' own: Segoe UI Variable and Cascadia Mono.
 
-[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/RandyNorthrup/crosschat-obs/releases/tag/v1.0.0

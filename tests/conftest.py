@@ -21,6 +21,10 @@ def home(tmp_path):
         hub.status.clear()
         hub.viewers.clear()
         hub.clients.clear()
-        hub.state.update({"youtube_video": "", "youtube_chat": None, "since": 0.0, "featured": None, "x_armed": None})
+        hub.local_clients.clear()
+        hub.starred.clear()
+        hub.jobs.clear()
+        hub.state.update({"youtube_video": "", "youtube_chat": None, "since": 0.0, "featured": None, "x_armed": None, "executor": None})
+        hub.companion_setup()
         return tmp_path
     return setup

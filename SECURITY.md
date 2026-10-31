@@ -21,6 +21,30 @@ Fixes go into the newest release only.
 - Bodies are limited to 256 KB and theme files to 64 KB.
 - Theme names are restricted to lowercase letters, digits and dashes, so a request can't reach other files.
 
+**The companion (paired devices on your home network)** runs on a second port, 4467 by default.
+
+- It only starts listening once you pair a device or start a pairing, so nothing is exposed before you ask for it.
+- Every request needs a paired device's key, except the pairing page itself.
+  - The key is 32 random bytes in an HttpOnly, SameSite=Strict cookie.
+  - CrossChat stores only its SHA-256 hash, in `devices.json`.
+- Pairing codes are 6 random digits. They last 5 minutes, allow 5 wrong tries, and work once.
+- Changes must come from the companion page itself, as JSON.
+- Paired devices can read chat and reply, moderate, star, feature and send test events. They can't:
+  - pair other devices;
+  - connect Twitch;
+  - change themes;
+  - open windows;
+  - go live on X;
+  - act as the extension.
+- It is plain `http` on your local network. Use it on a network you trust and don't forward the port; for remote use, a private network such as Tailscale is the safe way.
+
+**Twitch's API:**
+
+- CrossChat signs in with Twitch's device code flow as a public app. There is no client secret to leak.
+- It asks for three permissions only: `user:write:chat`, `moderator:manage:chat_messages`, `moderator:manage:banned_users`.
+- The tokens are encrypted for your Windows account with DPAPI (`twitch.bin`), so a copy of the file is useless elsewhere.
+- **Disconnect** deletes the file and revokes the token at Twitch.
+
 **Chat text is never treated as code.** The pages put names and messages on screen as plain text, never as HTML.
 
 **Your accounts:**
@@ -47,4 +71,7 @@ Fixes go into the newest release only.
 
 - `config.json`, your channels;
 - `themes\`;
-- `crosschat.log`. The log has no passwords, keys or cookies.
+- `quick.json`, your quick replies;
+- `devices.json`, hashes of paired devices' keys;
+- `twitch.bin`, the Twitch token, encrypted for your Windows account;
+- `crosschat.log`. The log has no passwords, keys, tokens or cookies.
