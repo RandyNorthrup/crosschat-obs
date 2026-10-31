@@ -215,6 +215,17 @@ Your settings are in `%LOCALAPPDATA%\CrossChat\config.json` (start from [`config
 | `obs.host`, `obs.port`, `obs.password` | from OBS | Only if OBS's WebSocket isn't on this PC or you want to override what OBS has saved. |
 | `remote.enabled`, `remote.port` | `true`, `4467` | The companion for paired devices. It only starts listening once you pair a device. |
 | `twitch_client_id` | CrossChat's | Use your own Twitch app instead (a Public client from dev.twitch.tv). |
+| `custom_overlays` | `""` | A folder of your own overlay pages, served at `http://127.0.0.1:4466/custom/<file>` (see below). |
+
+### Your own overlays
+
+Hand-made overlay pages can read CrossChat's live feed: `/events` (Server-Sent Events) and `/settings`.
+
+Since OBS 33, a page added as a *local file* can't reach `127.0.0.1`, so let CrossChat serve it:
+1. Set `"custom_overlays": "C:\\path\\to\\your\\overlays"` in `config.json`.
+2. Use `http://127.0.0.1:4466/custom/your-page.html` as the Browser Source URL.
+
+Subfolders, images, fonts, video and audio work. Nothing outside that folder is served.
 | `x.enabled` | `false` | Use X Live. |
 | `x.auto_go_live` | `true` | Go live on X when OBS starts streaming. |
 | `x.title` | `"Live now"` | Livestream title. |

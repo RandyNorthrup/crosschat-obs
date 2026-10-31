@@ -4,6 +4,14 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-31
+
+### Added
+
+- **Your own overlays**: `"custom_overlays"` in `config.json` names a folder whose pages CrossChat serves at `http://127.0.0.1:4466/custom/...`.
+  - OBS 33 no longer lets an overlay opened as a local file read CrossChat's live feed. This is the way around that.
+  - Only files inside that folder, of overlay kinds (pages, styles, scripts, images, fonts, video, audio), are served.
+
 ## [1.1.0] - 2026-10-31
 
 ### Added
@@ -86,6 +94,7 @@ First public release.
 - Overlays are served by the hub over `http://127.0.0.1`. OBS 33 blocks local-file overlays from reaching the hub.
 - Fonts are Windows' own: Segoe UI Variable and Cascadia Mono.
 
-[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/RandyNorthrup/crosschat-obs/releases/tag/v1.0.0

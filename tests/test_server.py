@@ -126,6 +126,27 @@ def test_live_feed_featured_messages_and_tests(home):
     run(serving(test))
 
 
+def test_custom_overlays_stay_inside_their_folder(home, tmp_path):
+    mine = tmp_path / "overlays"
+    (mine / "fonts").mkdir(parents=True)
+    (mine / "chat.html").write_text("<html>mine</html>", encoding="utf-8")
+    (mine / "fonts" / "a.woff2").write_bytes(b"font")
+    (mine / "notes.exe").write_bytes(b"MZ")
+    (tmp_path / "secret.txt").write_text("no", encoding="utf-8")
+    home({"custom_overlays": str(mine)})
+
+    async def test():
+        status, body = await http("GET", "/custom/chat.html", {"Origin": "null"})        # OBS browser sources may send null
+        assert status == 200 and body == b"<html>mine</html>"
+        assert (await http("GET", "/custom/fonts/a.woff2"))[0] == 200
+        for bad in ("/custom/notes.exe", "/custom/../secret.txt", "/custom/%2e%2e/secret.txt", "/custom/fonts/../../secret.txt",
+                    "/custom/C:/Windows/win.ini", "/custom/missing.html"):
+            assert (await http("GET", bad))[0] == 404, bad
+    run(serving(test))
+    home({})
+    assert hub.custom_file("chat.html") is None                  # no folder set: nothing is served
+
+
 def test_x_requests_are_used_once(home):
     home({"x": {"enabled": True, "title": "T", "source": "OBS"}})
 

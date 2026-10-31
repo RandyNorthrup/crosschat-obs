@@ -40,7 +40,7 @@ from websockets.exceptions import ConnectionClosed, InvalidHandshake
 from devices import Devices, device_name
 from twitch_api import Twitch, TwitchError
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 # CrossChat's public Twitch app (Client ID only: public apps have no secret). "twitch_client_id" in config.json overrides it.
 TWITCH_CLIENT_ID = "gg5cmjfvr1l09niyes19ccclashuth"  # gitleaks:allow (a public client ID, not a secret)
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -69,6 +69,7 @@ DEFAULTS = {
     "obs": {"host": "127.0.0.1", "port": 0, "password": ""},     # port 0 and no password: read from OBS's own settings
     "remote": {"enabled": True, "port": 4467},                  # the companion for paired devices on the home network
     "twitch_client_id": "",
+    "custom_overlays": "",                   # a folder of your own overlay pages, served at /custom/ (see custom_file)
     "x": {
         "enabled": False,
         "auto_go_live": False,
@@ -1309,6 +1310,26 @@ def page(*path):
         return f.read()
 
 
+CUSTOM_TYPES = {**TYPES, ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif", ".webm": "video/webm",
+                ".mp4": "video/mp4", ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8", ".mp3": "audio/mpeg", ".ogg": "audio/ogg"}
+
+
+def custom_file(path):
+    """A file of your own overlay folder ("custom_overlays" in config.json) for /custom/<path>, or None.
+
+    OBS 33 doesn't let a page opened as a local file reach the hub, so your own overlays that read /events are loaded
+    from here instead. Only files inside that folder, of the kinds listed above, are served.
+    """
+    root = CFG.get("custom_overlays") or ""
+    if not root or not re.fullmatch(r"[\w .-]+(/[\w .-]+)*", path) or ".." in path.split("/"):
+        return None
+    root = os.path.realpath(os.path.expandvars(root))
+    full = os.path.realpath(os.path.join(root, *path.split("/")))
+    if os.path.commonpath([root, full]) != root or not os.path.isfile(full) or os.path.splitext(full)[1].lower() not in CUSTOM_TYPES:
+        return None
+    return full
+
+
 async def reply(writer, code, kind, body, extra=""):
     writer.write(("HTTP/1.1 %s\r\nContent-Type: %s\r\nContent-Length: %d\r\nCache-Control: no-store\r\n%sConnection: close\r\n\r\n"
                   % (code, kind, len(body), extra)).encode() + body)
@@ -1327,7 +1348,7 @@ def refused(method, headers, path):
         return "not this address"
     origin = headers.get("origin", "")
     outsider = headers.get("sec-fetch-site") == "cross-site" or origin not in ("", "http://127.0.0.1:%d" % PORT, "http://localhost:%d" % PORT)
-    readable = method == "GET" and (path in READ_ONLY or path.startswith(("/overlay/", "/web/", "/themes/")))
+    readable = method == "GET" and (path in READ_ONLY or path.startswith(("/overlay/", "/web/", "/themes/", "/custom/")))
     if outsider and not readable and not (method == "GET" and origin.startswith("chrome-extension://")):
         return "not from another website"
     if method == "POST" and (outsider or headers.get("content-type", "").split(";")[0].strip() != "application/json"):
@@ -1388,6 +1409,12 @@ async def serve(reader, writer, remote=False):
             await reply(writer, "200 OK", TYPES[".html"], page(WEB, "overlay.html"), OPEN)
         elif re.fullmatch(r"/web/(vendor/)?[\w-]+\.(js|css|svg|ico|png|webmanifest)", url.path):
             await reply(writer, "200 OK", TYPES[os.path.splitext(url.path)[1]], page(WEB, url.path[5:]), OPEN)
+        elif url.path.startswith("/custom/"):          # your own overlay pages (custom_overlays in config.json)
+            found = custom_file(urllib.parse.unquote(url.path[8:]))
+            if found:
+                await reply(writer, "200 OK", CUSTOM_TYPES[os.path.splitext(found)[1].lower()], page(found))   # no CORS: other sites can't read them
+            else:
+                await reply(writer, "404 Not Found", "text/plain", b"not found")
         elif url.path == "/themes":
             await reply(writer, "200 OK", TYPES[".json"], json.dumps({"default": default_theme(), "themes": theme_list()}).encode(), OPEN)
         elif url.path.startswith("/themes/"):
