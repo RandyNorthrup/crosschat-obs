@@ -19,6 +19,12 @@ async def serving(test):
 
 async def http(method, path, headers=None, body=b"", read=65536):
     """One raw request (so Host, Origin and the rest are exactly what a test says). Returns (status, body)."""
+    status, _, body = await http_head(method, path, headers, body, read)
+    return status, body
+
+
+async def http_head(method, path, headers=None, body=b"", read=65536):
+    """The same, returning (status, response headers, body)."""
     reader, writer = await asyncio.open_connection("127.0.0.1", hub.PORT)
     head = {"Host": "127.0.0.1:%d" % hub.PORT, "Content-Length": str(len(body)), **(headers or {})}
     writer.write(("%s %s HTTP/1.1\r\n" % (method, path) + "".join("%s: %s\r\n" % kv for kv in head.items() if kv[1] is not None)
@@ -35,7 +41,8 @@ async def http(method, path, headers=None, body=b"", read=65536):
         pass
     writer.close()
     status, _, rest = data.partition(b"\r\n")
-    return int(status.split()[1]) if status else 0, rest.partition(b"\r\n\r\n")[2]
+    head, _, payload = rest.partition(b"\r\n\r\n")
+    return int(status.split()[1]) if status else 0, head.decode("latin1"), payload
 
 
 def own(extra=None):
@@ -67,7 +74,17 @@ def test_only_this_pc_and_its_own_pages_may_act(home):
         assert (await http("GET", "/", {"Host": "evil.example"}))[0] == 403            # DNS rebinding
         assert (await http("GET", "/feature?clear=1", {"Origin": "https://evil.example"}))[0] == 403
         assert (await http("GET", "/x/go?mode=dry", {"Sec-Fetch-Site": "cross-site"}))[0] == 403
-        assert (await http("GET", "/themes", {"Origin": "https://evil.example"}))[0] == 200   # reading is fine
+        assert (await http("GET", "/themes", {"Origin": "https://evil.example"}))[0] == 403   # not even reading
+        assert (await http("GET", "/", {"Sec-Fetch-Site": "cross-site"}))[0] == 403        # nor opening the window
+        assert (await http("GET", "/themes", {"Origin": "null"}))[0] == 403                # nor a sandboxed frame
+        page = {"Origin": "http://localhost:%d" % hub.PORT, "Sec-Fetch-Site": "cross-site"}
+        assert (await http("GET", "/themes", page))[0] == 200                              # your own overlay pages
+        status, head, _ = await http_head("GET", "/")
+        assert "X-Frame-Options: DENY" in head and "frame-ancestors 'none'" in head
+        status, head, _ = await http_head("GET", "/studio")
+        assert "X-Frame-Options: DENY" in head
+        status, head, _ = await http_head("GET", "/overlay/chat")
+        assert "default-src 'self'" in head and "connect-src 'self'" in head and "Access-Control-Allow-Origin" not in head
         assert (await post("/test", {"kind": "chat"}, {"Origin": "https://evil.example", "Content-Type": "application/json"}))[0] == 403
         assert (await post("/test", {"kind": "chat"}, {"Origin": "http://127.0.0.1:%d" % hub.PORT, "Content-Type": "text/plain"}))[0] == 403
         assert (await http("POST", "/test", own({"Content-Length": str(hub.BODY_LIMIT + 1)})))[0] == 413
@@ -136,12 +153,22 @@ def test_custom_overlays_stay_inside_their_folder(home, tmp_path):
     home({"custom_overlays": str(mine)})
 
     async def test():
-        status, body = await http("GET", "/custom/chat.html", {"Origin": "null"})        # OBS browser sources may send null
+        # the old address sends them to their own one, which the browser keeps apart from the CrossChat window's
+        status, head, _ = await http_head("GET", "/custom/chat.html?x=1")
+        assert status == 302 and "Location: http://localhost:%d/custom/chat.html?x=1" % hub.PORT in head
+        mine_ = {"Host": "localhost:%d" % hub.PORT}
+        status, body = await http("GET", "/custom/chat.html", mine_)
         assert status == 200 and body == b"<html>mine</html>"
-        assert (await http("GET", "/custom/fonts/a.woff2"))[0] == 200
+        assert (await http("GET", "/custom/fonts/a.woff2", {**mine_, "Sec-Fetch-Site": "same-origin"}))[0] == 200
+        assert (await http("GET", "/custom/fonts/a.woff2", {**mine_, "Origin": "https://evil.example", "Sec-Fetch-Site": "cross-site"}))[0] == 403
+        for path in ("/", "/studio", "/logs", "/targets", "/feature?clear=1", "/show", "/x/go?mode=dry"):
+            assert (await http("GET", path, mine_))[0] == 403, path                         # nothing of the CrossChat window
+        assert (await http("POST", "/send", {**mine_, "Origin": "http://localhost:%d" % hub.PORT, "Content-Type": "application/json"},
+                           b'{"to": ["twitch"], "text": "x"}'))[0] == 403
+        assert (await http("GET", "/settings", mine_))[0] == 200
         for bad in ("/custom/notes.exe", "/custom/../secret.txt", "/custom/%2e%2e/secret.txt", "/custom/fonts/../../secret.txt",
                     "/custom/C:/Windows/win.ini", "/custom/missing.html"):
-            assert (await http("GET", bad))[0] == 404, bad
+            assert (await http("GET", bad, mine_))[0] == 404, bad
     run(serving(test))
     home({})
     assert hub.custom_file("chat.html") is None                  # no folder set: nothing is served

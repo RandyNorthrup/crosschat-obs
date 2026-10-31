@@ -52,6 +52,7 @@
 <footer>
   <button id="jump" type="button">New messages ↓</button>
   <div id="quick" aria-label="Quick replies: tap to send to everyone, hold or right-click to put in the box"></div>
+  <div id="reading" hidden><span class="ico" aria-hidden="true">🔊</span><span id="reading-text"></span><em id="reading-more"></em><button id="reading-stop" type="button" title="Stop reading and skip what is waiting">Stop</button></div>
   <div id="replying"><span></span><button id="cancel" type="button" title="Stop replying to this message (Esc)" aria-label="Stop replying">✕</button></div>
   <div class="entry">
     <input id="say" type="text" maxlength="500" autocomplete="off" enterkeyhint="send" aria-label="Message to chat" placeholder="Say something to chat. Enter sends it.">
@@ -84,18 +85,79 @@
       </div>
       <label class="switch">Ding when a message arrives <input id="ding-switch" type="checkbox"></label>
     </section>
-    <section class="section" id="twitch-section">
-      <h3>Twitch</h3>
-      <div class="status"><i class="dot" id="twitch-dot"></i><span id="twitch-state">Not connected</span></div>
-      <div id="twitch-pending" hidden>
-        <p>Go to <b>twitch.tv/activate</b> and enter</p>
-        <div class="code" id="twitch-code"></div>
-        <div class="buttons"><button class="btn primary" type="button" id="twitch-open">Open twitch.tv/activate</button></div>
+    <section class="section" id="tts-section">
+      <h3>Text to speech</h3>
+      <div id="tts-form">
+        <label class="switch">Read chat aloud <input id="tts-enabled" type="checkbox"></label>
+        <div class="field"><label for="tts-read">What to read</label>
+          <select id="tts-read">
+            <option value="all">Every message</option>
+            <option value="questions">Questions only</option>
+            <option value="events">Subs, raids and other events</option>
+            <option value="command">Messages that start with a command</option>
+            <option value="featured">The message you show on stream</option>
+          </select></div>
+        <div class="field" id="tts-command-row"><label for="tts-command">Command</label><input id="tts-command" type="text" maxlength="20" placeholder="!tts" autocomplete="off"></div>
+        <label class="switch">Say who wrote it <input id="tts-names" type="checkbox"></label>
+        <label class="switch">Skip links <input id="tts-links" type="checkbox"></label>
+        <div class="field"><label for="tts-max">Longest message read <output id="tts-max-out" for="tts-max"></output></label><input id="tts-max" type="range" min="20" max="500" step="10"></div>
+        <fieldset class="field platforms"><legend>From</legend>
+          <label><input type="checkbox" data-tts-p="twitch"> Twitch</label><label><input type="checkbox" data-tts-p="youtube"> YouTube</label>
+          <label><input type="checkbox" data-tts-p="kick"> Kick</label><label><input type="checkbox" data-tts-p="x"> X</label>
+        </fieldset>
+        <div class="field"><label for="tts-voice">Voice</label><select id="tts-voice"></select>
+          <p class="warn" id="tts-voice-note" role="status" hidden></p></div>
+        <div class="field"><label for="tts-rate">Speed <output id="tts-rate-out" for="tts-rate"></output></label><input id="tts-rate" type="range" min="0.5" max="2" step="0.1"></div>
+        <div class="field"><label for="tts-volume">Volume <output id="tts-volume-out" for="tts-volume"></output></label><input id="tts-volume" type="range" min="0" max="1" step="0.05"></div>
       </div>
-      <p class="hint" id="twitch-hint">Connected, CrossChat posts your Twitch replies and moderates Twitch chat itself, without the browser extension.</p>
-      <div class="buttons" id="twitch-buttons">
-        <button class="btn primary" type="button" id="twitch-connect">Connect Twitch</button>
-        <button class="btn" type="button" id="twitch-disconnect" hidden>Disconnect</button>
+      <p class="hint" id="tts-remote" hidden></p>
+      <div class="buttons">
+        <button class="btn" type="button" id="tts-test">Test the voice</button>
+        <button class="btn" type="button" id="tts-stop">Stop reading</button>
+        <span class="saved" id="tts-saved" aria-live="polite"></span>
+      </div>
+      <p class="hint" id="tts-where"></p>
+    </section>
+    <section class="section" id="filters-section">
+      <h3>Filters <em id="filter-count"></em></h3>
+      <p class="hint">Hidden messages never reach the stream and are never read aloud. Here they stay, dimmed, with why.</p>
+      <div class="field"><label for="filter-word">Hide messages with these words</label>
+        <div class="chips" id="filter-words"></div>
+        <div class="add"><input id="filter-word" type="text" maxlength="50" placeholder="A word or phrase" autocomplete="off"><button class="btn" type="button" id="filter-word-add">Add</button></div>
+      </div>
+      <div class="field"><label for="filter-user">Hide these viewers</label>
+        <div class="chips" id="filter-users"></div>
+        <div class="add"><input id="filter-user" type="text" maxlength="50" placeholder="Name or @handle" autocomplete="off"><button class="btn" type="button" id="filter-user-add">Add</button></div>
+      </div>
+      <label class="switch">Hide !commands <input id="filter-commands" type="checkbox"></label>
+      <label class="switch">Hide chat bots (Nightbot, StreamElements and others) <input id="filter-bots" type="checkbox"></label>
+    </section>
+    <section class="section" id="connections-section">
+      <h3>Connections</h3>
+      <ul class="health" id="health"></ul>
+      <div class="card" id="twitch-section">
+        <h4>Twitch</h4>
+        <div class="status"><i class="dot" id="twitch-dot"></i><span id="twitch-state">Not connected</span></div>
+        <div id="twitch-pending" hidden>
+          <p>Go to <b>twitch.tv/activate</b> and enter</p>
+          <div class="code" id="twitch-code"></div>
+          <div class="buttons"><button class="btn primary" type="button" id="twitch-open">Open twitch.tv/activate</button></div>
+        </div>
+        <p class="hint" id="twitch-hint">Connect Twitch to reply and moderate on Twitch. CrossChat uses Twitch’s official API for both.</p>
+        <div class="buttons" id="twitch-buttons">
+          <button class="btn primary" type="button" id="twitch-connect">Connect Twitch</button>
+          <button class="btn" type="button" id="twitch-disconnect" hidden>Disconnect</button>
+        </div>
+      </div>
+      <div class="card" id="kick-section">
+        <h4>Kick</h4>
+        <div class="status"><i class="dot" id="kick-dot"></i><span id="kick-state">Not connected</span></div>
+        <p class="hint" id="kick-hint">Connect Kick to reply and moderate on Kick. CrossChat uses Kick’s official API for both.</p>
+        <div class="buttons">
+          <button class="btn primary" type="button" id="kick-connect">Connect Kick</button>
+          <button class="btn primary" type="button" id="kick-open" hidden>Open Kick to approve</button>
+          <button class="btn" type="button" id="kick-disconnect" hidden>Disconnect</button>
+        </div>
       </div>
     </section>
     <section class="section" id="devices-section">
@@ -113,6 +175,11 @@
         </div>
       </div>
       <p class="hint">The first time, Windows asks whether CrossChat may use the network: allow it on <b>private networks</b>.</p>
+    </section>
+    <section class="section" id="history-section">
+      <h3>Chat history</h3>
+      <p class="hint">Every stream’s chat is saved on this PC. Search it, or export a stream as a spreadsheet (CSV) or a web page.</p>
+      <div class="buttons"><button class="btn" type="button" id="history-open" aria-haspopup="dialog">Open chat history</button></div>
     </section>
     <section class="section">
       <h3>Check the stream</h3>
@@ -142,6 +209,29 @@
   <div class="dfoot"><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="button" id="qsave">Save</button></div>
 </dialog>
 
+<dialog id="history" aria-labelledby="history-title">
+  <div class="dhead">
+    <button class="icon-btn" type="button" id="history-back" title="All streams" aria-label="Back to all streams" hidden>←</button>
+    <h2 id="history-title">Chat history</h2>
+    <button class="icon-btn" type="button" data-close aria-label="Close">✕</button>
+  </div>
+  <div class="dbody" id="history-list">
+    <p class="section hint" style="margin:0;padding-top:4px;padding-bottom:4px">Newest first. Pick a stream to read, search and export its chat.</p>
+    <ul class="logs" id="logs"></ul>
+  </div>
+  <div class="logview" id="history-log" hidden>
+    <div class="logtools">
+      <input id="log-search" type="search" placeholder="Search names and messages" aria-label="Search this stream’s chat" autocomplete="off">
+      <select id="log-p" aria-label="Platform">
+        <option value="all">All platforms</option><option value="twitch">Twitch</option><option value="youtube">YouTube</option><option value="kick">Kick</option><option value="x">X</option>
+      </select>
+      <label class="check"><input id="log-q" type="checkbox"> Questions</label>
+    </div>
+    <div class="logmeta"><span id="log-count" aria-live="polite"></span><a class="btn small" id="log-csv" download>Export CSV</a><a class="btn small" id="log-html" download>Export HTML</a></div>
+    <div class="dbody"><ol class="loglines" id="log-lines"></ol><div class="qadd"><button class="btn" type="button" id="log-more" hidden>Show more</button></div></div>
+  </div>
+</dialog>
+
 <dialog id="confirm" aria-labelledby="confirm-title">
   <div class="dhead"><h2 id="confirm-title"></h2></div>
   <div class="dbody"><p class="section" id="confirm-text" style="margin:0"></p>
@@ -151,6 +241,7 @@
 </dialog>
 
 <script src="/web/vendor/qrcode.js"></script>
+<script src="/web/feed.js"></script>
 <script src="/web/app.js"></script>
 </body>
 </html>

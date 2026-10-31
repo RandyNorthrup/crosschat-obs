@@ -172,7 +172,10 @@ def test_replies_without_the_chat_window_say_why(home):
         sent = next(e for e in drain(watcher) if e["type"] == "sent")
         assert sent["answer"]["youtube"] == {"ok": False, "why": hub.NO_EXECUTOR}
         assert json.loads((await post(port, "/send", {"to": ["x"], "text": "x" * 141}))[2])["why"] == "too long for X"
-        assert json.loads((await post(port, "/send", {"to": ["kick"], "text": "hi"}))[2])["ok"] is False
+        await post(port, "/send", {"to": ["kick"], "text": "hi"})
+        await asyncio.sleep(0.05)
+        sent = next(e for e in drain(watcher) if e["type"] == "sent")
+        assert sent["answer"]["kick"] == {"ok": False, "why": "Connect Kick in Settings to reply on Kick"}
     run(serving(test))
 
 
@@ -228,9 +231,11 @@ def test_moderation_rules(home):
     run(serving(test))
 
 
-def test_demo_mode_answers_everything_on_this_pc(home):
-    home({"twitch": "realchannel"}, "--demo")
+def test_demo_mode_answers_everything_on_this_pc(home, tmp_path):
+    (tmp_path / "devices.json").write_text('{"devices": [{"id": "real", "name": "My phone", "hash": "x"}]}')
+    folder = home({"twitch": "realchannel"}, "--demo")
     assert hub.DEMO and hub.TEST and hub.twitch_event()["state"] == "on"
+    assert hub.DEV.listing() == []                         # real device names stay out of demo screenshots
 
     async def test(port):
         watcher = asyncio.Queue()
@@ -246,6 +251,11 @@ def test_demo_mode_answers_everything_on_this_pc(home):
         assert all(a["answer"] == {"twitch": {"ok": True}, "youtube": {"ok": True}, "x": {"ok": True}} or a["answer"] == {"ok": True}
                    for a in events if a["type"] == "sent")
         assert json.loads((await post(port, "/pair/start", {}))[2])["ok"] is False
+        # the demo never touches the real accounts, devices or settings
+        for path in ("/twitch/disconnect", "/kick/disconnect", "/twitch/connect", "/kick/connect", "/devices/revoke"):
+            assert json.loads((await post(port, path, {"id": "x"}))[2])["ok"] is False, path
+        assert json.loads((await post(port, "/filters", {"words": ["demo"]}))[2])["ok"] is True
+        assert (folder / "filters-demo.json").exists() and not (folder / "filters.json").exists()
     run(serving(test))
 
 

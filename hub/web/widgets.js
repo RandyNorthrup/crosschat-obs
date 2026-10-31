@@ -2,9 +2,10 @@
 // the address picks the widget (/overlay/chat, /overlay/featured, /overlay/viewers, /overlay/alerts).
 // Data comes from the hub's /events feed; ?demo shows made-up data instead (?demo=still holds it still, for
 // screenshots); ?preview is the Theme Studio's copy, which takes its theme from the Studio rather than the hub.
-// Everything viewers typed goes onto the page as text only (textContent), never as HTML.
+// Everything viewers typed goes onto the page as text only (textContent), never as HTML. Messages the streamer's
+// filters hide (m.hidden) never show here.
 (() => {
-  const T = window.CrossChatTheme, I = window.CrossChatIcons, doc = document;
+  const T = window.CrossChatTheme, I = window.CrossChatIcons, F = window.CrossChatFeed, doc = document;
   const q = new URLSearchParams(location.search);
   const WIDGET = (/\/overlay\/(chat|featured|viewers|alerts)\b/.exec(location.pathname) || [])[1] || q.get('widget') || 'chat';
   const PREVIEW = q.has('preview'), DEMO = PREVIEW || q.has('demo'), STILL = q.get('demo') === 'still';
@@ -14,14 +15,15 @@
   doc.documentElement.dataset.widget = WIDGET;
   if (STILL) doc.documentElement.dataset.still = '';
 
-  let theme = T.merge({}), shown = 'all', live = false, primed = false;
+  let theme = T.merge({}), shown = 'all', live = false, primed = false, emotes = new Map();
+  let themed = false, early = [];                  // chat that came before the theme (and so its delay) was known
 
   // ---- theme ----------------------------------------------------------------------------------------
   // Address overrides, for one OBS source that differs a little from its theme (documented in docs/THEMES.md).
   function overrides() {
     const o = {}, put = (path, v) => { const keys = path.split('.'); let at = o; keys.slice(0, -1).forEach((k) => { at = at[k] = at[k] || {}; }); at[keys[keys.length - 1]] = v; };
     const MAP = { size: 'font.size', layout: 'message.layout', icons: 'message.platform', max: 'chat.max', seconds: 'chat.seconds', direction: 'chat.direction',
-                  align: 'chat.align', scale: 'featured.scale', volume: 'alerts.volume', opacity: 'colors.backgroundOpacity' };
+                  align: 'chat.align', scale: 'featured.scale', volume: 'alerts.volume', opacity: 'colors.backgroundOpacity', delay: 'chat.delay' };
     Object.entries(MAP).forEach(([k, path]) => { if (q.has(k)) put(path, q.get(k)); });
     if (q.has('sound')) put('alerts.sound', !/^(0|off|false|no)$/i.test(q.get('sound')));
     if (q.has('badges')) put('message.badges', !/^(0|off|false|no)$/i.test(q.get('badges')));
@@ -33,6 +35,9 @@
     T.apply(theme, doc);
     shown = T.wanted(theme.chat.platforms, q.get('platforms'));
     redraw();
+    themed = true;
+    const waiting = early; early = [];
+    waiting.forEach((e) => chatIn(e.m, e.live, e.at));
   }
 
   const getJSON = (path) => fetch(path, { cache: 'no-store' }).then((r) => { if (!r.ok) throw new Error(path + ': ' + r.status); return r.json(); });
@@ -62,13 +67,13 @@
     el.style.setProperty('--cc-name', T.nameColor(m, theme));
   }
 
-  function words(into, m) {
+  function words(into, m) {                        // Twitch's own emotes first, then 7TV / BetterTTV / FrankerFaceZ words
     const surface = T.lightSurface(theme) ? 'light' : 'dark';
-    T.emotePieces(m.text, m.p === 'twitch' ? m.emotes : '').forEach((piece) => {
+    F.withEmotes(T.emotePieces(m.text, m.p === 'twitch' ? m.emotes : ''), emotes).forEach((piece) => {
       if (piece.text !== undefined) { into.appendChild(doc.createTextNode(piece.text)); return; }
       const img = doc.createElement('img');
       img.className = 'cc-emote'; img.alt = piece.alt; img.decoding = 'async';
-      img.src = 'https://static-cdn.jtvnw.net/emoticons/v2/' + piece.emote + '/default/' + surface + '/2.0';
+      img.src = piece.url || 'https://static-cdn.jtvnw.net/emoticons/v2/' + piece.emote + '/default/' + surface + '/2.0';
       into.appendChild(img);
     });
   }
@@ -86,8 +91,13 @@
   function message(m, cls) {
     const el = doc.createElement('div');
     el.className = cls; el.dataset.platform = m.p; el.dataset.kind = m.kind || 'chat'; el.dataset.id = m.id;
+    if (m.first === 'ever' || m.first === 'stream') el.dataset.first = m.first;
     colourFor(el, m);
     const head = doc.createElement('span'); head.className = 'cc-head';
+    if (m.first === 'ever' && m.kind !== 'event' && theme.message.firstHighlight) {   // a first-time chatter
+      el.classList.add('cc-first');
+      const tag = doc.createElement('span'); tag.className = 'cc-first-tag'; tag.textContent = 'NEW'; head.appendChild(tag);
+    }
     (m.badges || []).map((b) => BADGES[b]).filter((b, i, all) => b && all.indexOf(b) === i).forEach((b) => {
       const badge = doc.createElement('span'); badge.className = 'cc-badge'; badge.textContent = b; head.appendChild(badge);
     });
@@ -130,16 +140,40 @@
     return T.shows(shown, m.p);
   }
 
-  function chatAdd(m, animate) {
-    if (chat.seen.has(m.id)) return;
+  // born: when the message counts as arrived (a held message's time on screen starts when it shows).
+  function chatAdd(m, animate, born) {
+    if (chat.seen.has(m.id) || m.hidden) return;
     chat.seen.add(m.id);
     if (chat.seen.size > 2000) chat.seen.delete(chat.seen.values().next().value);
-    const age = Date.now() - (m.t || Date.now()), life = theme.chat.seconds * 1000;
-    if (life && age >= life) return;
-    const item = { m, el: null, timer: 0 };
+    born = born || m.t || Date.now();
+    const life = theme.chat.seconds * 1000;
+    if (life && Date.now() - born >= life) return;
+    const item = { m, el: null, timer: 0, born };
     chat.items.push(item);
     draw(item, animate);
     trim();
+  }
+
+  // The display delay (theme chat.delay, or ?delay=): each message waits before it shows, and one deleted, purged or
+  // hidden meanwhile never does. Messages from before the page opened only wait out what is left of it.
+  // live: it arrived as it happened (not the backlog sent on connect). at: when it arrived.
+  const hold = F.holdQueue();
+  let holdTimer = 0;
+  function chatIn(m, live, at) {
+    if (m.hidden || chat.seen.has(m.id)) return;
+    const now = Date.now();
+    if (!themed && !DEMO) { early.push({ m, live, at: at || now }); return; }
+    const wait = theme.chat.delay * 1000;
+    const until = !wait ? 0 : live ? (at || now) + wait : (m.t || now) + wait;
+    if (until <= now) { chatAdd(m, live); return; }
+    hold.add(m, until);
+    holdNext();
+  }
+  function holdNext() {
+    clearTimeout(holdTimer);
+    const at = hold.next();
+    if (at === Infinity) return;
+    holdTimer = setTimeout(() => { hold.due(Date.now()).forEach((m) => chatAdd(m, true, Date.now())); holdNext(); }, Math.max(0, at - Date.now()) + 10);
   }
 
   function draw(item, animate) {
@@ -152,7 +186,7 @@
     item.el = el;
     clearTimeout(item.timer);
     const life = theme.chat.seconds * 1000;
-    if (life && !STILL) item.timer = setTimeout(() => drop(item), Math.max(0, life - (Date.now() - (item.m.t || Date.now()))));
+    if (life && !STILL) item.timer = setTimeout(() => drop(item), Math.max(0, life - (Date.now() - item.born)));
   }
 
   function drop(item, quick) {
@@ -170,11 +204,11 @@
   // ---- featured message ---------------------------------------------------------------------------------
   const featured = { m: null, el: null, timer: 0 };
 
-  function feature(m) {
+  function feature(m) {                            // never delayed: the streamer picked it
     clearTimeout(featured.timer);
     if (featured.el) leave(featured.el);
-    featured.m = m || null; featured.el = null;
-    if (!m) return;
+    featured.m = m && !m.hidden ? m : null; featured.el = null;
+    if (!featured.m) return;
     featured.el = message(m, 'cc-featured');
     featured.el.classList.add('cc-new');
     root.firstChild.appendChild(featured.el);
@@ -236,7 +270,7 @@
   }
 
   function alertAdd(m, fresh) {
-    if (alerts.seen.has(m.id) || !alertShows(m) || (!fresh && !DEMO)) return;
+    if (alerts.seen.has(m.id) || m.hidden || !alertShows(m) || (!fresh && !DEMO)) return;
     alerts.seen.add(m.id);
     alerts.queue.push(m);
     if (alerts.queue.length > 20) alerts.queue.shift();
@@ -311,7 +345,7 @@
   function handle(m) {
     if (!m || typeof m !== 'object') return;
     if (m.type === 'msg') {
-      if (WIDGET === 'chat') chatAdd(m, primed);
+      if (WIDGET === 'chat') chatIn(m, primed);
       else if (WIDGET === 'alerts') alertAdd(m, primed && Date.now() - (m.t || 0) < 20000);
     } else if (m.type === 'status') {
       primed = true; live = !!m.live; crowd.status = m.status || {};
@@ -319,16 +353,18 @@
     } else if (m.type === 'viewers') {
       crowd.counts = m.counts || {};
       if (WIDGET === 'viewers') { drawViewers(); countTo(m.total || 0); }
-    } else if (m.type === 'delete') {
-      chat.items.filter((i) => i.m.id === m.id).forEach((i) => drop(i));
-      if (featured.m && featured.m.id === m.id) feature(null);
-    } else if (m.type === 'purge') {
-      const who = (i) => i.m.p === m.p && String(i.m.name || '').toLowerCase() === m.name;
-      chat.items.filter(who).forEach((i) => drop(i));
-      if (featured.m && who({ m: featured.m })) feature(null);
+    } else if (m.type === 'delete' || m.type === 'purge' || m.type === 'hide') {
+      early = early.filter((e) => !F.takes(m, e.m));
+      hold.drop((held) => F.takes(m, held));
+      chat.items.filter((i) => F.takes(m, i.m)).forEach((i) => drop(i));
+      if (featured.m && F.takes(m, featured.m)) feature(null);
     } else if (m.type === 'clear') {
+      early = []; hold.clear();
       chat.items.slice().forEach((i) => drop(i, true));
       chat.seen.clear();
+    } else if (m.type === 'emotes') {
+      emotes = F.emoteMap(m.emotes);
+      if (chat.items.length || featured.m) redraw();
     } else if (m.type === 'feature' && WIDGET === 'featured') {
       feature(m.msg && m.msg.text !== undefined ? m.msg : null);
     } else if (m.type === 'theme' && !PREVIEW) {
@@ -383,7 +419,8 @@
   let tick = 0;
   function demoLine(i) {
     const who = PEOPLE[i % PEOPLE.length], text = LINES[(i + Math.floor(i / PEOPLE.length) * 5) % LINES.length];
-    return { type: 'msg', kind: 'chat', id: 'demo-' + i + '-' + Date.now(), t: Date.now(), text, emotes: emotesFor(text), badges: [], color: '', ...who };
+    return { type: 'msg', kind: 'chat', id: 'demo-' + i + '-' + Date.now(), t: Date.now(), text, emotes: emotesFor(text), badges: [], color: '',
+             first: i === 0 ? 'ever' : '', ...who };
   }
 
   function demo() {
@@ -392,8 +429,8 @@
     const sum = () => Object.values(counts).reduce((a, b) => a + b, 0);
     if (WIDGET === 'chat') {
       for (tick = 0; tick < 8; tick++) chatAdd(demoLine(tick), false);
-      chatAdd({ type: 'msg', kind: 'event', alert: 'sub', id: 'demo-ev', t: Date.now(), p: 'twitch', name: 'kiwi_codes', text: 'kiwi_codes subscribed for 6 months!', badges: [] }, false);
-      if (!STILL) setInterval(() => chatAdd(demoLine(tick++), true), 2400);
+      chatAdd({ type: 'msg', kind: 'event', alert: 'resub', amount: '6', id: 'demo-ev', t: Date.now(), p: 'twitch', name: 'kiwi_codes', text: '', badges: [] }, false);
+      if (!STILL) setInterval(() => chatIn(demoLine(tick++), true), 2400);   // new lines wait out the delay, as on stream
     } else if (WIDGET === 'featured') {
       const picks = [5, 1, 9, 3].map((i) => demoLine(i));
       feature(picks[0]);

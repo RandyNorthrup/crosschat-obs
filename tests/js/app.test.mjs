@@ -12,9 +12,13 @@ const here = { remote: false, executor: true, twitch: 'off', states: { twitch: '
 
 test('replies go to the open chats that take replies, or to the one being answered', () => {
   const states = { twitch: 'on', youtube: 'waiting', x: 'on', kick: 'on' };
-  assert.deepEqual(A.openPlatforms(states), ['twitch', 'x']);            // Kick can't take replies
+  assert.deepEqual(A.openPlatforms(states), ['twitch', 'x']);            // Kick takes replies only once connected
+  assert.deepEqual(A.openPlatforms(states, 'pending'), ['twitch', 'x']);
+  assert.deepEqual(A.openPlatforms(states, 'on'), ['twitch', 'x', 'kick']);
   assert.deepEqual(A.targetsFor(states, null), ['twitch', 'x']);
+  assert.deepEqual(A.targetsFor(states, null, 'on'), ['twitch', 'x', 'kick']);
   assert.deepEqual(A.targetsFor(states, { p: 'youtube' }), ['youtube']);
+  assert.deepEqual(A.tooLong('a'.repeat(501), ['kick']), ['kick']);
 });
 
 test('length limits count characters, not bytes', () => {
@@ -23,12 +27,15 @@ test('length limits count characters, not bytes', () => {
   assert.deepEqual(A.tooLong('a'.repeat(201), ['twitch', 'youtube']), ['youtube']);
 });
 
-test('what can carry a message: Twitch on its own once connected, the rest through the chat window', () => {
+test('what can carry a message: Twitch and Kick once connected, the rest through the chat window', () => {
   assert.equal(A.route('twitch', { executor: false, twitch: 'on' }).ok, true);
   assert.equal(A.route('youtube', { executor: false, twitch: 'on' }).ok, false);
   assert.match(A.route('youtube', { executor: false, remote: true }).why, /streaming PC/);
-  assert.match(A.route('twitch', { executor: false, twitch: 'off' }).why, /Twitch connected/);
+  assert.equal(A.route('twitch', { executor: false, twitch: 'off' }).why, 'Connect Twitch in Settings to reply on Twitch');
+  assert.equal(A.route('twitch', { executor: true, twitch: 'off' }).ok, false);   // no more replies through the extension
   assert.equal(A.route('kick', { executor: true }).ok, false);
+  assert.equal(A.route('kick', { executor: false, kick: 'on' }).ok, true);
+  assert.match(A.route('kick', { remote: true }).why, /Connect Kick in Settings on the streaming PC/);
   assert.equal(A.canReply(chat('youtube'), here).ok, true);
   assert.equal(A.canReply(chat('youtube'), { ...here, states: { youtube: 'off' } }).ok, false);
   assert.equal(A.canReply({ ...chat('twitch'), kind: 'event' }, here).ok, false);
@@ -46,7 +53,86 @@ test('moderation per platform', () => {
   assert.ok(A.modMenu(chat('youtube'), { ...here, executor: false }).every((e) => !e.ok));
   assert.match(A.modMenu(chat('x'), here)[0].why, /X chat/);
   assert.match(A.modMenu(chat('kick'), here)[0].why, /Kick/);
+  assert.ok(A.modMenu(chat('kick'), here).every((e) => !e.ok && e.why === 'Connect Kick in Settings to moderate'));
+  const kick = A.modMenu(chat('kick'), { ...here, kick: 'on' });
+  assert.deepEqual(kick.filter((e) => e.ok).map((e) => e.action + (e.seconds || '')), ['delete', 'timeout600', 'timeout3600', 'timeout', 'ban', 'unban']);
   assert.match(A.modMenu(chat('twitch', { badges: ['broadcaster'] }), { ...here, twitch: 'on' })[0].why, /you/);
+});
+
+test('custom timeouts fit each platform', () => {
+  assert.equal(A.timeoutSeconds('kick', 1.2), 120);                    // Kick: whole minutes, rounded up
+  assert.equal(A.timeoutSeconds('kick', 0), 60);
+  assert.equal(A.timeoutSeconds('kick', 99999), 604800);               // at most 7 days
+  assert.equal(A.timeoutSeconds('twitch', 1.5), 90);
+  assert.equal(A.timeoutSeconds('twitch', 99999), 1209600);            // at most 14 days
+});
+
+test('text-to-speech settings are filled in and kept in range', () => {
+  const d = A.ttsSettings(null);
+  assert.deepEqual(d, { enabled: false, read: 'all', command: '!tts', names: true, max_chars: 200, skip_links: true, platforms: 'all', voice: '', rate: 1, volume: 1 });
+  const s = A.ttsSettings({ enabled: true, read: 'nope', max_chars: 9000, rate: '0.1', volume: -3, platforms: ['kick', 'x', 'facebook'], command: '  ' });
+  assert.equal(s.read, 'all'); assert.equal(s.max_chars, 500); assert.equal(s.rate, 0.5); assert.equal(s.volume, 0);
+  assert.deepEqual(s.platforms, ['kick', 'x']); assert.equal(s.command, '!tts');
+  assert.equal(A.ttsSettings({ platforms: ['twitch', 'youtube', 'kick', 'x'] }).platforms, 'all');
+});
+
+const V = (name, localService, lang = 'en-US') => ({ name, localService, lang });
+const VOICES = [V('Microsoft Aria Online (Natural) - English (United States)', false), V('Google Deutsch', false, 'de-DE'),
+                V('Microsoft Hedda - German (Germany)', true, 'de-DE'), V('Microsoft Zira - English (United States)', true), V('Google US English', false)];
+
+test('voices: on this PC first, online ones apart and never picked on their own', () => {
+  const g = A.voiceGroups(VOICES, 'en-US');
+  assert.deepEqual(g.local.map((v) => v.name), ['Microsoft Zira - English (United States)', 'Microsoft Hedda - German (Germany)']);
+  assert.deepEqual(g.online.map((v) => v.name), ['Microsoft Aria Online (Natural) - English (United States)', 'Google US English', 'Google Deutsch']);
+  assert.equal(A.pickVoice(VOICES, '', 'en-US').name, 'Microsoft Zira - English (United States)');            // default: the first on this PC
+  assert.equal(A.pickVoice(VOICES, 'Google US English', 'en-US').name, 'Google US English');                // exactly the saved one
+  assert.equal(A.pickVoice(VOICES, 'A voice from another PC', 'en-US').localService, true);                 // missing: a local one, never online
+  assert.equal(A.pickVoice(VOICES.filter((v) => !v.localService), '', 'en-US'), null);                      // no local voice: none at all
+  assert.equal(A.voiceMaker(VOICES[1]), 'Google');
+  assert.equal(A.voiceMaker(VOICES[0]), 'Microsoft');
+  assert.equal(A.onlineVoice(VOICES[3]), false);
+});
+
+test('the read-aloud queue says one line at a time, in order', () => {
+  const q = A.speech(3);
+  const a = { id: 'a', text: 'one' }, b = { id: 'b', text: 'two' }, c = { id: 'c', text: 'three' };
+  assert.equal(q.add(a), a);                                          // nothing playing: say it now
+  assert.equal(q.add(b), null);                                       // waits its turn
+  assert.equal(q.add({ id: 'b', text: 'two again' }), null);          // already waiting
+  assert.equal(q.add({ id: 'e', text: '   ' }), null);                // nothing to say
+  q.add(c);
+  assert.equal(q.waiting, 2);
+  assert.equal(q.done(b), null);                                      // not the one playing: ignored
+  assert.equal(q.done(a), b);
+  assert.equal(q.done(b), c);
+  assert.equal(q.done(c), null);
+  assert.equal(q.current, null);
+  q.add(a); q.add(b);
+  assert.equal(q.stop(), true);
+  assert.equal(q.done(a), null);                                      // a stopped line ending later changes nothing
+  assert.equal(q.add(c), c);
+  const full = A.speech(2); full.add(a); ['1', '2', '3'].forEach((id) => full.add({ id, text: id }));
+  assert.equal(full.waiting, 2);                                      // too many waiting: the oldest is dropped
+});
+
+test('filter lists, connection health, chat logs', () => {
+  assert.deepEqual(A.cleanList([' Spoiler ', 'spoiler', '', null, 'a'.repeat(80)]), ['Spoiler', 'a'.repeat(50)]);
+  assert.equal(A.cleanList(Array.from({ length: 250 }, (_, i) => 'w' + i)).length, 200);
+  assert.deepEqual(A.filterSettings({ words: ['x'], bots: 'yes' }), { words: ['x'], users: [], hide_commands: false, bots: false });
+  const now = 1793462400000;
+  assert.equal(A.health({ since: now - 72 * 60000, last: now - 8000, reconnects: 2 }, now), 'connected 1 h 12 m · last message 8 s ago · 2 reconnects');
+  assert.equal(A.health({ since: (now - 45000) / 1000, last: 0, reconnects: 1 }, now), 'connected 45 s · no messages yet · 1 reconnect');
+  assert.equal(A.health({ since: 0, last: 0, reconnects: 0 }, now), 'not connected');
+  assert.equal(A.span(26 * 3600000), '1 d 2 h');
+  assert.equal(A.bytes(221184), '216 KB');
+  assert.equal(A.validLog('2026-10-31_1345'), true);
+  assert.equal(A.validLog('../secrets'), false);
+  const log = [{ p: 'twitch', name: 'Ann', text: 'what keyboard is that?', question: true }, { p: 'youtube', name: 'Bo', text: 'Keyboard looks great' },
+               { p: 'twitch', name: 'Keyla', text: 'hi' }];
+  assert.equal(A.logFilter(log, { text: 'KEYBOARD' }).length, 2);
+  assert.equal(A.logFilter(log, { text: 'key', p: 'twitch' }).length, 2);   // names count too
+  assert.equal(A.logFilter(log, { questions: true }).length, 1);
+  assert.equal(A.logFilter(log, { text: 'keyboard great' }).length, 1);       // every word
 });
 
 test('quick replies are cleaned the way the hub keeps them', () => {

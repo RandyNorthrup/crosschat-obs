@@ -24,6 +24,8 @@ def home(tmp_path):
         hub.local_clients.clear()
         hub.starred.clear()
         hub.jobs.clear()
+        for holders in hub.roles.values():
+            holders.clear()
         hub.state.update({"youtube_video": "", "youtube_chat": None, "since": 0.0, "featured": None, "x_armed": None, "executor": None})
         hub.companion_setup()
         return tmp_path

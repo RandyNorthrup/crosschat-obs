@@ -100,7 +100,8 @@ if (-not $healthy) {
     & $python.Exe @($python.Args + @('-m', 'venv', '--clear', (Join-Path $App '.venv')))
     if ($LASTEXITCODE -ne 0) { Say 'Could not create the Python environment.' Red; exit 1 }
 }
-& $venvPython -m pip install --disable-pip-version-check --no-warn-script-location -q -r (Join-Path $App 'hub\requirements.txt')
+# exact versions with their checksums: pip refuses anything that doesn't match what was tested
+& $venvPython -m pip install --disable-pip-version-check --no-warn-script-location -q --require-hashes -r (Join-Path $App 'hub\requirements.lock')
 if ($LASTEXITCODE -ne 0) { Say 'Installing the Python packages failed (see above). Check the internet connection and run Install.cmd again.' Red; exit 1 }
 Say 'Done.'
 

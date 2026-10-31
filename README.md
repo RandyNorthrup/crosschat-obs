@@ -13,7 +13,7 @@
   <a href="https://www.paypal.com/donate/?hosted_button_id=Q9VC7B42R7K82"><img alt="Donate with PayPal" src="https://img.shields.io/badge/donate-PayPal-0070ba"></a>
 </p>
 
-**CrossChat** is a free companion for OBS Studio when you stream to several platforms at once. It reads **Twitch, YouTube, Kick and X** chat into one window, lets you **answer everyone with one message** (or one person on their own platform), **moderates** Twitch and YouTube, puts **themeable chat, featured messages, viewer counts and alerts** on your stream, and **starts and ends your X livestream together with OBS**. Pair your **phone or another PC** to read, answer and moderate chat from there. Everything runs on your own PC and home network.
+**CrossChat** is a free companion for OBS Studio when you stream to several platforms at once. It reads **Twitch, YouTube, Kick and X** chat into one window, lets you **answer everyone with one message** (or one person on their own platform), **moderates** Twitch, YouTube and Kick, puts **themeable chat, featured messages, viewer counts and alerts** on your stream, and **starts and ends your X livestream together with OBS**. Pair your **phone or another PC** to read, answer and moderate chat from there. Everything runs on your own PC and home network.
 
 <p align="center">
   <img src="assets/video/overview.webp" alt="CrossChat in action: a question from YouTube is put on stream, then one reply goes out to Twitch, YouTube and X at once" width="100%"><br>
@@ -27,6 +27,11 @@
 - Viewer counts per platform and in total.
 - Subs, raids, cheers, Super Chats and memberships are marked in the list.
 - Deleted messages and timed-out viewers are struck through.
+- **7TV, BetterTTV and FrankerFaceZ emotes**, as well as each platform's own.
+- **First-time chatters** stand out, and each platform's connection health is a glance away.
+- **Filters** hide words, viewers, chat commands and bots from your stream without deleting anything.
+- **Read chat aloud**: questions, everything, alerts or a `!tts` command, with Windows' own voices.
+- **Chat history**: every stream kept on your PC for 90 days, to search and export as CSV or HTML.
 - Light, dark, or follows Windows.
 - Opens by itself when OBS starts streaming, and closes two minutes after you stop.
 
@@ -34,9 +39,9 @@
 - Type once to post to every live platform, as you.
 - Use **only:** to post to a single platform, or open a message and press **reply** to answer that person on their own platform. On Twitch that's a threaded reply.
 - **Quick replies:** one-tap lines and emoji you edit yourself.
-- **Moderation:** delete a message, time out or ban, on Twitch and YouTube.
+- **Moderation:** delete a message, time out or ban, on Twitch, YouTube and Kick.
 - **Answer later:** star messages to come back to. Questions are picked out for you.
-- **Twitch through Twitch's official API.** Connect once in Settings; the code is pre-filled at twitch.tv/activate.
+- **Twitch and Kick through their official APIs.** Connect once in Settings.
 - YouTube and X go out through your signed-in browser and the CrossChat extension.
 - Test mode (`?dry`) walks through the whole path without posting anything.
 
@@ -85,6 +90,10 @@
 | <img src="assets/screenshots/chat-dark.png" alt="The CrossChat window: viewers per platform and chat from Twitch, YouTube, Kick and X" width="260"> | <img src="assets/screenshots/chat-reply.png" alt="Replying to a YouTube viewer while their question is featured on stream" width="260"> | <img src="assets/screenshots/chat-mod.png" alt="A message's actions: reply, show on stream, answer later, delete, timeouts, ban, quick replies" width="260"> |
 | **Questions** | **Quick replies** | **Settings** |
 | <img src="assets/screenshots/chat-questions.png" alt="The Questions view: only messages that look like questions" width="260"> | <img src="assets/screenshots/chat-quick.png" alt="Editing quick replies" width="260"> | <img src="assets/screenshots/chat-settings.png" alt="Settings: light or dark, Twitch connected, pair a device, test events" width="260"> |
+
+| Read chat aloud | Filters | Chat history | Connection health |
+|:-:|:-:|:-:|:-:|
+| <img src="assets/screenshots/chat-tts.png" alt="Text-to-speech settings: what to read, voice, speed and volume" width="195"> | <img src="assets/screenshots/chat-filters.png" alt="Filters: hidden words, viewers, commands and bots, with hidden messages dimmed in the chat" width="195"> | <img src="assets/screenshots/chat-history.png" alt="A past stream's chat: search, platform filter, questions, CSV and HTML export" width="195"> | <img src="assets/screenshots/chat-health.png" alt="Connections: how long each platform has been connected, last message and reconnects, and Twitch and Kick sign-in" width="195"> |
 
 **The companion on a phone or another PC**
 
@@ -182,7 +191,7 @@ Reply, moderate, star and feature messages as much as you like: in the demo ever
 | Put a message on stream | Hover it → **show**. **Hide** in the window, or the hotkey, takes it off. |
 | Restyle the widgets | ✎ in the chat window, or Start menu → CrossChat → **Theme Studio** |
 | Go live on X now | Start menu → **Go live on X**, the OBS script's button, or the hotkey |
-| Moderate | Open a message → **Moderate** (Twitch needs **Connect Twitch** in Settings once) |
+| Moderate | Open a message → **Moderate** (Twitch and Kick need **Connect Twitch** / **Connect Kick** in Settings once) |
 | Use your phone | Settings (⚙) → **Pair a device**, then scan the QR code |
 | Use another PC | Settings (⚙) → **Pair a device**, then open the address it shows in that PC's browser (enter the 6-digit code if asked) |
 
@@ -201,7 +210,7 @@ A Stream Deck can trigger them with a *Hotkey* action, or open the Start-menu sh
 |---|:-:|:-:|---|:-:|---|
 | **Twitch** | ✅ | ✅ (official API once connected) | delete, timeout, ban, unban | ✅ | subs, resubs, gifts, raids, cheers |
 | **YouTube** | ✅ | ✅ | remove, 5-minute timeout, hide user | ✅ | Super Chats, Super Stickers, members, gifted memberships |
-| **Kick** | ✅ | — | — | ✅ | subs, gifts, hosts (see [Known limits](#known-limits)) |
+| **Kick** | ✅ | ✅ (official API once connected) | delete, timeout, ban, unban | ✅ | subs, gifts, hosts (see [Known limits](#known-limits)) |
 | **X** | ✅ | ✅ | — | ✅ | — |
 
 ## X Live
@@ -240,9 +249,19 @@ Your settings are in `%LOCALAPPDATA%\CrossChat\config.json` (start from [`config
 | `overlay.platforms` | `"all"` | Which platforms the on-stream chat shows by default, for example `["twitch"]`. |
 | `overlay.theme` | `"classic"` | The theme sources use without `?theme=` (the Theme Studio's **Set as default** overrides it). |
 | `obs.host`, `obs.port`, `obs.password` | from OBS | Only if OBS's WebSocket isn't on this PC or you want to override what OBS has saved. |
-| `remote.enabled`, `remote.port` | `true`, `4467` | The companion for paired devices. It only starts listening once you pair a device. |
+| `remote.enabled`, `remote.port` | `true`, `4467` | The companion for paired devices. It only starts listening once you pair a device, and never on a network Windows calls Public. |
+| `remote.bind` | `"auto"` | Where the companion listens. `"auto"` is your PC's home-network address. Set a Tailscale IP to use it over Tailscale. |
 | `twitch_client_id` | CrossChat's | Use your own Twitch app instead (a Public client from dev.twitch.tv). |
-| `custom_overlays` | `""` | A folder of your own overlay pages, served at `http://127.0.0.1:4466/custom/<file>` (see below). |
+| `kick_client_id`, `kick_client_secret` | CrossChat's | Use your own Kick app instead (redirect URL `http://localhost:4466/kick/callback`). |
+| `emotes` | all on | `{"bttv": true, "ffz": true, "7tv": true}`: third-party emotes in the chat and widgets. |
+| `logs.enabled`, `logs.keep_days` | `true`, `90` | Keep each stream's chat on this PC, and for how long. |
+| `custom_overlays` | `""` | A folder of your own overlay pages, served at `http://localhost:4466/custom/<file>` (see below). |
+| `x.enabled` | `false` | Use X Live. |
+| `x.auto_go_live` | `true` | Go live on X when OBS starts streaming. |
+| `x.title` | `"Live now"` | Livestream title. |
+| `x.title_file`, `x.title_prefix` | `""` | Use the first line of a text file as the title instead (handy with a "now building" file). |
+| `x.source` | `"OBS"` | The source name in X Live Studio. |
+| `x.end_with_obs` | `true` | End the X livestream when OBS stops. |
 
 ### Your own overlays
 
@@ -250,15 +269,11 @@ Hand-made overlay pages can read CrossChat's live feed: `/events` (Server-Sent E
 
 Since OBS 33, a page added as a *local file* can't reach `127.0.0.1`, so let CrossChat serve it:
 1. Set `"custom_overlays": "C:\\path\\to\\your\\overlays"` in `config.json`.
-2. Use `http://127.0.0.1:4466/custom/your-page.html` as the Browser Source URL.
+2. Use `http://localhost:4466/custom/your-page.html` as the Browser Source URL. (`http://127.0.0.1:4466/custom/...` is sent there.)
 
-Subfolders, images, fonts, video and audio work. Nothing outside that folder is served.
-| `x.enabled` | `false` | Use X Live. |
-| `x.auto_go_live` | `true` | Go live on X when OBS starts streaming. |
-| `x.title` | `"Live now"` | Livestream title. |
-| `x.title_file`, `x.title_prefix` | `""` | Use the first line of a text file as the title instead (handy with a "now building" file). |
-| `x.source` | `"OBS"` | The source name in X Live Studio. |
-| `x.end_with_obs` | `true` | End the X livestream when OBS stops. |
+These pages get their own address, which the browser keeps apart from the CrossChat window, so an overlay you downloaded can show chat but can't reply, moderate or change anything as you.
+
+Subfolders, images, fonts, video and audio work. Nothing outside that folder is served. To build your own, see the **[API](docs/API.md)**.
 
 ## How it works
 
@@ -279,7 +294,7 @@ flowchart LR
   HUB -- live feed --> WIN
   HUB -- live feed --> WID
   WIN -- "replies, mod jobs" --> EXT
-  HUB -- "Twitch replies and moderation<br/>(official API)" --> TW
+  HUB -- "Twitch and Kick replies, moderation<br/>(official APIs)" --> TW & KI
   EXT -- posts as you --> YT & XS["X Live Studio"]
   XS -- "X chat, viewers" --> EXT --> HUB
   HUB -- "go live / end" --> EXT
@@ -289,24 +304,28 @@ When you pair a device, Windows asks once whether Python may use the network. Ch
 
 - **The hub** (`hub/hub.py`) is a small Python program. It reads each platform's public chat and follows OBS through its WebSocket server. It serves the chat window, the widgets and the Theme Studio, on `127.0.0.1` only.
 - **The OBS script** (`obs/crosschat.lua`) starts the hub with OBS and gives you buttons and hotkeys.
-- **The extension** (`extension/`) does what only your signed-in browser can do: post your replies, and work X Live Studio.
+- **The extension** (`extension/`) does what only your signed-in browser can do: post your YouTube and X replies, moderate YouTube, and work X Live Studio. It reads no logins and has no Chrome permissions.
 
 ## Privacy and security
 
-- Everything stays on your PC. The hub listens on `127.0.0.1` only and answers only under that address.
-- Anything that *does* something (opening windows, going live, featuring a message, changing themes) is refused when another website asks for it.
-- Reading chat uses the platforms' public, signed-out chat feeds.
-- **Twitch replies and moderation** use Twitch's official API once you connect Twitch.
-  - CrossChat asks for three permissions only: write chat, delete messages, ban/unban.
-  - The token is encrypted for your Windows account (DPAPI). Disconnecting revokes it at Twitch.
-  - Before you connect, the extension posts Twitch replies using your browser's Twitch login cookie, for that one connection only.
-- YouTube and X replies, and YouTube moderation, go out from your own browser with the accounts already signed in there.
-- **The companion port (4467)** only opens after you pair a device.
+CrossChat has no server and no account. Everything runs on your PC; it talks only to the platforms you set up, straight from your PC. **[SECURITY.md](SECURITY.md) lists every connection it makes and what is sent.**
+
+- The hub listens on `127.0.0.1` only and answers only under that address. Other websites get nothing from it, not even the chat, and can't put the CrossChat window in a frame.
+- Your own overlay pages run at their own address and get only the public chat: they can't reply, moderate or change anything as you.
+- Anything that *does* something (opening windows, going live, featuring a message, changing settings) is refused when another website asks for it.
+- **Reading chat** uses the platforms' public, signed-out chat feeds.
+- **Twitch and Kick replies and moderation** use their official APIs once you connect them in Settings.
+  - The tokens are encrypted for your Windows account (DPAPI). Disconnecting deletes them and revokes them at Twitch or Kick.
+- **The extension reads no logins.** It has no Chrome permissions; it only types your YouTube and X replies into those sites' own chat boxes.
+- **The companion port (4467)** only opens after you pair a device, and only on a network Windows calls Private.
   - It answers paired devices only: an HttpOnly cookie per device, of which only a hash is stored.
   - Pairing codes are 6 digits, last 5 minutes and allow 5 tries.
   - Use it on your home network only.
+- **Chat history** stays in `%LOCALAPPDATA%\CrossChat\logs` and is removed after 90 days. Spreadsheet exports can't run formulas a viewer typed.
+- **Text-to-speech** uses Windows' own voices unless you pick one marked *online*.
 - CrossChat reads OBS's WebSocket password from OBS's own settings file. It doesn't copy it anywhere.
-- No telemetry, no analytics, no update checks. The only log is `%LOCALAPPDATA%\CrossChat\crosschat.log`.
+- No telemetry, no analytics, no update checks.
+- Every release has a signed build provenance attestation: `gh attestation verify <zip> --repo RandyNorthrup/crosschat-obs`. The installer installs the exact Python packages CrossChat was tested with, checked against their checksums.
 
 More detail, and how to report a problem privately: [SECURITY.md](SECURITY.md).
 
@@ -324,7 +343,7 @@ More detail, and how to report a problem privately: [SECURITY.md](SECURITY.md).
 ## Known limits
 
 - **Windows only.** The hub uses Windows to place and close the chat window.
-- **Kick replies** aren't supported. Kick alerts come from Kick's public feed and haven't been checked against a real Kick stream yet.
+- **Kick** replies and moderation use Kick's documented API. Sign-in was verified against Kick; the post and moderation calls are covered by tests, not yet by a live Kick stream. Kick alerts come from Kick's public feed and haven't been checked against a real Kick stream yet.
 - **X Live** depends on X Live Studio's page and needs X Premium. CrossChat clicks through it like a person would, so a redesign by X can break it until CrossChat is updated.
 - **YouTube** chat is read the same way YouTube's own chat pop-out reads it.
 - **YouTube moderation** clicks through YouTube's own chat menu in the CrossChat window, so the signed-in account must own the channel or moderate it. It hasn't been checked against a live YouTube stream yet.
@@ -346,8 +365,8 @@ Then remove the two pieces it can't:
 python -m pip install -r hub/requirements.txt pytest ruff
 python hub/hub.py --test --twitch <any live channel>     # run the hub without OBS, against real chat
 ruff check hub scripts tests
-python -m pytest                                         # 42 tests: config, platforms, web server, obs-websocket, companion
-node --test "tests/js/*.test.mjs"                        # 24 tests: theme engine, chat app
+python -m pytest                                         # 63 tests: config, platforms, web server, obs-websocket, companion, 1.4 features and safety rules
+node --test "tests/js/*.test.mjs"                        # 35 tests: theme engine, chat app, emotes and chat delay
 python scripts/obs_e2e.py --obs <portable OBS folder>    # end to end against a real OBS (see the file)
 pwsh scripts/package.ps1                                 # builds dist\CrossChat-<version>-windows.zip
 ```

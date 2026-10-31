@@ -42,6 +42,7 @@
       badges: true,
       emoteSize: 28,
       timestamps: false,
+      firstHighlight: true,        // a viewer's first message in the channel ever: highlighted, with a NEW tag
     },
     chat: {
       direction: 'bottom',         // bottom: newest at the bottom | top: newest at the top
@@ -52,6 +53,7 @@
       animationOut: 'fade',        // fade | slide | none
       platforms: 'all',            // "all" or a list such as ["twitch", "youtube"]
       events: true,                // subs, raids and the like as highlighted lines in the chat too
+      delay: 0,                    // seconds each message waits before it shows; deleted or hidden meanwhile, it never does
     },
     featured: { layout: 'card', scale: 1.5, platform: true, seconds: 0, animation: 'pop' },
     viewers: { layout: 'row', perPlatform: true, label: 'watching', icon: true },
@@ -83,7 +85,7 @@
     'colors.backgroundOpacity': [0, 1, 0.01], 'colors.outlineWidth': [0, 6, 0.5], 'colors.shadow': [0, 1, 0.05],
     'message.radius': [0, 40, 1], 'message.padding': [0, 40, 1], 'message.gap': [0, 40, 1], 'message.accentWidth': [0, 12, 1],
     'message.emoteSize': [12, 64, 1],
-    'chat.max': [1, 50, 1], 'chat.seconds': [0, 3600, 1],
+    'chat.max': [1, 50, 1], 'chat.seconds': [0, 3600, 1], 'chat.delay': [0, 60, 1],
     'featured.scale': [0.5, 3, 0.05], 'featured.seconds': [0, 600, 1],
     'alerts.seconds': [1, 60, 0.5], 'alerts.volume': [0, 1, 0.05],
   };

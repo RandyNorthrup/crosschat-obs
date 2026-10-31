@@ -4,6 +4,64 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-31
+
+### Added
+
+- **Kick replies and moderation** through Kick's official API. **Connect Kick** in Settings signs in with Kick's OAuth 2.1 and PKCE.
+  - Reply to everyone, to Kick only, or to one Kick viewer as a threaded reply.
+  - Delete, timeout (1 minute to 7 days), ban and unban.
+  - The token is encrypted for your Windows account (DPAPI). Disconnecting revokes it at Kick.
+- **7TV, BetterTTV and FrankerFaceZ emotes** in the chat window, the companion and the widgets: the global sets and your Twitch channel's. Turn each off with `"emotes"` in `config.json`.
+- **Read chat aloud** (text-to-speech): questions only, everything, alerts, a `!tts` command, or the featured message.
+  - It uses Windows' own voices. Voices that send text online are marked as such.
+  - Links, emote names, filtered messages and your own lines are never read.
+  - Paired devices can read a message aloud or skip one.
+- **Filters**: hide words, viewers, chat commands and well-known bots from the widgets, without deleting anything on the platform.
+  - **Filter this user** in a message's menu. New filters also take matching messages already on screen off the stream.
+  - Hidden messages stay in your window, dimmed, with the reason.
+- **Chat delay** for the on-stream chat (`chat.delay` in the Theme Studio, or `?delay=` on one source): a message deleted, timed out or filtered while it waits never reaches the stream. The featured message is never delayed.
+- **First-time chatters** are marked: first message ever in your channel (Twitch says so) or first this stream.
+- **Connection health**: how long each platform has been connected, its last message and its reconnects.
+- **Chat history**: every stream's chat is kept on your PC for 90 days. Search it, filter by platform or questions, and export it as CSV or HTML (Settings → Chat history).
+- New screenshots: text-to-speech, filters, chat history and connection health.
+- **[API documentation](docs/API.md)** for your own overlays and tools.
+- Release downloads come with a signed **build provenance attestation**: `gh attestation verify <zip> --repo RandyNorthrup/crosschat-obs`.
+
+### Changed
+
+- **The extension reads no logins any more.** It has no Chrome permissions at all. Twitch replies go through Twitch's API only, so connect Twitch in Settings to reply there.
+- **Companion**: it listens only on your PC's home-network address, and refuses to start on a network Windows calls Public (café or hotel Wi-Fi). It closes when the PC moves to another network. `"remote": {"bind"}` sets the address yourself, for Tailscale.
+
+- **Your own overlays** are served at `http://localhost:4466/custom/` (old `127.0.0.1` addresses are sent there). See Security.
+
+### Security
+
+An independent review of the whole codebase found the issues below. All are fixed.
+
+- **Other websites get nothing from CrossChat.** Before, any website open in your browser could read the chat feed and, from `/events`, paired devices' names, quick replies and sign-in state. It could also take over the reply and speech roles of the CrossChat window.
+- **The CrossChat window, the Studio and the pairing page can't be framed** by another site, where a hidden frame could take your clicks. If a second window takes the reply or speech role and closes, the role goes back to the window that had it.
+- **Your own overlay pages can't act as you.** They run at their own address and get the public chat only, without filtered messages or CrossChat's notes. Before, a downloaded overlay pack could post, moderate and read history.
+- **The widgets only load CrossChat's own files**, emote pictures and Google Fonts. A shared theme's custom CSS can't call other servers.
+- **Companion:**
+  - it answers only requests addressed to an IP address, which stops DNS-rebinding pages from trying pairing codes;
+  - it stays off when Windows can't say the network is Private;
+  - it closes when no device is paired;
+  - oversized or slow requests are dropped, and connections at once are limited.
+- **Filtered messages** can't be featured or read aloud, from any device.
+- **Disconnect** revokes both Kick tokens the way Kick documents it, and says so when Twitch or Kick didn't confirm.
+- Twitch's sign-in page is only ever opened on twitch.tv.
+- A strange viewer count from a platform can't break the chat feed any more.
+- Requests from other sites on the same address (`same-site`) are treated like any other website.
+- Emote names and picture addresses from 7TV, BetterTTV and FrankerFaceZ are checked before any page sees them.
+- Chat history exports neutralise spreadsheet formulas a viewer could type.
+- **Supply chain:**
+  - the installer installs exact package versions checked against their SHA-256 hashes (`hub/requirements.lock`);
+  - GitHub Actions are pinned to commits;
+  - releases are built by a job that installs nothing.
+- Your chat history, tokens and settings are kept out of git when running from a checkout.
+- [SECURITY.md](SECURITY.md) now lists every connection CrossChat makes and what it sends.
+
 ## [1.3.0] - 2026-10-31
 
 ### Added
@@ -105,7 +163,8 @@ First public release.
 - Overlays are served by the hub over `http://127.0.0.1`. OBS 33 blocks local-file overlays from reaching the hub.
 - Fonts are Windows' own: Segoe UI Variable and Cascadia Mono.
 
-[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.0.0...v1.1.0

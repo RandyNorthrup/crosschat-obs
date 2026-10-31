@@ -12,22 +12,28 @@
   root.CrossChatApp = api;
 })(typeof self !== 'undefined' ? self : globalThis, function () {
   const NAMES = { twitch: ['Twitch', 'TW'], youtube: ['YouTube', 'YT'], kick: ['Kick', 'K'], x: ['X', 'X'], facebook: ['Facebook', 'FB'] };
-  const LIMIT = { twitch: 500, youtube: 200, x: 140 };     // platforms a reply can go to, and the longest message each takes
+  // Platforms a reply can go to, and the longest message each takes. Kick only once Kick is connected in Settings.
+  const LIMIT = { twitch: 500, youtube: 200, x: 140, kick: 500 };
   const QUICK_MAX = 30, QUICK_LENGTH = 100;
+  const LONGEST_TIMEOUT = { twitch: 1209600, kick: 604800 };    // 14 days; 7 days
 
   const name = (p) => (NAMES[p] ? NAMES[p][0] : p);
-  const openPlatforms = (states) => Object.keys(LIMIT).filter((p) => (states || {})[p] === 'on');   // chats that can take a reply now
-  const targetsFor = (states, replyTo) => (replyTo ? [replyTo.p] : openPlatforms(states));
+  const takesReplies = (p, kick) => !!LIMIT[p] && (p !== 'kick' || kick === 'on');
+  // Chats that can take a reply now. kick: the state of the Kick connection ("on" once connected).
+  const openPlatforms = (states, kick) => Object.keys(LIMIT).filter((p) => (states || {})[p] === 'on' && takesReplies(p, kick));
+  const targetsFor = (states, replyTo, kick) => (replyTo ? [replyTo.p] : openPlatforms(states, kick));
   const tooLong = (text, to) => to.filter((p) => LIMIT[p] && [...text].length > LIMIT[p]);
   const clean = (text) => String(text || '').replace(/\s+/g, ' ').trim();
 
   // What can carry a message to platform p right now: { ok, why }.
   function route(p, ctx) {
     if (!LIMIT[p]) return { ok: false, why: name(p) + ' chat can only be read from CrossChat' };
-    if (p === 'twitch' && ctx.twitch === 'on') return { ok: true };
+    // Twitch and Kick replies go through the platform's own API, so only once connected in Settings.
+    if (p === 'twitch' || p === 'kick') {
+      return ctx[p] === 'on' ? { ok: true } : { ok: false, why: 'Connect ' + name(p) + ' in Settings' + (ctx.remote ? ' on the streaming PC' : '') + ' to reply on ' + name(p) };
+    }
     if (ctx.executor) return { ok: true };
-    return { ok: false, why: ctx.remote ? 'Needs the CrossChat window open on the streaming PC' + (p === 'twitch' ? ', or Twitch connected in Settings' : '')
-      : 'Needs this window open in Chrome or Edge with the CrossChat extension' + (p === 'twitch' ? ', or Twitch connected in Settings' : '') };
+    return { ok: false, why: ctx.remote ? 'Needs the CrossChat window open on the streaming PC' : 'Needs this window open in Chrome or Edge with the CrossChat extension' };
   }
 
   // Can message m be answered on its own platform: { ok, why }.
@@ -44,12 +50,11 @@
     if (!m || m.kind !== 'chat' || !m.name) return off('Only chat messages can be moderated');
     if ((m.badges || []).some((b) => b === 'broadcaster' || b === 'owner')) return off("That's you");
     if (m.p === 'x') return off("X chat can't be moderated from CrossChat");
-    if (m.p === 'kick') return off("Kick chat can't be moderated from CrossChat yet");
-    if (m.p === 'twitch') {
-      const why = ctx.twitch === 'on' ? '' : ctx.remote ? 'Connect Twitch on the streaming PC (Settings) to moderate' : 'Connect Twitch in Settings to moderate';
+    if (m.p === 'twitch' || m.p === 'kick') {     // both through the platform's own API, once connected in Settings
+      const why = ctx[m.p] === 'on' ? '' : 'Connect ' + name(m.p) + (ctx.remote ? ' on the streaming PC (Settings)' : ' in Settings') + ' to moderate';
       const ok = !why;
       return [
-        { action: 'delete', label: 'Delete message', ok: ok && !!m.mid, why: why || (m.mid ? '' : 'Twitch gave this message no id') },
+        { action: 'delete', label: 'Delete message', ok: ok && !!m.mid, why: why || (m.mid ? '' : name(m.p) + ' gave this message no id') },
         { action: 'timeout', seconds: 600, label: 'Timeout 10 minutes', ok, why },
         { action: 'timeout', seconds: 3600, label: 'Timeout 1 hour', ok, why },
         { action: 'timeout', label: 'Timeout for…', custom: true, ok, why },
@@ -139,8 +144,131 @@
     return out;
   }
 
-  return { NAMES, LIMIT, QUICK_MAX, QUICK_LENGTH, name, openPlatforms, targetsFor, tooLong, clean, route, canReply, modMenu,
-           duration, describe, cleanQuick, inView, mention, secondsLeft, readable, pieces };
+  // A custom timeout typed in minutes, as the seconds platform p takes: Twitch 1 minute to 14 days, Kick whole minutes
+  // (rounded up) from 1 minute to 7 days.
+  function timeoutSeconds(p, minutes) {
+    const most = LONGEST_TIMEOUT[p] || LONGEST_TIMEOUT.twitch, n = Number(minutes) || 0;
+    if (p === 'kick') return Math.min(most / 60, Math.max(1, Math.ceil(n))) * 60;
+    return Math.min(most, Math.max(60, Math.round(n * 60)));
+  }
+
+  // ---- reading chat aloud ----------------------------------------------------------------------------------------------
+  const TTS_READ = ['all', 'questions', 'events', 'command', 'featured'];
+  const TTS_PLATFORMS = ['twitch', 'youtube', 'kick', 'x'];
+
+  // Text-to-speech settings as the hub keeps them, from whatever came in (missing or wrong values get the defaults).
+  function ttsSettings(raw) {
+    const s = raw && typeof raw === 'object' ? raw : {};
+    const num = (v, lo, hi, d) => { const n = v === null || v === '' ? NaN : Number(v); return isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+    const list = Array.isArray(s.platforms) ? TTS_PLATFORMS.filter((p) => s.platforms.includes(p)) : 'all';
+    return {
+      enabled: s.enabled === true,
+      read: TTS_READ.includes(s.read) ? s.read : 'all',
+      command: [...clean(s.command)].slice(0, 20).join('') || '!tts',
+      names: s.names !== false,
+      max_chars: Math.round(num(s.max_chars, 20, 500, 200)),
+      skip_links: s.skip_links !== false,
+      platforms: list === 'all' || list.length === TTS_PLATFORMS.length ? 'all' : list,
+      voice: typeof s.voice === 'string' ? s.voice.slice(0, 200) : '',
+      rate: Math.round(num(s.rate, 0.5, 2, 1) * 10) / 10,
+      volume: Math.round(num(s.volume, 0, 1, 1) * 100) / 100,
+    };
+  }
+
+  // Voices that are not on this PC (Edge's "Online (Natural)" ones, Chrome's Google ones) send the text they read to
+  // Microsoft or Google. They are listed apart and never picked unless the streamer picks one by name.
+  const onlineVoice = (v) => !!v && v.localService === false;
+  const voiceMaker = (v) => (/google/i.test((v && v.name) || '') ? 'Google' : 'Microsoft');
+  function voiceGroups(voices, lang) {
+    const base = String(lang || 'en').slice(0, 2).toLowerCase();
+    const mine = (v) => String(v.lang || '').toLowerCase().startsWith(base);
+    const all = (voices || []).filter((v) => v && v.name);
+    const ordered = all.filter(mine).concat(all.filter((v) => !mine(v)));
+    return { local: ordered.filter((v) => !onlineVoice(v)), online: ordered.filter(onlineVoice) };
+  }
+  // The voice to read with: exactly the saved one, else the first voice on this PC (null when there is none).
+  function pickVoice(voices, saved, lang) {
+    const exact = saved && (voices || []).find((v) => v && v.name === saved);
+    return exact || voiceGroups(voices, lang).local[0] || null;
+  }
+
+  // The read-aloud queue on the speaker: one at a time, in order. add() and done() hand back what to say now, if anything;
+  // done() for an item that is no longer the current one (it was stopped) changes nothing.
+  function speech(longest) {
+    let queue = [], current = null;
+    const next = () => { current = queue.shift() || null; return current; };
+    return {
+      get current() { return current; },
+      get waiting() { return queue.length; },
+      add(item) {
+        if (!item || !clean(item.text)) return null;
+        if (item.id && ((current && current.id === item.id) || queue.some((q) => q.id === item.id))) return null;
+        queue.push(item);
+        if (queue.length > (longest || 30)) queue.shift();
+        return current ? null : next();
+      },
+      done(item) { return item && item === current ? next() : null; },
+      stop() { const had = !!current || queue.length > 0; queue = []; current = null; return had; },
+    };
+  }
+
+  // ---- filters, connection health, chat logs -----------------------------------------------------------------------------
+  const LIST_MAX = 200, LIST_LENGTH = 50;
+  // A filter list as the hub keeps it: trimmed, no blanks or repeats (in any case), at most 200 of at most 50 characters.
+  function cleanList(list) {
+    const out = [], seen = new Set();
+    (Array.isArray(list) ? list : []).forEach((t) => {
+      const s = [...clean(t)].slice(0, LIST_LENGTH).join('');
+      if (s && !seen.has(s.toLowerCase()) && out.length < LIST_MAX) { seen.add(s.toLowerCase()); out.push(s); }
+    });
+    return out;
+  }
+  const filterSettings = (raw) => {
+    const s = raw && typeof raw === 'object' ? raw : {};
+    return { words: cleanList(s.words), users: cleanList(s.users), hide_commands: s.hide_commands === true, bots: s.bots === true };
+  };
+
+  // "45 s", "12 m", "1 h 12 m", "2 d 3 h".
+  function span(ms) {
+    const s = Math.max(0, Math.round((Number(ms) || 0) / 1000));
+    if (s < 60) return s + ' s';
+    const m = Math.floor(s / 60);
+    if (m < 60) return m + ' m';
+    const h = Math.floor(m / 60);
+    if (h < 24) return h + ' h' + (m % 60 ? ' ' + (m % 60) + ' m' : '');
+    return Math.floor(h / 24) + ' d' + (h % 24 ? ' ' + (h % 24) + ' h' : '');
+  }
+  const ms = (t) => { const n = Number(t) || 0; return n && n < 1e12 ? n * 1000 : n; };
+
+  // One platform's connection health: "connected 1 h 12 m · last message 8 s ago · 2 reconnects".
+  function health(h, now) {
+    if (!h) return '';
+    now = now || Date.now();
+    const since = ms(h.since), last = ms(h.last), n = Number(h.reconnects) || 0;
+    const out = [since ? 'connected ' + span(now - since) : 'not connected'];
+    if (since || last) out.push(last ? 'last message ' + span(now - last) + ' ago' : 'no messages yet');
+    if (n) out.push(n + (n === 1 ? ' reconnect' : ' reconnects'));
+    return out.join(' · ');
+  }
+
+  const validLog = (name) => typeof name === 'string' && /^[\w-]{1,60}$/.test(name);
+  function bytes(n) {
+    n = Number(n) || 0;
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return Math.round(n / 1024) + ' KB';
+    return (n / 1048576).toFixed(1) + ' MB';
+  }
+  // The messages of a saved chat that match: every searched word in the name or text, one platform, questions only.
+  function logFilter(messages, f) {
+    f = f || {};
+    const words = clean(f.text).toLowerCase().split(' ').filter(Boolean);
+    return (Array.isArray(messages) ? messages : []).filter((m) => m && (!f.p || f.p === 'all' || m.p === f.p) && (!f.questions || m.question)
+      && words.every((w) => [m.name, m.handle, m.system, m.text].join(' ').toLowerCase().includes(w)));
+  }
+
+  return { NAMES, LIMIT, QUICK_MAX, QUICK_LENGTH, LIST_MAX, LIST_LENGTH, TTS_READ, TTS_PLATFORMS, name, takesReplies, openPlatforms, targetsFor,
+           tooLong, clean, route, canReply, modMenu, duration, describe, cleanQuick, inView, mention, secondsLeft, readable, pieces, timeoutSeconds,
+           ttsSettings, onlineVoice, voiceMaker, voiceGroups, pickVoice, speech, cleanList, filterSettings, span, health, validLog, bytes, logFilter };
 });
 
 // ---- the page ---------------------------------------------------------------------------------------------------------
@@ -154,9 +282,11 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
   const store = (key, value) => { try { if (value === undefined) return localStorage.getItem(key); localStorage.setItem(key, value); } catch (e) { return null; } return null; };
   const touch = matchMedia('(hover: none)');
 
+  const F = globalThis.CrossChatFeed || { emoteMap: () => new Map(), withEmotes: (p) => p };
   const ctx = { remote: false, device: null, version: '', lanUrl: null, executor: false, executorKnown: false, twitch: 'off',
                 bridge: !!document.documentElement.dataset.crosschat, states: {}, unpaired: false };
-  let counts = {}, starred = new Set(), quick = [], devices = [], twitchAuth = { state: 'off' }, pairTimer = null;
+  let counts = {}, starred = new Set(), quick = [], devices = [], twitchAuth = { state: 'off' }, kickAuth = { state: 'off' }, pairTimer = null;
+  let tts = A.ttsSettings({}), filters = A.filterSettings({}), health = {}, emotes = new Map();
   let replyTo = null, featuredId = null, view = 'all', pinned = true, ding = store('ding') === '1', audio, sending = false, feed = null;
   const msgs = new Map();                         // id -> message, for the action sheet and featuring
   const waiting = {}, early = {}, echoes = [];    // jobs this page started; answers that came before their job id; lines sent to several platforms
@@ -262,20 +392,30 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     drawPlatforms();
     document.querySelectorAll('.tag').forEach((t) => t.style.setProperty('--c', css(t.dataset.p)));
     list.querySelectorAll('.name').forEach((n) => { n.style.color = nameColor(n.dataset.color); });
-    list.querySelectorAll('.emote').forEach((img) => { img.src = img.src.replace(/\/(dark|light)\//, lightNow() ? '/light/' : '/dark/'); });
+    list.querySelectorAll('.emote.tw').forEach((img) => { img.src = img.src.replace(/\/(dark|light)\//, lightNow() ? '/light/' : '/dark/'); });
   }
 
-  function words(into, m) {                       // the message text, with Twitch emotes swapped for their pictures
-    A.pieces(m.text, m.p === 'twitch' ? m.emotes : '').forEach((piece) => {
+  // The message text, with Twitch's emotes and 7TV / BetterTTV / FrankerFaceZ words swapped for their pictures.
+  function words(into, m) {
+    F.withEmotes(A.pieces(m.text, m.p === 'twitch' ? m.emotes : ''), emotes).forEach((piece) => {
       if (piece.text != null) { into.append(piece.text); return; }
-      const img = el('img', 'emote'); img.alt = piece.alt;
-      img.src = 'https://static-cdn.jtvnw.net/emoticons/v2/' + piece.emote + '/default/' + (lightNow() ? 'light' : 'dark') + '/1.0';
+      const img = el('img', piece.url ? 'emote' : 'emote tw'); img.alt = piece.alt; img.title = piece.alt; img.decoding = 'async';
+      img.src = piece.url || 'https://static-cdn.jtvnw.net/emoticons/v2/' + piece.emote + '/default/' + (lightNow() ? 'light' : 'dark') + '/1.0';
       into.append(img);
     });
   }
+  function rewords() {                            // the emote list changed: draw every message's words again
+    list.querySelectorAll('.m[data-id] .words').forEach((w) => { const m = msgs.get(w.closest('.m').dataset.id); if (m) { w.textContent = ''; words(w, m); } });
+  }
 
   // ---- who is watching, where a reply can go -------------------------------------------------------------------------
-  const targets = () => A.targetsFor(ctx.states, replyTo);
+  const targets = () => A.targetsFor(ctx.states, replyTo, kickAuth.state);
+
+  const STATE = { on: 'connected', waiting: 'waiting for the stream', retry: 'reconnecting' };
+  function pillTitle(p) {
+    const state = ctx.states[p], h = A.health(health[p]);
+    return A.name(p) + ' chat: ' + (STATE[state] || (state === 'off' ? (p === 'x' ? 'no livestream there (Go live on X starts one)' : 'off') : state)) + (h ? '\n' + h : '');
+  }
 
   function drawPlatforms() {
     const bar = $('platforms'), only = $('targets');
@@ -283,19 +423,26 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     Object.keys(ctx.states).forEach((p) => {
       const state = ctx.states[p];
       const pill = el('div', 'pill ' + (state === 'on' ? 'on' : state === 'retry' ? 'retry' : ''));
+      pill.dataset.p = p;
       pill.style.setProperty('--c', css(p));
-      pill.title = A.name(p) + ' chat: ' + ({ on: 'connected', waiting: 'waiting for the stream', retry: 'reconnecting', off: p === 'x' ? 'no livestream there (Go live on X starts one)' : 'off' }[state] || state);
+      pill.title = pillTitle(p);
       pill.append(el('i'), el('span', '', A.name(p)), el('b', '', counts[p] == null ? '–' : counts[p]));
       bar.append(pill);
       if (!A.LIMIT[p]) return;
       const b = el('button', 'to'); b.type = 'button'; b.style.setProperty('--c', css(p)); b.append(el('i'), A.name(p));
-      b.disabled = sending || state !== 'on';
-      b.title = state === 'on' ? 'Send what you typed to ' + A.name(p) + ' only' : A.name(p) + ' chat is not open right now';
+      const can = A.takesReplies(p, kickAuth.state);
+      b.disabled = sending || state !== 'on' || !can;
+      b.title = !can ? 'Connect Kick in Settings to reply on Kick' : state === 'on' ? 'Send what you typed to ' + A.name(p) + ' only' : A.name(p) + ' chat is not open right now';
       b.onclick = () => post([p]);
       only.append(b, ' ');
     });
     drawEntry();
   }
+  // "last message 8 s ago" goes stale: keep the tooltips and Settings → Connections current.
+  setInterval(() => {
+    document.querySelectorAll('#platforms .pill').forEach((pill) => { pill.title = pillTitle(pill.dataset.p); });
+    if ($('settings').open) drawHealth();
+  }, 5000);
 
   function drawEntry() {
     const to = targets(), text = A.clean(say.value), over = A.tooLong(text, to), n = [...text].length;
@@ -304,7 +451,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     $('all').textContent = sending ? 'Sending…' : replyTo ? 'Reply on ' + A.name(replyTo.p) : 'Send to all';
     $('all').disabled = $('send').disabled = sending || !to.length;
     $('all').title = $('send').title = to.length ? 'Goes to: ' + to.map(A.name).join(', ') : 'No chat is open right now';
-    document.querySelectorAll('#quick .chip:not(.edit)').forEach((c) => { c.disabled = !A.openPlatforms(ctx.states).length; });
+    document.querySelectorAll('#quick .chip:not(.edit)').forEach((c) => { c.disabled = !A.openPlatforms(ctx.states, kickAuth.state).length; });
   }
 
   // ---- notes in the list ---------------------------------------------------------------------------------------------
@@ -406,8 +553,10 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     msgs.set(m.id, m);
     if (msgs.size > 600) msgs.delete(msgs.keys().next().value);
     row.tabIndex = -1;
-    row.setAttribute('aria-label', m.name + ' on ' + A.name(m.p) + ': ' + (m.system ? m.system + ' ' : '') + m.text);
+    row.setAttribute('aria-label', m.name + ' on ' + A.name(m.p) + (m.first === 'ever' ? ', first message in your channel' : '') + ': '
+      + (m.system ? m.system + ' ' : '') + m.text + (m.hidden ? ' (hidden by your filters)' : ''));
     if (m.question) row.classList.add('q');
+    if (m.first === 'ever') row.classList.add('first');
     const tag = el('div', 'tags'); tag.append(tagFor(m.p));
     const body = el('div', 'body');
     (m.badges || []).filter((b) => /^(broadcaster|owner|moderator|vip|verified|member|subscriber|founder)$/.test(b))
@@ -415,12 +564,14 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     const who = el('span', 'name', m.name); who.dataset.color = m.color || ''; who.style.color = nameColor(m.color);
     body.append(who);
     if (m.system && m.system !== m.text) body.append(el('span', 'system', m.system + (m.text ? ' · ' : '')));
-    words(body, m);
+    const said = el('span', 'words'); words(said, m); body.append(said);
     body.append(el('span', 'time', new Date(m.t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })));
     const flags = el('span', 'flags');
+    if (FIRST[m.first]) { const f = el('span', 'flag first', FIRST[m.first][0]); f.title = FIRST[m.first][1]; flags.append(f); }
     if (m.question) flags.append(el('span', 'flag q', 'Q'));
     const star = el('span', 'flag star', '★'); star.hidden = !starred.has(m.id); flags.append(star);
     body.append(flags);
+    if (m.hidden) hideRow(row, m.hidden, flags);
     row.append(tag, body);
     if (m.name && A.NAMES[m.p]) {                 // the hover toolbar (devices with a mouse); touch opens the sheet instead
       const acts = el('div', 'acts');
@@ -433,6 +584,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
       }
       const show = el('button', 'show', m.id === featuredId ? 'hide' : 'show'); show.type = 'button';
       show.title = 'Show this message big on stream (featured message)';
+      if (m.hidden && m.id !== featuredId) { show.disabled = true; show.title = 'Hidden by your filters, so it stays off the stream'; }
       show.onclick = (e) => { e.stopPropagation(); featureIt(m.id === featuredId ? null : m.id); };
       const st = el('button', 'star' + (starred.has(m.id) ? ' on' : ''), starred.has(m.id) ? '★' : '☆'); st.type = 'button';
       st.title = starred.has(m.id) ? 'Remove from Answer later' : 'Answer later';
@@ -452,7 +604,33 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     for (let r = list.querySelector('.m'); extra > 0 && r;) { const next = r.nextElementSibling; if (!r.classList.contains('starred')) { r.remove(); extra--; } r = next; }
     scrolled();
     drawViews();
-    if (ding && Date.now() - m.t < 5000) beep();
+    if (ding && !m.hidden && Date.now() - m.t < 5000) beep();
+  }
+
+  const FIRST = { ever: ['NEW', 'First message in your channel'], stream: ['1ST', 'First message this stream'] };
+  const HIDDEN = { word: ['word', 'it has a word from your filter list'], user: ['viewer', 'you filtered this viewer'],
+                   command: ['command', 'it is a !command'], bot: ['bot', 'it came from a bot'] };
+
+  // A message the streamer's filters hide: dimmed here, with why. It never reaches the stream and is never read aloud.
+  function hideRow(row, why, flags) {
+    const [word, reason] = HIDDEN[why] || ['filter', 'it matched your filters'];
+    row.classList.add('hid');
+    flags = flags || row.querySelector('.flags');
+    if (!flags || flags.querySelector('.flag.hid')) return;
+    const f = el('span', 'flag hid', 'hidden · ' + word); f.title = 'Not on stream and not read aloud: ' + reason;
+    flags.prepend(f);
+    const show = row.querySelector('.acts .show');
+    if (show && show.textContent === 'show') { show.disabled = true; show.title = 'Hidden by your filters, so it stays off the stream'; }
+  }
+  // Every row from one viewer (name or @handle, on any platform unless p is given), e.g. after "Filter this user".
+  function hideWho(who, why, p) {
+    who = String(who || '').toLowerCase().replace(/^@/, '');
+    if (!who) return;
+    msgs.forEach((m) => {
+      if ((p && m.p !== p) || (String(m.name || '').toLowerCase() !== who && String(m.handle || '').toLowerCase() !== who)) return;
+      m.hidden = m.hidden || why;
+      const row = rowOf(m.id); if (row) hideRow(row, m.hidden);
+    });
   }
 
   function scrolled() { if (pinned) list.scrollTop = list.scrollHeight; else jump.style.display = 'block'; }
@@ -523,7 +701,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
       chip.addEventListener('pointerdown', () => { held = false; clearTimeout(timer); timer = setTimeout(put, 500); });
       ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => chip.addEventListener(ev, () => clearTimeout(timer)));
       chip.addEventListener('contextmenu', (e) => { e.preventDefault(); clearTimeout(timer); if (!held) put(); });
-      chip.addEventListener('click', () => { if (held) { held = false; return; } post(A.openPlatforms(ctx.states), text); });
+      chip.addEventListener('click', () => { if (held) { held = false; return; } post(A.openPlatforms(ctx.states, kickAuth.state), text); });
       bar.append(chip);
     });
     const edit = el('button', 'chip edit', quick.length ? '✎' : '✎ Quick replies'); edit.type = 'button';
@@ -557,7 +735,17 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
   }
 
   // ---- the action sheet for one message ------------------------------------------------------------------------------
-  const ctxNow = () => ({ remote: ctx.remote, executor: ctx.executor || DEMO, twitch: twitchAuth.state, states: ctx.states });
+  const ctxNow = () => ({ remote: ctx.remote, executor: ctx.executor || DEMO, twitch: twitchAuth.state, kick: kickAuth.state, states: ctx.states });
+
+  // After Twitch, Kick or the chat window comes or goes: what each row's reply button can do now.
+  function refreshActs() {
+    const c = ctxNow();
+    list.querySelectorAll('.acts .re').forEach((b) => {
+      const m = msgs.get(b.closest('.m').dataset.id); if (!m) return;
+      const can = A.canReply(m, c);
+      b.disabled = !can.ok; b.title = can.ok ? 'Reply to ' + m.name + ' on ' + A.name(m.p) : can.why;
+    });
+  }
 
   function item(icon, label, how, action, opts) {
     opts = opts || {};
@@ -585,20 +773,30 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     const can = A.canReply(m, c), yes = { ok: true };
     menu.append(item('↩', 'Reply', can, () => { close(); setReply(m); }));
     const on = m.id === featuredId;
-    menu.append(item('▣', on ? 'Hide from stream' : 'Show on stream', yes, () => { close(); featureIt(on ? null : m.id); }, { hint: on ? '' : 'Big, as the featured message' }));
+    menu.append(item('▣', on ? 'Hide from stream' : 'Show on stream', on || !m.hidden ? yes : { ok: false, why: 'Hidden by your filters, so it stays off the stream' },
+      () => { close(); featureIt(on ? null : m.id); }, { hint: on ? '' : 'Big, as the featured message' }));
     const st = starred.has(m.id);
     menu.append(item(st ? '★' : '☆', st ? 'Remove from Answer later' : 'Answer later', yes, () => { close(); toggleStar(m.id); }));
+    menu.append(item('🔊', 'Read aloud', m.hidden ? { ok: false, why: 'Hidden by your filters, so it is never read aloud' } : yes, () => { close(); readAloud(m); },
+      { hint: 'On the streaming PC’s speakers' }));
     menu.append(item('⧉', 'Copy text', yes, () => { close(); copy((m.system ? m.system + ' ' : '') + m.text); }));
+    if (m.name) {
+      const filtered = filters.users.some((u) => [m.name, m.handle].some((n) => n && n.toLowerCase() === u.toLowerCase().replace(/^@/, '')));
+      menu.append(item('⊘', filtered ? 'Stop filtering ' + m.name : 'Filter this user', ctx.remote ? { ok: false, why: 'Filters are set on the streaming PC' } : yes,
+        () => { close(); filterUser(m, !filtered); }, { hint: filtered ? '' : 'Hide their messages here and on stream' }));
+    }
     group(menu, 'Moderate');
     A.modMenu(m, c).forEach((entry) => {
       const icon = { delete: '🗑', timeout: '⏱', ban: '⛔', unban: '↺' }[entry.action] || '•';
       menu.append(item(icon, entry.label, entry, async () => {
         close();
         if (entry.custom) {
-          const minutes = await ask({ title: 'Time out ' + m.name, text: 'How long on ' + A.name(m.p) + '? (1 minute to 14 days)', ok: 'Time out', input: true });
-          if (minutes) moderate(m, entry, Math.min(1209600, Math.max(60, Math.round(minutes * 60))));
+          const kick = m.p === 'kick';
+          $('confirm-input').max = kick ? 10080 : 20160;
+          const minutes = await ask({ title: 'Time out ' + m.name, text: 'How long on ' + A.name(m.p) + '? (1 minute to ' + (kick ? '7' : '14') + ' days)', ok: 'Time out', input: true });
+          if (minutes) moderate(m, entry, A.timeoutSeconds(m.p, minutes));
         } else if (entry.action === 'ban') {
-          if (await ask({ title: (m.p === 'youtube' ? 'Hide ' : 'Ban ') + m.name + '?', text: m.p === 'youtube' ? 'They won\'t be able to chat on your channel until you unhide them in YouTube Studio.' : 'They won\'t be able to chat on your Twitch channel until you unban them.', ok: m.p === 'youtube' ? 'Hide user' : 'Ban' })) moderate(m, entry, 0);
+          if (await ask({ title: (m.p === 'youtube' ? 'Hide ' : 'Ban ') + m.name + '?', text: m.p === 'youtube' ? 'They won\'t be able to chat on your channel until you unhide them in YouTube Studio.' : 'They won\'t be able to chat on your ' + A.name(m.p) + ' channel until you unban them.', ok: m.p === 'youtube' ? 'Hide user' : 'Ban' })) moderate(m, entry, 0);
         } else moderate(m, entry, entry.seconds || 0);
       }, { danger: entry.danger }));
     });
@@ -675,13 +873,59 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     $('twitch-connect').disabled = blocked;
     $('twitch-connect').title = blocked ? twitchAuth.why : '';
     $('twitch-disconnect').hidden = ctx.remote || s !== 'on';
-    $('twitch-hint').textContent = blocked ? twitchAuth.why + ' Twitch replies still go out through the browser extension.'
+    $('twitch-hint').textContent = blocked ? twitchAuth.why + ' Until Twitch is connected, CrossChat reads Twitch chat but can’t reply or moderate there.'
       : ctx.remote ? 'Connecting Twitch is done on the streaming PC (Settings there).'
-      : 'Connected, CrossChat posts your Twitch replies and moderates Twitch chat itself, without the browser extension.';
+      : s === 'on' ? 'CrossChat posts your Twitch replies and moderates Twitch chat through Twitch’s official API.'
+      : 'Connect Twitch to reply and moderate on Twitch. CrossChat uses Twitch’s official API for both.';
   }
   $('twitch-connect').onclick = async () => { const a = await api('/twitch/connect', {}); if (!a.ok) note('Twitch: ' + (a.why || 'could not start') + '.', 'bad'); };
-  $('twitch-disconnect').onclick = async () => { if (await ask({ title: 'Disconnect Twitch?', text: 'Twitch replies then go through the browser extension again, and Twitch moderation stops.', ok: 'Disconnect' })) api('/twitch/disconnect', {}); };
-  $('twitch-open').onclick = () => window.open(twitchAuth.verification_uri || 'https://www.twitch.tv/activate', '_blank', 'noopener');
+  $('twitch-disconnect').onclick = async () => { if (await ask({ title: 'Disconnect Twitch?', text: 'CrossChat then reads Twitch chat but can’t reply or moderate there until you connect again.', ok: 'Disconnect' })) api('/twitch/disconnect', {}); };
+  $('twitch-open').onclick = () => window.open(/^https:\/\/www\.twitch\.tv\//.test(twitchAuth.verification_uri || '') ? twitchAuth.verification_uri
+    : 'https://www.twitch.tv/activate', '_blank', 'noopener');
+
+  // Kick: replies and moderation through Kick's official API once the streamer approves CrossChat on kick.com.
+  let kickWanted = false, kickOpened = '';
+  function openKick(url) {
+    if (!/^https:\/\//.test(url || '') || kickOpened === url) return;
+    kickOpened = url; window.open(url, '_blank', 'noopener');
+  }
+  function drawKick() {
+    const s = kickAuth.state;
+    $('kick-dot').className = 'dot' + (s === 'on' ? ' ok' : '');
+    $('kick-state').textContent = s === 'on' ? 'Connected' + (kickAuth.login ? ' as ' + kickAuth.login : '') : s === 'pending' ? 'Waiting for you to approve CrossChat on Kick…'
+      : s === 'error' ? 'Not connected: ' + (kickAuth.why || 'Kick said no') : 'Not connected';
+    const blocked = s === 'off' && !!kickAuth.why;
+    $('kick-open').hidden = s !== 'pending' || ctx.remote || !kickAuth.url;
+    $('kick-connect').hidden = ctx.remote || s === 'on' || s === 'pending';
+    $('kick-connect').disabled = blocked;
+    $('kick-connect').title = blocked ? kickAuth.why : '';
+    $('kick-disconnect').hidden = ctx.remote || s !== 'on';
+    $('kick-hint').textContent = blocked ? kickAuth.why + ' Kick chat is still read; replies and moderation need the connection.'
+      : ctx.remote ? 'Connecting Kick is done on the streaming PC (Settings there).'
+      : s === 'on' ? 'CrossChat posts your Kick replies and moderates Kick chat through Kick’s official API.'
+      : s === 'pending' ? 'Approve CrossChat in the Kick tab that opened, then come back here.'
+      : 'Connect Kick to reply and moderate on Kick. CrossChat uses Kick’s official API for both.';
+  }
+  $('kick-connect').onclick = async () => {
+    kickWanted = true; kickOpened = '';
+    const a = await api('/kick/connect', {});
+    if (!a.ok) { kickWanted = false; note('Kick: ' + (a.why || 'could not start') + '.', 'bad'); } else if (a.url) openKick(a.url);
+  };
+  $('kick-disconnect').onclick = async () => { if (await ask({ title: 'Disconnect Kick?', text: 'CrossChat then reads Kick chat but can’t reply or moderate there until you connect again.', ok: 'Disconnect' })) api('/kick/disconnect', {}); };
+  $('kick-open').onclick = () => { kickOpened = ''; openKick(kickAuth.url); };
+
+  // How each chat connection is doing: how long it has been up, when the last message came, how often it reconnected.
+  function drawHealth() {
+    const ul = $('health'); ul.textContent = '';
+    const ps = Object.keys(ctx.states);
+    if (!ps.length) ul.append(el('li', 'none', 'No chats yet: they appear when CrossChat starts reading them.'));
+    ps.forEach((p) => {
+      const li = el('li'), state = ctx.states[p];
+      const dot = el('i', 'dot' + (state === 'on' ? ' ok' : state === 'retry' ? '' : ' off'));
+      li.append(dot, el('b', '', A.name(p)), el('span', '', A.health(health[p]) || STATE[state] || state));
+      ul.append(li);
+    });
+  }
 
   function drawDevices() {
     const ul = $('devices'); ul.textContent = '';
@@ -727,9 +971,277 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     svg.append(path); box.append(svg);
   }
 
+  // ---- reading chat aloud ---------------------------------------------------------------------------------------------
+  // The hub sends `say` to one window only, its "speaker": the chat window on the streaming PC (not one inside OBS, which
+  // has no speakers of its own). Lines queue up and are read one at a time, never over each other.
+  const synth = window.speechSynthesis, speaker = A.speech(30);
+  let voices = [], blocked = null;
+  const speakerRole = () => !ctx.remote && typeof window.obsstudio === 'undefined' && !!synth;
+  function loadVoices() { voices = synth ? synth.getVoices() : []; fillVoices(); }
+  if (synth) { synth.addEventListener('voiceschanged', loadVoices); loadVoices(); }
+  const voicesReady = () => new Promise((resolve) => {                 // Chrome lists its voices a moment after the page opens
+    if (!synth || voices.length) { resolve(); return; }
+    const done = () => { loadVoices(); resolve(); };
+    synth.addEventListener('voiceschanged', done, { once: true }); setTimeout(done, 3000);
+  });
+
+  function sayIt(item) { const now = speaker.add(item); if (now) talk(now); drawReading(); }
+
+  async function talk(item) {
+    drawReading();
+    await voicesReady();
+    if (speaker.current !== item) return;                              // stopped while the voices loaded
+    // Exactly the saved voice; without it, a voice on this PC. Never an online one the streamer didn't pick.
+    const voice = A.pickVoice(voices, item.voice, navigator.language);
+    let over = false, timer = 0, alive = 0;
+    const finish = () => {
+      if (over) return; over = true; clearTimeout(timer); clearInterval(alive);
+      const next = speaker.done(item); if (next) talk(next); else drawReading();
+    };
+    if (!voice) { note('Nothing read aloud: this browser has no voice on this PC to read with.', 'bad'); finish(); return; }
+    const u = new SpeechSynthesisUtterance(A.clean(item.text));
+    u.voice = voice; u.lang = voice.lang;
+    u.rate = Math.min(2, Math.max(0.5, Number(item.rate) || 1));
+    u.volume = Math.min(1, Math.max(0, item.volume == null ? 1 : Number(item.volume)));
+    u.onend = finish;
+    u.onerror = (e) => {
+      if (e.error === 'not-allowed' && speaker.current === item) {     // the browser wants one click in this window first
+        over = true; clearTimeout(timer); clearInterval(alive); blocked = item; drawNotice(); drawReading(); return;
+      }
+      finish();
+    };
+    timer = setTimeout(finish, [...u.text].length / (11 * u.rate) * 1000 + 8000);      // in case a voice never says it is done
+    if (A.onlineVoice(voice)) alive = setInterval(() => { if (synth.speaking && !synth.paused) { synth.pause(); synth.resume(); } }, 10000);   // Chrome stops long online speech
+    synth.speak(u);
+  }
+
+  function stopSpeech(tellHub) {
+    const was = blocked; blocked = null;
+    speaker.stop(); if (synth) synth.cancel();
+    drawReading(); if (was) drawNotice();
+    if (tellHub) api('/tts/skip', {});
+  }
+  const unblock = () => { if (!blocked) return; const item = blocked; blocked = null; drawNotice(); if (speaker.current === item) talk(item); };
+  document.addEventListener('pointerdown', unblock, true);
+  document.addEventListener('keydown', unblock, true);
+
+  function drawReading() {
+    const now = speaker.current;
+    $('reading').hidden = !now;
+    if (!now) return;
+    $('reading-text').textContent = (blocked ? 'Waiting to read: ' : 'Reading: ') + A.clean(now.text);
+    $('reading-more').textContent = speaker.waiting ? '+' + speaker.waiting + ' waiting' : '';
+  }
+  $('reading-stop').onclick = () => stopSpeech(true);
+
+  async function readAloud(m) {
+    const a = await api('/tts/say', { id: m.id });
+    note(a.ok ? (ctx.remote ? 'Reading it aloud on the streaming PC.' : 'Reading it aloud.') : 'Not read aloud: ' + (a.why || 'no answer') + '.', a.ok ? 'good' : 'bad');
+  }
+
+  // ---- Settings → Text to speech ------------------------------------------------------------------------------------
+  function fillVoices() {
+    const sel = $('tts-voice'), groups = A.voiceGroups(voices, navigator.language);
+    const want = tts.voice || (groups.local[0] && groups.local[0].name) || '';
+    sel.textContent = '';
+    [['On this PC', groups.local], ['Online (sends text to Microsoft/Google)', groups.online]].forEach(([label, list]) => {
+      if (!list.length) return;
+      const g = el('optgroup'); g.label = label;
+      list.forEach((v) => g.append(new Option(v.name, v.name)));
+      sel.append(g);
+    });
+    if (want && ![...groups.local, ...groups.online].some((v) => v.name === want)) sel.append(new Option(want + ' (not in this browser)', want));
+    if (!sel.options.length) sel.append(new Option('No voices in this browser', ''));
+    sel.value = want;
+    showVoiceNote();
+  }
+  function showVoiceNote() {
+    const v = voices.find((x) => x.name === $('tts-voice').value);
+    $('tts-voice-note').hidden = !A.onlineVoice(v);
+    $('tts-voice-note').textContent = A.onlineVoice(v) ? 'This voice sends the text it reads to ' + A.voiceMaker(v) + ' to make the audio.' : '';
+  }
+
+  function fillTts() {
+    const s = tts;
+    $('tts-enabled').checked = s.enabled; $('tts-read').value = s.read; $('tts-command').value = s.command;
+    $('tts-names').checked = s.names; $('tts-links').checked = s.skip_links;
+    $('tts-max').value = s.max_chars; $('tts-rate').value = s.rate; $('tts-volume').value = s.volume;
+    document.querySelectorAll('[data-tts-p]').forEach((b) => { b.checked = s.platforms === 'all' || s.platforms.includes(b.dataset.ttsP); });
+    fillVoices(); showTts();
+  }
+  function showTts() {
+    $('tts-command-row').hidden = $('tts-read').value !== 'command';
+    $('tts-max-out').textContent = $('tts-max').value + ' characters';
+    $('tts-rate-out').textContent = Number($('tts-rate').value).toFixed(1) + '×';
+    $('tts-volume-out').textContent = Math.round($('tts-volume').value * 100) + '%';
+  }
+  function readTts() {
+    const ps = [...document.querySelectorAll('[data-tts-p]')].filter((b) => b.checked).map((b) => b.dataset.ttsP);
+    return A.ttsSettings({ enabled: $('tts-enabled').checked, read: $('tts-read').value, command: $('tts-command').value, names: $('tts-names').checked,
+                           skip_links: $('tts-links').checked, max_chars: $('tts-max').value, platforms: ps, voice: $('tts-voice').value,
+                           rate: $('tts-rate').value, volume: $('tts-volume').value });
+  }
+  function drawTts() {
+    const local = !ctx.remote;
+    $('tts-form').hidden = !local;
+    $('tts-remote').hidden = local;
+    $('tts-remote').textContent = 'Reading aloud is set up on the streaming PC' + (tts.enabled ? ' and is on.' : '. It is off right now.');
+    $('tts-test').hidden = !local || !synth;
+    $('tts-saved').textContent = '';
+    $('tts-where').hidden = !local;
+    $('tts-where').textContent = !synth ? 'This browser can’t speak. Open the chat window in Chrome or Edge.'
+      : speakerRole() ? 'This window reads aloud, on this PC’s speakers. Keep it open while you stream.'
+      : 'The chat window in Chrome or Edge on this PC reads aloud (not the one inside OBS).';
+    if (local && !$('tts-section').contains(document.activeElement)) fillTts();
+  }
+  let ttsSave = 0;
+  $('tts-form').addEventListener('input', (e) => {
+    if (e.target === $('tts-voice')) showVoiceNote();
+    tts = readTts(); showTts();
+    clearTimeout(ttsSave);
+    ttsSave = setTimeout(async () => {
+      const a = await api('/tts', { settings: tts });
+      $('tts-saved').textContent = a.ok ? 'Saved.' : 'Not saved: ' + (a.why || 'no answer') + '.';
+    }, 450);
+  });
+  $('tts-test').onclick = () => sayIt({ id: 'test-' + Date.now(), text: 'Hi chat! This is how CrossChat reads your messages.',
+                                        voice: $('tts-voice').value, rate: $('tts-rate').value, volume: $('tts-volume').value });
+  $('tts-stop').onclick = () => stopSpeech(true);
+
+  // ---- Settings → Filters ---------------------------------------------------------------------------------------------
+  function drawFilters() {
+    [['words', 'filter-words', 'word'], ['users', 'filter-users', 'viewer']].forEach(([key, id, what]) => {
+      const box = $(id); box.textContent = '';
+      if (!filters[key].length) box.append(el('span', 'none', key === 'words' ? 'No words yet.' : 'No viewers yet.'));
+      filters[key].forEach((text) => {
+        const chip = el('span', 'fchip'), x = el('button', '', '✕'); x.type = 'button';
+        x.setAttribute('aria-label', 'Remove ' + what + ' ' + text); x.title = 'Remove';
+        x.onclick = () => saveFilters({ ...filters, [key]: filters[key].filter((t) => t !== text) });
+        chip.append(el('span', '', text), x); box.append(chip);
+      });
+    });
+    $('filter-commands').checked = filters.hide_commands;
+    $('filter-bots').checked = filters.bots;
+    $('filter-count').textContent = filters.words.length + filters.users.length ? (filters.words.length + filters.users.length) + ' in use' : '';
+  }
+  async function saveFilters(next) {
+    next = A.filterSettings(next);
+    const a = await api('/filters', { settings: next });
+    if (!a.ok) { note('Filters not saved: ' + (a.why || 'no answer') + '.', 'bad'); return false; }
+    filters = next; drawFilters();
+    return true;
+  }
+  function addFilter(key, input) {
+    let text = A.clean($(input).value);
+    if (key === 'users') text = text.replace(/^@/, '');
+    if (!text) return;
+    if (filters[key].length >= A.LIST_MAX) { note('Filters hold up to ' + A.LIST_MAX + ' of each.', 'bad'); return; }
+    saveFilters({ ...filters, [key]: [...filters[key], text] }).then((ok) => { if (ok) { $(input).value = ''; $(input).focus(); } });
+  }
+  $('filter-word-add').onclick = () => addFilter('words', 'filter-word');
+  $('filter-user-add').onclick = () => addFilter('users', 'filter-user');
+  $('filter-word').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addFilter('words', 'filter-word'); } };
+  $('filter-user').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addFilter('users', 'filter-user'); } };
+  $('filter-commands').onchange = () => saveFilters({ ...filters, hide_commands: $('filter-commands').checked });
+  $('filter-bots').onchange = () => saveFilters({ ...filters, bots: $('filter-bots').checked });
+
+  async function filterUser(m, on) {
+    const names = [m.name, m.handle].filter(Boolean).map((n) => n.toLowerCase());
+    const users = on ? [...filters.users, m.handle || m.name] : filters.users.filter((u) => !names.includes(u.toLowerCase().replace(/^@/, '')));
+    if (!(await saveFilters({ ...filters, users }))) return;
+    if (on) { hideWho(m.handle || m.name, 'user'); note('Hiding ' + m.name + '’s messages here and on stream. Undo in Settings → Filters.', 'good'); }
+    else note(m.name + '’s new messages show again.', 'good');
+  }
+
+  // ---- chat history (the streaming PC only): every stream's chat, saved by the hub ------------------------------------
+  let logs = [], log = null;
+  async function getJSON(path) {
+    if (DEMO) return demoGet(path);
+    const r = await fetch(path, { cache: 'no-store' });
+    if (!r.ok) throw new Error(path + ': ' + r.status);
+    return r.json();
+  }
+  const when = (t) => new Date(Number(t) || 0).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+  async function openHistory() {
+    showLogList();
+    if (!$('history').open) openDialog($('history'));
+    const ul = $('logs'); ul.textContent = ''; ul.append(el('li', 'none', 'Loading…'));
+    try { logs = (await getJSON('/logs')).logs || []; } catch (e) { logs = null; }
+    drawLogs();
+  }
+  function showLogList() {
+    log = null;
+    $('history-title').textContent = 'Chat history';
+    $('history-list').hidden = false; $('history-log').hidden = true; $('history-back').hidden = true;
+  }
+  function drawLogs() {
+    const ul = $('logs'); ul.textContent = '';
+    if (!logs) { ul.append(el('li', 'none', 'Could not load the chat history.')); return; }
+    const good = logs.filter((g) => g && A.validLog(g.name));
+    if (!good.length) ul.append(el('li', 'none', 'Nothing saved yet. Each stream’s chat is saved here while you’re live.'));
+    good.forEach((g) => {
+      const li = el('li'), b = el('button', 'log'); b.type = 'button';
+      const n = Number(g.messages) || 0;
+      b.append(el('b', '', when(g.started)),
+               el('small', '', (g.ended ? A.span(g.ended - g.started) : 'live now') + ' · ' + n.toLocaleString() + (n === 1 ? ' message' : ' messages') + ' · ' + A.bytes(g.bytes)));
+      b.onclick = () => openLog(g);
+      li.append(b); ul.append(li);
+    });
+  }
+  async function openLog(g) {
+    $('history-list').hidden = true; $('history-log').hidden = false; $('history-back').hidden = false;
+    $('history-title').textContent = when(g.started);
+    [['csv', 'CSV'], ['html', 'HTML']].forEach(([ext]) => {
+      const a = $('log-' + ext);
+      a.href = '/logs/' + encodeURIComponent(g.name) + '.' + ext; a.download = 'crosschat-' + g.name + '.' + ext;
+      a.onclick = DEMO ? (e) => { e.preventDefault(); note('Demo: there is no saved chat to export.'); } : null;
+    });
+    $('log-lines').textContent = ''; $('log-more').hidden = true; $('log-count').textContent = 'Loading…';
+    let messages;
+    try { messages = await getJSON('/logs/' + encodeURIComponent(g.name) + '.json'); } catch (e) { $('log-count').textContent = 'Could not load this stream’s chat.'; return; }
+    log = { g, messages: Array.isArray(messages) ? messages : (messages && messages.messages) || [], hits: [], shown: 0 };
+    filterLog();
+    if (!touch.matches) $('log-search').focus();
+  }
+  function filterLog() {
+    if (!log) return;
+    log.hits = A.logFilter(log.messages, { text: $('log-search').value, p: $('log-p').value, questions: $('log-q').checked });
+    log.shown = 0; $('log-lines').textContent = '';
+    moreLog();
+  }
+  function moreLog() {
+    const next = log.hits.slice(log.shown, log.shown + 300);
+    next.forEach((m) => $('log-lines').append(logLine(m)));
+    log.shown += next.length;
+    const n = log.hits.length, all = log.messages.length;
+    $('log-count').textContent = n.toLocaleString() + (n === 1 ? ' message' : ' messages') + (n !== all ? ' of ' + all.toLocaleString() : '');
+    $('log-more').hidden = log.shown >= n;
+  }
+  function logLine(m) {
+    const li = el('li', 'line' + (m.kind === 'event' ? ' event' : '') + (m.hidden ? ' hid' : ''));
+    li.append(el('span', 'at', new Date(Number(m.t) || 0).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })), tagFor(m.p));
+    const body = el('span', 'said');
+    const who = el('b', 'name', m.name || ''); who.style.color = nameColor(m.color); body.append(who);
+    if (m.system && m.system !== m.text) body.append(el('span', 'system', m.system + (m.text ? ' · ' : '')));
+    body.append(m.text || '');
+    if (m.question) body.append(' ', el('span', 'flag q', 'Q'));
+    if (m.hidden) body.append(' ', el('span', 'flag hid', 'hidden'));
+    li.append(body);
+    return li;
+  }
+  let logSearch = 0;
+  $('log-search').addEventListener('input', () => { clearTimeout(logSearch); logSearch = setTimeout(filterLog, 150); });
+  $('log-p').onchange = $('log-q').onchange = filterLog;
+  $('log-more').onclick = moreLog;
+  $('history-back').onclick = () => { showLogList(); drawLogs(); };
+  $('history-open').onclick = () => { $('settings').close(); openHistory(); };
+
   function drawSettings() {
-    showTheme(); showDing(); drawTwitch(); drawDevices();
+    showTheme(); showDing(); drawTwitch(); drawKick(); drawDevices(); drawHealth(); drawTts(); drawFilters();
     $('devices-section').hidden = ctx.remote;
+    $('filters-section').hidden = ctx.remote;
+    $('history-section').hidden = ctx.remote;
     $('studio-row').hidden = ctx.remote;
     $('about').textContent = 'CrossChat ' + (ctx.version || '') + ' · ' + (ctx.remote ? 'this device: ' + (ctx.device || 'paired device')
       : 'the streaming PC' + (ctx.lanUrl ? ' · other devices reach it at ' + ctx.lanUrl : ''));
@@ -740,10 +1252,11 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     const n = $('notice'), text = n.querySelector('span');
     let say_ = '';
     if (ctx.unpaired) say_ = 'This device is no longer paired. Pair it again from Settings on the streaming PC.';
+    else if (blocked) say_ = 'Click anywhere in this window once so it can read chat aloud (the browser asks for that).';
     else if (!DEMO && ctx.executorKnown && !ctx.executor) {
       say_ = ctx.remote ? 'Replies to YouTube and X need the CrossChat window open on the streaming PC (Chrome or Edge with the extension).'
         : ctx.bridge ? '' : 'Replies to YouTube and X go out through the CrossChat window in Chrome or Edge with the extension: Start menu → CrossChat → Open chat.';
-      if (say_ && twitchAuth.state !== 'on') say_ += ' Twitch too, until Twitch is connected in Settings.';
+      if (say_ && twitchAuth.state !== 'on' && ctx.states.twitch) say_ += ' Connect Twitch in Settings' + (ctx.remote ? ' on the streaming PC' : '') + ' to reply on Twitch.';
     }
     n.hidden = !say_;
     text.textContent = say_;
@@ -769,7 +1282,8 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     switch (m.type) {
       case 'msg': add(m); break;
       case 'status': {
-        ctx.states = m.status || {}; drawPlatforms(); youtubeBox(m.yt || '');
+        ctx.states = m.status || {}; health = m.health || {}; drawPlatforms(); youtubeBox(m.yt || ''); refreshActs();
+        if ($('settings').open) drawHealth();
         const live = $('live'); live.className = m.live ? 'on' : ''; live.textContent = m.live ? 'LIVE' : 'OFF AIR';
         break;
       }
@@ -782,10 +1296,25 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
       case 'sent': finish(m.job_id, m.answer); break;
       case 'starred': starred = new Set(m.ids || []); drawStars(); break;
       case 'quick': quick = A.cleanQuick(m.replies); drawQuick(); break;
-      case 'executor': ctx.executor = !!m.present; ctx.executorKnown = true; drawNotice(); drawPlatforms(); break;
-      case 'twitch_auth': twitchAuth = m; drawTwitch(); drawNotice(); break;
+      case 'executor': ctx.executor = !!m.present; ctx.executorKnown = true; drawNotice(); drawPlatforms(); refreshActs(); break;
+      case 'twitch_auth': twitchAuth = m; drawTwitch(); drawNotice(); refreshActs(); break;
+      case 'kick_auth':
+        kickAuth = m;
+        if (m.state === 'pending' && kickWanted && !ctx.remote) openKick(m.url);
+        else if (m.state !== 'pending') kickWanted = false;
+        drawKick(); drawPlatforms(); refreshActs();
+        break;
       case 'devices': devices = m.devices || []; drawDevices(); break;
       case 'pair': showPair(m); break;
+      case 'emotes': emotes = F.emoteMap(m.emotes); rewords(); break;
+      case 'say': if (speakerRole() || DEMO) sayIt({ id: m.id, text: m.text, voice: m.voice, rate: m.rate, volume: m.volume }); break;
+      case 'say_stop': stopSpeech(false); break;
+      case 'tts': tts = A.ttsSettings(m.settings); if ($('settings').open) drawTts(); break;
+      case 'filters': filters = A.filterSettings(m.settings); if ($('settings').open && !$('filters-section').contains(document.activeElement)) drawFilters(); break;
+      case 'hide':                                // the hub hid messages after the fact: { id } or { p, name }, with why
+        if (m.id) { const msg = msgs.get(m.id); if (msg) { msg.hidden = m.why || 'user'; const row = rowOf(m.id); if (row) hideRow(row, msg.hidden); } }
+        else hideWho(m.name, m.why || 'user', m.p);
+        break;
       default: break;                             // theme and anything newer: not for this page
     }
   }
@@ -804,7 +1333,8 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
   }
 
   function connect() {
-    feed = new EventSource('/events' + (executorRole() ? '?executor=1' : ''));
+    const roles = [executorRole() && 'executor=1', speakerRole() && 'speaker=1'].filter(Boolean);
+    feed = new EventSource('/events' + (roles.length ? '?' + roles.join('&') : ''));
     feed.onopen = () => { connected(true); list.querySelectorAll('.m').forEach((n) => n.remove()); msgs.clear(); setReply(null); drawViews(); };
     feed.onerror = () => {
       connected(false);
@@ -854,29 +1384,68 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     if (path === '/twitch/connect') { handle({ type: 'twitch_auth', state: 'pending', user_code: 'WDJB-MJHT', verification_uri: 'https://www.twitch.tv/activate' }); return ok(); }
     if (path === '/twitch/disconnect') { handle({ type: 'twitch_auth', state: 'off' }); return ok(); }
     if (path === '/devices/revoke') { handle({ type: 'devices', devices: devices.filter((d) => d.id !== body.id) }); return ok(); }
+    if (path === '/kick/connect') { handle({ type: 'kick_auth', state: 'pending' }); setTimeout(() => handle({ type: 'kick_auth', state: 'on', login: 'you' }), 1500); return ok(); }
+    if (path === '/kick/disconnect') { handle({ type: 'kick_auth', state: 'off' }); return ok(); }
+    if (path === '/tts') { setTimeout(() => handle({ type: 'tts', settings: body.settings }), 50); return ok(); }
+    if (path === '/filters') { setTimeout(() => handle({ type: 'filters', settings: body.settings }), 50); return ok(); }
+    if (path === '/tts/skip') { handle({ type: 'say_stop' }); return ok(); }
+    if (path === '/tts/say') {
+      const m = msgs.get(body.id);
+      if (m) handle({ type: 'say', id: m.id, text: (tts.names ? m.name + ' says: ' : '') + m.text, voice: tts.voice, rate: tts.rate, volume: tts.volume });
+      return ok();
+    }
     return ok();
+  }
+
+  // ?demo chat history: three streams of made-up chat.
+  function demoGet(path) {
+    const hour = 3600000, start = new Date(); start.setHours(13, 45, 0, 0);
+    const day = (n) => start.getTime() - n * 24 * hour;
+    const all = [
+      { name: 'demo-today', started: day(0), ended: null, messages: 1284, bytes: 221184 },
+      { name: 'demo-tuesday', started: day(2) + 2 * hour, ended: day(2) + 4.2 * hour, messages: 3910, bytes: 702464 },
+      { name: 'demo-saturday', started: day(5) - hour, ended: day(5) + 1.5 * hour, messages: 2207, bytes: 391168 },
+    ];
+    if (path === '/logs') return Promise.resolve({ logs: all });
+    const from = (all.find((g) => path === '/logs/' + g.name + '.json') || all[0]).started;
+    const who = [['twitch', 'pixel_pirate', '#ff7f50'], ['youtube', 'Maya Chen', ''], ['x', 'Dev Daily', ''], ['kick', 'turbo_kat', '#53fc18'],
+                 ['twitch', 'nightowl_42', '#1e90ff'], ['youtube', 'Sam Ortiz', ''], ['twitch', 'kiwi_codes', '#9acd32'], ['youtube', 'Rafael Gomes', '']];
+    const said = ['what are we building today?', 'hello from Lisbon 👋', 'one chat for every platform, finally', 'W stream', 'welcome in everyone',
+                  'can you show how replies reach every platform?', 'that boss fight was wild', 'what keyboard is that?', 'how do I set up the overlay?',
+                  'gg', 'is the theme studio free too?', 'love the new layout'];
+    return Promise.resolve(Array.from({ length: 160 }, (_, i) => {
+      const [p, name, color] = who[(i * 5) % who.length], text = said[(i * 7) % said.length];
+      return { id: 'log-' + i, t: from + i * 41000, p, name, color, kind: 'chat', text, question: /\?$/.test(text) };
+    }));
   }
 
   function demo() {
     const remote = DEMO_KIND === 'remote';
-    Object.assign(ctx, { remote, device: remote ? 'Phone' : null, version: '1.1.0', lanUrl: 'http://192.168.1.20:4467/', executor: true, executorKnown: true });
+    Object.assign(ctx, { remote, device: remote ? 'Phone' : null, version: '1.4.0', lanUrl: 'http://192.168.1.20:4467/', executor: true, executorKnown: true });
     applyMode(); connected(true);
-    const t = Date.now() - 9 * 60000, at = (min) => t + min * 60000;
-    handle({ type: 'status', live: true, status: { twitch: 'on', youtube: 'on', kick: 'on', x: 'on' } });
+    const t = Date.now() - 9 * 60000, at = (min) => t + min * 60000, ago = (s) => Date.now() - s * 1000;
+    handle({ type: 'status', live: true, status: { twitch: 'on', youtube: 'on', kick: 'on', x: 'on' },
+             health: { twitch: { since: ago(4320), last: ago(8), reconnects: 0 }, youtube: { since: ago(4290), last: ago(3), reconnects: 2 },
+                       kick: { since: ago(1260), last: ago(41), reconnects: 1 }, x: { since: ago(4250), last: ago(95), reconnects: 0 } } });
     handle({ type: 'viewers', counts: { twitch: 128, youtube: 342, kick: 41, x: 87 }, total: 598 });
     handle({ type: 'twitch_auth', state: 'on', login: 'you' });
+    handle({ type: 'kick_auth', state: 'on', login: 'you' });
+    handle({ type: 'tts', settings: { enabled: true, read: 'questions', names: true, max_chars: 200, skip_links: true, platforms: 'all', voice: '', rate: 1.1, volume: 0.8 } });
+    handle({ type: 'filters', settings: { words: ['spoiler', 'cheap followers', 'dm me'], users: ['bot_4417'], hide_commands: true, bots: true } });
     handle({ type: 'quick', replies: ['Welcome in! 👋', 'Thanks for the follow!', 'GG', 'Be right back', 'Links are in the panels below', '❤'] });
     handle({ type: 'devices', devices: [{ id: 'd1', name: 'Phone', created: at(-3000) / 1000, last_seen: Date.now() / 1000 },
                                           { id: 'd2', name: 'Laptop', created: at(-9000) / 1000, last_seen: at(-1500) / 1000 }] });
     [{ kind: 'note', p: 'system', text: 'Stream started. Chat from every platform shows up here.', t: at(0) },
-     { p: 'twitch', name: 'pixel_pirate', color: '#ff7f50', text: 'first! what are we building today?', question: true, t: at(1), mid: 'a1', uid: '101' },
+     { p: 'twitch', name: 'pixel_pirate', color: '#ff7f50', text: 'first! what are we building today?', question: true, first: 'ever', t: at(1), mid: 'a1', uid: '101' },
      { p: 'youtube', name: 'Maya Chen', badges: ['member'], text: 'Watching from Lisbon 👋 love the new overlay', t: at(1.5), mid: 'y1' },
      { p: 'x', name: 'Dev Daily', handle: 'devdaily', text: 'One chat for every platform, finally', t: at(2) },
      { p: 'kick', name: 'turbo_kat', color: '#53fc18', text: 'W stream, audio sounds great', t: at(3) },
      { p: 'twitch', kind: 'event', name: 'nightowl_42', system: 'subscribed for 6 months!', text: 'half a year already', t: at(4) },
      { p: 'twitch', name: 'nightowl_42', color: '#1e90ff', badges: ['moderator'], text: 'welcome in, new folks 🙂', t: at(4.5), mid: 'a2', uid: '102' },
      { p: 'youtube', name: 'Sam Ortiz', text: 'can you show how replies reach every platform?', question: true, t: at(6), id: 'yt-sam', mid: 'y2' },
-     { p: 'twitch', name: 'bot_4417', color: '#7fff00', text: 'cheap followers!!! dm me for a deal', t: at(6.5), id: 'tw-spam', mid: 'a3', uid: '103' },
+     { p: 'twitch', name: 'bot_4417', color: '#7fff00', text: 'cheap followers!!! dm me for a deal', t: at(6.5), id: 'tw-spam', mid: 'a3', uid: '103',
+       hidden: DEMO_KIND === 'mod' ? undefined : 'user' },
+     { p: 'kick', name: 'quietstorm', color: '#f4a261', text: 'hey all, first time catching you live', first: 'ever', t: at(6.8), mid: 'k2' },
      { p: 'x', name: 'Lena Park', handle: 'lenapark', text: 'does the overlay work with Streamlabs too?', question: true, t: at(7) },
      { p: 'youtube', name: 'Rafael Gomes', text: 'what keyboard is that?', question: true, t: at(7.5), id: 'yt-kb', mid: 'y3' }]
       .forEach((m, i) => handle({ type: 'msg', id: m.id || 'demo-' + i, kind: 'chat', color: '', badges: [], ...m }));
@@ -893,8 +1462,15 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
       const label = [...document.querySelectorAll('#sheet-menu .label')].find((l) => l.textContent === 'Moderate');
       if (label) label.scrollIntoView({ block: 'start' });
     }
-    if (DEMO_KIND === 'settings' || DEMO_KIND === 'pair') { drawSettings(); openDialog($('settings')); }
+    const SECTION = { tts: 'tts-section', filters: 'filters-section', health: 'connections-section' };
+    if (DEMO_KIND === 'settings' || DEMO_KIND === 'pair' || SECTION[DEMO_KIND]) { drawSettings(); openDialog($('settings')); }
     if (DEMO_KIND === 'pair') { api('/pair/start', {}); $('pair').scrollIntoView({ block: 'center' }); }
+    if (SECTION[DEMO_KIND]) $(SECTION[DEMO_KIND]).scrollIntoView({ block: 'start' });
+    if (DEMO_KIND === 'tts') {                    // what the speaker window shows while it reads (nothing is spoken)
+      speaker.add({ id: 'demo-say', text: 'Rafael Gomes says: what keyboard is that?' }); speaker.add({ id: 'demo-say-2', text: 'Sam Ortiz says: can you show how replies reach every platform?' });
+      drawReading();
+    }
+    if (DEMO_KIND === 'history') openHistory().then(() => openLog(logs[1]));
     if (DEMO_KIND === 'quick') openQuickEditor();
   }
 

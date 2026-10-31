@@ -71,6 +71,7 @@ These override the theme for one source. Combine them with `&`.
 | `icons` | `icons=text` | Platform shown as `icon`, `text`, `bar` or `none`. |
 | `max` | `max=5` | Chat feed: messages on screen. |
 | `seconds` | `seconds=0` | Chat feed: seconds each message stays (`0` = stays). |
+| `delay` | `delay=10` | Chat feed: seconds each message waits before it shows, 0 to 60. One you delete (or that your filters hide) meanwhile never shows. |
 | `direction` | `direction=top` | Chat feed: newest at the `bottom` or `top`. |
 | `align` | `align=right` | `left` or `right` (chat feed and viewer counter). |
 | `opacity` | `opacity=0.5` | Background opacity, 0 to 1. |
@@ -132,6 +133,7 @@ Your themes live in **`%LOCALAPPDATA%\CrossChat\themes\`**, one `<file name>.jso
 | `message.badges` | true/false | | `true` |
 | `message.emoteSize` | px | 12 – 64 | `28` |
 | `message.timestamps` | true/false | | `false` |
+| `message.firstHighlight` | true/false | a viewer's first message in your channel gets a NEW tag and a ring | `true` |
 | **chat** | | | |
 | `chat.direction` | choice | `bottom`, `top` (where the newest message goes) | `bottom` |
 | `chat.align` | choice | `left`, `right` | `left` |
@@ -141,6 +143,7 @@ Your themes live in **`%LOCALAPPDATA%\CrossChat\themes\`**, one `<file name>.jso
 | `chat.animationOut` | choice | `fade`, `slide`, `none` | `fade` |
 | `chat.platforms` | `"all"` or list | `twitch`, `youtube`, `kick`, `x` | `"all"` |
 | `chat.events` | true/false | subs, raids and the like as highlighted lines | `true` |
+| `chat.delay` | seconds | 0 – 60; each message waits this long before it shows, so you can delete it first | `0` |
 | **featured** | | | |
 | `featured.layout` | choice | `card`, `banner` | `card` |
 | `featured.scale` | number | 0.5 – 3 (× chat text size) | `1.5` |
@@ -168,7 +171,13 @@ The chime plays through the browser source. Tick **Control audio via OBS** in th
 
 ### Google Fonts
 
-`font.google` loads a font from [fonts.google.com](https://fonts.google.com) by its name, for example `Inter`, `Outfit` or `Nunito`. That needs an internet connection, which OBS browser sources have. If the font can't load, the `font.family` list is used instead. No other outside files are loaded, apart from Twitch's own emote pictures.
+`font.google` loads a font from [fonts.google.com](https://fonts.google.com) by its name, for example `Inter`, `Outfit` or `Nunito`. That needs an internet connection, which OBS browser sources have. If the font can't load, the `font.family` list is used instead. No other outside files are loaded, apart from emote pictures: Twitch's own, and your channel's 7TV, BetterTTV and FrankerFaceZ emotes.
+
+### Delay, filters and first-time chatters
+
+- **Delay** (`chat.delay`, or `?delay=` on one source) holds each chat message back for that many seconds. Delete a message, time out or ban its sender, or have your filters hide it in that time, and it never reaches the stream. The featured message is never delayed: you picked it.
+- **Filters** (Settings → Filters in the chat window) hide messages on every widget, with no delay needed. Hidden messages are never read aloud either.
+- **First-time chatters**: when Twitch says a message is someone's first in your channel, the chat feed and the featured message mark it with a NEW tag and a ring in the accent colour. Turn it off with `message.firstHighlight`.
 
 ## Custom CSS
 
@@ -179,7 +188,8 @@ For anything the settings don't cover, write CSS: in the theme (the Studio's **C
 | Class | What |
 |---|---|
 | `.cc-chat` | the chat feed column |
-| `.cc-msg` | one chat message (`data-platform`, `data-kind="chat"` or `"event"`, `data-id`) |
+| `.cc-msg` | one chat message (`data-platform`, `data-kind="chat"` or `"event"`, `data-id`; `data-first="ever"` or `"stream"` on a viewer's first message in your channel, or this stream) |
+| `.cc-first`, `.cc-first-tag` | a first-time chatter's message (when `message.firstHighlight` is on), and its NEW tag |
 | `.cc-icon` | platform icon (an `<svg>` inside) |
 | `.cc-tag` | platform text tag (TW, YT, K, X) |
 | `.cc-main` | name and text of a message |
@@ -187,7 +197,7 @@ For anything the settings don't cover, write CSS: in the theme (the Studio's **C
 | `.cc-badge` | one badge (host, mod, vip, sub, member, ✓) |
 | `.cc-name` | the viewer's name |
 | `.cc-text` | the message text |
-| `.cc-emote` | a Twitch emote picture |
+| `.cc-emote` | an emote picture (Twitch, 7TV, BetterTTV or FrankerFaceZ; `alt` is its code) |
 | `.cc-time` | the time (when `message.timestamps` is on) |
 | `.cc-new`, `.cc-out` | a message arriving, leaving (animations) |
 | `.cc-featured-area`, `.cc-featured`, `.cc-where` | the featured message, and its "on YouTube" note |
@@ -210,6 +220,8 @@ For anything the settings don't cover, write CSS: in the theme (the Studio's **C
 | `--cc-p`, `--cc-ink`, `--cc-name` | on each message, viewer pill and alert: its platform colour, black/white on that colour, and the name colour in use |
 
 The built-in styles use low-specificity selectors, so a plain `.cc-name { … }` in custom CSS wins.
+
+Custom CSS can't load anything from other servers: the widgets only load CrossChat's own files, emote pictures and Google Fonts, so a shared theme can't tell anyone your address each time OBS shows it. Images in custom CSS must be `data:` URLs. Custom CSS can still change what your widgets show, so only import themes from people you trust.
 
 ### Examples
 

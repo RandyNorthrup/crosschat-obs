@@ -66,6 +66,7 @@
       { path: 'message.badges', type: 'toggle', label: 'Badges (mod, sub, member…)' },
       { path: 'message.emoteSize', type: 'range', label: 'Emote size (px)' },
       { path: 'message.timestamps', type: 'toggle', label: 'Times' },
+      { path: 'message.firstHighlight', type: 'toggle', label: 'Highlight first-time chatters', help: 'A NEW tag and a ring on a viewer’s first message in your channel (Twitch says when).' },
     ] },
     { title: 'Platform tags', fields: [{ path: 'message.platform', type: 'select', label: 'Show the platform as' }] },
     { title: 'Chat feed', fields: [
@@ -77,6 +78,7 @@
       { path: 'chat.animationOut', type: 'select', label: 'Leaves with' },
       { path: 'chat.platforms', type: 'platforms', label: 'Platforms shown' },
       { path: 'chat.events', type: 'toggle', label: 'Subs, raids and other events in the feed' },
+      { path: 'chat.delay', type: 'range', label: 'Delay before messages show (s)', help: 'Time to delete a message before it reaches the stream. 0 shows chat at once; the featured message never waits.' },
     ] },
     { title: 'Featured message', fields: [
       { path: 'featured.layout', type: 'select', label: 'Layout' },

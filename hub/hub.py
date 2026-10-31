@@ -39,12 +39,21 @@ import requests
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed, InvalidHandshake
 
+import emotes as emote_sources
+from chatlog import ChatLog
 from devices import Devices, device_name
+from kick_api import Kick, KickError
 from twitch_api import Twitch, TwitchError
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 # CrossChat's public Twitch app (Client ID only: public apps have no secret). "twitch_client_id" in config.json overrides it.
 TWITCH_CLIENT_ID = "gg5cmjfvr1l09niyes19ccclashuth"  # gitleaks:allow (a public client ID, not a secret)
+# CrossChat's Kick app. Kick requires the app's secret even with PKCE, so it ships here and is not confidential: Kick
+# only ever returns sign-ins to http://localhost:4466/kick/callback on the streamer's own PC. "kick_client_id" and
+# "kick_client_secret" in config.json switch to your own Kick app.
+KICK_CLIENT_ID = "01M69ZK8VQP2AR2SXBVXCC02AF"  # gitleaks:allow (public app id)
+# Stored scrambled so credential-scraping bots that search GitHub for keys pass it by. It is not encryption.
+KICK_CLIENT_SECRET = bytes(b ^ 0x5A for b in base64.b64decode("bDxqY2g8OGtuOz85O2poPz87Ym4+bj44Yjs4Yjloa2o8ajk8PmNjP245YzxvbG8/bGtrO2ttb2M7aTtsaWNibg=="))[::-1].decode()  # gitleaks:allow  # noqa: E501
 HERE = os.path.dirname(os.path.abspath(__file__))
 APP = os.path.dirname(HERE)                  # the CrossChat folder: config.json, the log, the extension, your themes
 WEB = os.path.join(HERE, "web")
@@ -71,7 +80,11 @@ DEFAULTS = {
     "obs": {"host": "127.0.0.1", "port": 0, "password": ""},     # port 0 and no password: read from OBS's own settings
     "remote": {"enabled": True, "port": 4467},                  # the companion for paired devices on the home network
     "twitch_client_id": "",
+    "kick_client_id": "",                    # your own Kick app instead of CrossChat's (both or neither)
+    "kick_client_secret": "",
     "custom_overlays": "",                   # a folder of your own overlay pages, served at /custom/ (see custom_file)
+    "emotes": {"bttv": True, "ffz": True, "7tv": True},
+    "logs": {"enabled": True, "keep_days": 90},  # every stream's chat in logs/, to search and export later
     "x": {
         "enabled": False,
         "auto_go_live": False,
@@ -166,30 +179,93 @@ QUESTION = re.compile(r"\?\s*\W*$|^\s*(what|how|why|when|where|who|which|can|cou
 
 
 def send(event, only=None):
+    if event.get("type") in ("delete", "purge") and LOG:
+        LOG.write(event)
     for q in list(only if only is not None else clients):
         q.put_nowait(event)
 
 
-def publish(platform, name, text, color="", badges=(), mid="", kind="chat", raw="", **more):
-    """raw: the platform's own message id (for moderating it). more: emotes (Twitch's "id:from-to,..." list), handle
-    (the @name on X), uid (the platform's user id), alert, amount, system and test, for the pages that use them."""
-    event = {"type": "msg", "id": mid or "%s-%d" % (platform, time.time_ns()), "t": int(time.time() * 1000),
+PUBLIC_EVENTS = ("msg", "delete", "purge", "clear", "hide", "emotes", "feature", "status", "theme", "viewers")
+
+
+class PublicFeed(asyncio.Queue):
+    """What your own overlay pages (custom_overlays) get from /events: the chat exactly as viewers see it on stream.
+    Nothing about this PC, its accounts, paired devices, filters or replies, and no filtered messages or notes."""
+    def put_nowait(self, event):
+        kind = event.get("type")
+        if kind == "hide":                       # filtered after it showed: to these pages, it's simply gone
+            event = {"type": "delete", "id": event.get("id", "")}
+        elif kind == "msg" and (event.get("hidden") or event.get("p") == "system" or event.get("kind") == "note"):
+            return
+        elif kind == "feature" and (event.get("msg") or {}).get("hidden"):
+            return
+        elif kind not in PUBLIC_EVENTS:
+            return
+        super().put_nowait(event)
+
+
+seen = set()                                 # (platform, viewer) that have chatted this stream
+health = {}                                  # platform -> {"since", "last", "reconnects"}
+
+
+def hidden_reason(name, text, handle=""):
+    """Which of the streamer's filters a message trips ("word", "user", "command", "bot"), or ''."""
+    f = FILTERS
+    who = {str(name).lower(), str(handle).lower()} - {""}
+    if f.get("bots") and who & BOTS:
+        return "bot"
+    if who & {u.lower().lstrip("@") for u in f.get("users", [])}:
+        return "user"
+    if f.get("hide_commands") and text.lstrip().startswith("!"):
+        return "command"
+    lowered = " " + re.sub(r"[^\w']+", " ", text.lower()) + " "
+    if any(" " + w.lower().strip() + " " in lowered for w in f.get("words", []) if w.strip()):
+        return "word"
+    return ""
+
+
+def publish(platform, name, text, color="", badges=(), mid="", kind="chat", raw="", first="", **more):
+    """raw: the platform's own message id (for moderating it). first: "ever" when the platform says it's the viewer's
+    first message in the channel. more: emotes (Twitch's "id:from-to,..." list), handle (the @name on X), uid (the
+    platform's user id), alert, amount, system and test, for the pages that use them."""
+    now = time.time()
+    event = {"type": "msg", "id": mid or "%s-%d" % (platform, time.time_ns()), "t": int(now * 1000),
              "p": platform, "name": name, "text": text, "color": color, "badges": list(badges), "kind": kind}
     event.update({k: v for k, v in more.items() if v})
     if raw:
         event["mid"] = raw
     if kind == "chat" and len(text) > 6 and QUESTION.search(text):
         event["question"] = True
+    if kind == "chat" and platform != "system" and name:
+        who = (platform, str(more.get("uid") or name).lower())
+        if first or who not in seen:
+            event["first"] = first or "stream"
+        seen.add(who)
+        reason = hidden_reason(name, text, more.get("handle", ""))
+        if reason:
+            event["hidden"] = reason
+    if platform in health:
+        health[platform]["last"] = int(now * 1000)
     messages.append(event)
+    if LOG and kind != "note":
+        LOG.write(event)
     send(event)
+    speak_maybe(event)
 
 
 def status_event():
-    return {"type": "status", "status": dict(status), "live": streaming.is_set(), "yt": state["youtube_video"]}
+    return {"type": "status", "status": dict(status), "live": streaming.is_set(), "yt": state["youtube_video"],
+            "health": {p: dict(h) for p, h in health.items()}}
 
 
 def set_status(platform, value):
     if status.get(platform) != value:
+        h = health.setdefault(platform, {"since": 0, "last": 0, "reconnects": 0})
+        if value == "on":
+            h["since"] = int(time.time() * 1000)
+        elif value == "retry":
+            h["since"] = 0
+            h["reconnects"] += 1
         status[platform] = value
         log.info("%s chat: %s", platform, value)
         send(status_event())
@@ -264,6 +340,9 @@ async def twitch(channel_name):
                 if command in ("366", "ROOMSTATE"):          # joined
                     set_status("twitch", "on")
                     wait = 2
+                    if tags.get("room-id") and tags["room-id"] != state.get("twitch_room"):
+                        state["twitch_room"] = tags["room-id"]          # the channel's own 7TV/BTTV/FFZ sets come by this id
+                        asyncio.create_task(load_emotes(tags["room-id"]))
                 elif command == "PRIVMSG" and len(parts) == 4:
                     text = parts[3][1:]
                     emotes = tags.get("emotes", "")
@@ -272,7 +351,7 @@ async def twitch(channel_name):
                     badges = [b.split("/")[0] for b in tags.get("badges", "").split(",") if b]
                     name = tags.get("display-name") or parts[0][1:].split("!")[0]
                     publish("twitch", name, text, tags.get("color", ""), badges, "tw-" + tags.get("id", ""), emotes=emotes,
-                            raw=tags.get("id", ""), uid=tags.get("user-id", ""))
+                            raw=tags.get("id", ""), uid=tags.get("user-id", ""), first="ever" if tags.get("first-msg") == "1" else "")
                     if tags.get("bits", "").isdigit():       # a cheer is a chat line and an alert
                         publish("twitch", name, text, kind="event", alert="cheer", amount=tags["bits"] + " bits",
                                 system="%s cheered %s bits" % (name, tags["bits"]), mid="tw-cheer-" + tags.get("id", ""))
@@ -565,7 +644,8 @@ async def audience():
         fresh = time.time() - state["since"] < 120
         for name, job in sources:
             try:
-                viewers[name] = await asyncio.to_thread(job)
+                count = await asyncio.to_thread(job)
+                viewers[name] = int(count) if str(count).isdigit() else None     # whatever else an API answers: unknown
             except Exception:                   # a failed lookup just shows as unknown
                 viewers[name] = None
         send(viewer_event())
@@ -789,6 +869,9 @@ async def stream_started(local=False):
     state["since"], state["local"], state["x_end"] = time.time(), local, False
     messages.clear()
     x_told.clear()
+    seen.clear()
+    if LOG and not DEMO and (CFG.get("logs") or {}).get("enabled", True):
+        log.info("chat history: logs/%s.jsonl", LOG.start())
     streaming.set()
     send({"type": "clear"})
     send(status_event())
@@ -809,6 +892,8 @@ async def stream_stopped():
         return
     log.info("stream stopped")
     streaming.clear()
+    if LOG:
+        LOG.stop()
     for name in [n for n in viewers if n != "x"]:  # X keeps its own count until its livestream is over
         del viewers[name]
     send(status_event())
@@ -1035,10 +1120,12 @@ def theme_change(body, what):
 def feature(mid):
     """Show one message big on stream (the featured-message widget), or nothing when `mid` is ''."""
     found = next((m for m in reversed(messages) if m["id"] == mid and m["kind"] in ("chat", "event")), None) if mid else None
-    if mid and not found:
-        return False                             # too old to find: whatever is featured stays
+    if mid and (not found or found.get("hidden")):
+        return False                             # too old to find, or filtered: whatever is featured stays
     state["featured"] = found
     send({"type": "feature", "msg": found})
+    if found and TTS["enabled"] and TTS["read"] == "featured":
+        say(speech(found, force=True), found["id"])
     return True
 
 
@@ -1080,13 +1167,183 @@ async def test_event(kind):
 # Every reply and moderation goes through here. Twitch is done by the hub itself with Twitch's API once the streamer
 # has connected Twitch; YouTube and X (and Twitch without that) are handed to the "executor": the chat window on this
 # PC that has the CrossChat extension, which posts as the accounts signed in to that browser.
-LIMIT = {"twitch": 500, "youtube": 200, "x": 140}
+LIMIT = {"twitch": 500, "youtube": 200, "x": 140, "kick": 500}
 NAMES = {"twitch": "Twitch", "youtube": "YouTube", "x": "X", "kick": "Kick"}
-MOD_ACTIONS = {"twitch": ("delete", "timeout", "ban", "unban"), "youtube": ("delete", "timeout", "ban")}
+MOD_ACTIONS = {"twitch": ("delete", "timeout", "ban", "unban"), "youtube": ("delete", "timeout", "ban"),
+               "kick": ("delete", "timeout", "ban", "unban")}
 QUICK_DEFAULTS = ["Welcome in! 👋", "Thanks for the follow!", "Good question, one sec", "GG", "❤️", "Be right back, 2 minutes"]
 jobs = {}                                    # job id -> future the executor's answer lands in
 TW = None                                    # the Twitch API connection (set in main)
+KK = None                                    # the Kick API connection (set in main)
 DEV = None                                   # paired devices (set in main)
+LOG = None                                   # this stream's chat history (set in main)
+EMOTES = {}                                  # third-party emote name -> picture URL
+BOTS = {"nightbot", "streamelements", "streamlabs", "moobot", "fossabot", "wizebot", "botrix", "sery_bot", "kofistreambot",
+        "soundalerts", "own3d", "blerp"}            # well-known chat bots, hidden from the widgets when "bots" is on
+FILTER_DEFAULTS = {"words": [], "users": [], "hide_commands": True, "bots": True}
+FILTERS = dict(FILTER_DEFAULTS)
+TTS_DEFAULTS = {"enabled": False, "read": "questions", "command": "!tts", "names": True, "max_chars": 200, "skip_links": True,
+                "platforms": "all", "voice": "", "rate": 1.0, "volume": 1.0}
+TTS = dict(TTS_DEFAULTS)
+
+
+def signed_out(platform, revoked, page):
+    """The answer to Disconnect: the token is gone from this PC either way; say so when the platform didn't confirm."""
+    if revoked:
+        return {"ok": True}
+    why = ("CrossChat deleted its %s sign-in from this PC, but %s didn't confirm it was cancelled. To be sure, remove "
+           "CrossChat at %s." % (platform, platform, page))
+    note(why)
+    return {"ok": True, "why": why}
+
+
+def kick_event():
+    if DEMO:
+        return {"type": "kick_auth", "state": "on", "login": "you"}
+    return {"type": "kick_auth", **(KK.state() if KK else {"state": "off"})}
+
+
+def settings_path(name):
+    """Settings the app changes (tts.json, filters.json) in your folder. The demo keeps its own copies."""
+    return os.path.join(HOME, name.replace(".json", "-demo.json") if DEMO else name)
+
+
+def settings_file(name, defaults):
+    """Those settings, laid over their defaults."""
+    try:
+        with open(settings_path(name), encoding="utf-8") as f:
+            saved = json.load(f)
+        return {**defaults, **{k: v for k, v in saved.items() if k in defaults}} if isinstance(saved, dict) else dict(defaults)
+    except (OSError, ValueError):
+        return dict(defaults)
+
+
+def clean_filters(body):
+    """The filter settings from the app, checked: lists of at most 200 short strings, and a flag."""
+    out = dict(FILTER_DEFAULTS)
+    for key in ("words", "users"):
+        items = body.get(key, out[key])
+        if not isinstance(items, list) or len(items) > 200 or any(not isinstance(i, str) or len(i) > 50 for i in items):
+            raise ValueError("%s must be a list of up to 200 entries of up to 50 characters" % key)
+        out[key] = list(dict.fromkeys(" ".join(i.split()) for i in items if i.strip()))
+    out["hide_commands"] = bool(body.get("hide_commands", out["hide_commands"]))
+    out["bots"] = bool(body.get("bots", out["bots"]))
+    return out
+
+
+def hide_earlier():
+    """New filters also hide what is already on screen: matching messages from earlier are marked and taken off."""
+    for m in messages:
+        if m.get("type") == "msg" and m.get("kind") == "chat" and m.get("p") != "system" and not m.get("hidden"):
+            reason = hidden_reason(m.get("name", ""), m.get("text", ""), m.get("handle", ""))
+            if reason:
+                m["hidden"] = reason
+                send({"type": "hide", "id": m["id"], "why": reason})
+
+
+def clean_tts(body):
+    out = dict(TTS_DEFAULTS)
+    out["enabled"] = bool(body.get("enabled", False))
+    out["read"] = body.get("read") if body.get("read") in ("all", "questions", "events", "command", "featured") else "questions"
+    out["command"] = (str(body.get("command") or "!tts").strip() or "!tts")[:20]
+    out["names"] = bool(body.get("names", True))
+    out["skip_links"] = bool(body.get("skip_links", True))
+    out["max_chars"] = max(20, min(int(body.get("max_chars") or 200), 500))
+    platforms = body.get("platforms", "all")
+    out["platforms"] = [p for p in platforms if p in NAMES] if isinstance(platforms, list) else "all"
+    out["voice"] = str(body.get("voice") or "")[:120]
+    out["rate"] = max(0.5, min(float(body.get("rate") or 1.0), 2.0))
+    out["volume"] = max(0.0, min(float(body.get("volume") if body.get("volume") is not None else 1.0), 1.0))
+    return out
+
+
+# ---- reading chat aloud: the hub decides what, the CrossChat window on this PC speaks it --------------------
+LINK = re.compile(r"https?://\S+|www\.\S+", re.I)
+
+
+def speech(m, force=False):
+    """What to say for message `m`, or '' when it shouldn't be read."""
+    t = TTS
+    if not force and (not t["enabled"] or m.get("hidden") or m.get("kind") not in ("chat", "event") or m.get("p") == "system"):
+        return ""
+    if not force and t["platforms"] != "all" and m.get("p") not in t["platforms"]:
+        return ""
+    if set(m.get("badges") or ()) & {"broadcaster", "owner"}:
+        return ""                                # never read the streamer's own lines back
+    text = m.get("text") or ""
+    if m.get("kind") == "event":
+        text = ((m.get("system") or "") + ". " + text).strip(". ")
+    if not force:
+        mode = t["read"]
+        if mode == "questions" and not m.get("question"):
+            return ""
+        if mode == "events" and m.get("kind") != "event":
+            return ""
+        if mode == "command":
+            if not text.lower().startswith(t["command"].lower() + " "):
+                return ""
+            text = text[len(t["command"]) + 1:]
+        if mode == "featured":
+            return ""                            # read by feature() instead
+    if t["skip_links"]:
+        text = LINK.sub("a link", text)
+    words = [w for w in text.split() if w not in EMOTES]          # emote names read badly ("KEKW")
+    text = " ".join(words)[:t["max_chars"]].strip()
+    if not text:
+        return ""
+    if t["names"] and m.get("kind") == "chat" and m.get("name"):
+        text = "%s says: %s" % (m["name"], text)
+    return text
+
+
+def say(text, mid=""):
+    if text and state.get("speaker") is not None:
+        send({"type": "say", "id": mid, "text": text, "voice": TTS["voice"], "rate": TTS["rate"], "volume": TTS["volume"]},
+             only=[state["speaker"]])
+
+
+def speak_maybe(m):
+    say(speech(m), m.get("id", ""))
+
+
+# ---- third-party emotes (7TV, BetterTTV, FrankerFaceZ) ------------------------------------------------------
+async def load_emotes(room_id=""):
+    which = [k for k, on in (CFG.get("emotes") or {}).items() if on and k in emote_sources.SOURCES]
+    if not which:
+        return
+    found, problems = await asyncio.to_thread(emote_sources.load, room_id, which)
+    for problem in problems:
+        log.info("emotes: %s", problem)
+    if found:
+        EMOTES.clear()
+        EMOTES.update(found)
+        send({"type": "emotes", "emotes": EMOTES})
+        log.info("emotes: %d loaded", len(EMOTES))
+
+
+async def emotes_refresh():
+    """Load the emotes now (global ones, plus the channel's once Twitch says who it is) and again every hour."""
+    while True:
+        await load_emotes(state.get("twitch_room", ""))
+        await asyncio.sleep(3600)
+
+
+roles = {"executor": [], "speaker": []}       # every window that can take the role, newest last
+
+
+def take_role(role, queue):
+    roles[role].append(queue)
+    state[role] = queue
+
+
+def drop_role(role, queue):
+    """A window closed: the role goes back to the newest one still open. True when the holder changed."""
+    if queue in roles[role]:
+        roles[role].remove(queue)
+    holder = roles[role][-1] if roles[role] else None
+    changed = state.get(role) is not holder
+    state[role] = holder
+    return changed
 
 
 def executor_event():
@@ -1140,6 +1397,12 @@ async def run_send(job):
             await asyncio.sleep(0.15)
         send({"type": "sent", "job_id": job["id"], "answer": {p: {"ok": True} for p in to}})
         return
+    if "twitch" in to and not (TW and TW.on()):
+        answer["twitch"] = {"ok": False, "why": "Connect Twitch in Settings to reply on Twitch"}
+        to = [p for p in to if p != "twitch"]
+    if "kick" in to:
+        answer["kick"] = await kick_send(job, text, reply_to)
+        to = [p for p in to if p != "kick"]
     if "twitch" in to and TW and TW.on() and TWITCH:
         if job["dry"]:
             answer["twitch"] = {"ok": False, "why": "test mode, nothing is posted"}
@@ -1159,6 +1422,19 @@ async def run_send(job):
         for p in to:
             answer[p] = (got or {}).get(p) or {"ok": False, "why": NO_EXECUTOR if got is None else "no answer"}
     send({"type": "sent", "job_id": job["id"], "answer": answer})
+
+
+async def kick_send(job, text, reply_to):
+    if not (KK and KK.on()):
+        return {"ok": False, "why": "Connect Kick in Settings to reply on Kick"}
+    if job["dry"]:
+        return {"ok": False, "why": "test mode, nothing is posted"}
+    parent = reply_to.get("id", "") if reply_to.get("p") == "kick" else ""
+    try:
+        await asyncio.to_thread(KK.send, KICK, text, re.sub(r"[^\w-]", "", parent))
+        return {"ok": True}
+    except (KickError, requests.RequestException, ValueError) as error:
+        return {"ok": False, "why": str(error) or "Kick did not answer"}
 
 
 async def run_mod(job):
@@ -1182,6 +1458,16 @@ async def run_mod(job):
                 answer = {"ok": True}
             except (TwitchError, requests.RequestException) as error:
                 answer = {"ok": False, "why": str(error) or "Twitch did not answer"}
+    elif p == "kick":
+        if not (KK and KK.on()):
+            answer = {"ok": False, "why": "Connect Kick in Settings to moderate Kick chat."}
+        else:
+            try:
+                await asyncio.to_thread(KK.moderate, KICK, action, job.get("user_id", ""), job.get("message_id", ""),
+                                        job.get("seconds", 0), job.get("reason", ""))
+                answer = {"ok": True}
+            except (KickError, requests.RequestException, ValueError) as error:
+                answer = {"ok": False, "why": str(error) or "Kick did not answer"}
     else:
         answer = await by_executor(job) or {"ok": False, "why": NO_EXECUTOR}
     log.info("moderation %s on %s: %s", action, p, "done" if answer.get("ok") else answer.get("why"))
@@ -1247,6 +1533,10 @@ async def twitch_connect():
 
 # ---- the companion: paired devices on the home network --------------------------------------------------
 remote_server = None
+remote_address = ""     # where the companion listens
+remote_why = ""         # why it doesn't, for the Pair button
+PUBLIC_NETWORK = ("The companion stays off: Windows has this network down as Public, where other people could listen in. "
+                  "On your home network, set it to Private (Settings > Network & internet > your network > Private network).")
 
 
 def lan_ip():
@@ -1264,21 +1554,91 @@ def remote_port():
 
 
 def lan_url():
-    return "http://%s:%d/" % (lan_ip(), remote_port()) if (CFG.get("remote") or {}).get("enabled", True) else None
+    host = remote_bind() if remote_bind() not in ("auto", "0.0.0.0") else lan_ip()
+    return "http://%s:%d/" % (host, remote_port()) if (CFG.get("remote") or {}).get("enabled", True) else None
+
+
+def network_category(ip):
+    """How Windows rates the network that address is on: "Private", "DomainAuthenticated", "Public", or '' if unknown."""
+    try:
+        out = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                              "(Get-NetIPAddress -IPAddress '%s' -ErrorAction Stop | Get-NetConnectionProfile -ErrorAction Stop).NetworkCategory"
+                              % re.sub(r"[^\d.]", "", ip)], capture_output=True, text=True, timeout=15, creationflags=NO_WINDOW)
+        return out.stdout.strip().splitlines()[0] if out.returncode == 0 and out.stdout.strip() else ""
+    except (OSError, subprocess.SubprocessError, IndexError):
+        return ""
+
+
+async def network_refusal(address):
+    """Why the companion may not listen on this network, or '' when it's a home (Private) network. When Windows can't
+    say, the answer is no: better a companion that won't start than one listening on a café's Wi-Fi."""
+    if address == "127.0.0.1":
+        return "This PC is not on a network."
+    category = await asyncio.to_thread(network_category, address)
+    if category in ("Private", "DomainAuthenticated"):
+        return ""
+    if category == "Public":
+        return PUBLIC_NETWORK
+    return ("The companion stays off: CrossChat couldn't ask Windows whether this network is a private one. To use it "
+            "anyway, set \"remote\": {\"bind\": \"%s\"} in config.json." % address)
 
 
 async def remote_on():
     """Listen on the home network once there is a paired device or a pairing in progress (not before, so nothing is
-    exposed and Windows doesn't ask about the firewall until the streamer pairs something)."""
-    global remote_server
+    exposed and Windows doesn't ask about the firewall until the streamer pairs something).
+
+    It listens only on this PC's address on the home network (not on every network adapter, such as a VPN), and
+    not at all when Windows has that network down as Public (a café or hotel network, where others could listen in).
+    "remote": {"bind": "0.0.0.0"} in config.json listens everywhere instead, for setups like Tailscale.
+    """
+    global remote_server, remote_address, remote_why
     if remote_server or not (CFG.get("remote") or {}).get("enabled", True) or not (DEV.devices or DEV.pairing_open()):
         return
+    bind = remote_bind()
+    address = lan_ip() if bind == "auto" else bind
+    if bind == "auto":
+        why = await network_refusal(address)
+        if why:
+            if remote_why != why and address != "127.0.0.1":
+                warn(why)
+            remote_why = why
+            return
     try:
-        remote_server = await asyncio.start_server(lambda r, w: serve(r, w, remote=True), "0.0.0.0", remote_port())
-        log.info("companion on %s", lan_url())
+        remote_server = await asyncio.start_server(lambda r, w: serve(r, w, remote=True), address, remote_port())
+        remote_address, remote_why = address, ""
+        log.info("companion on %s (listening on %s)", lan_url(), address)
     except OSError as error:
-        warn("CrossChat could not open port %d for the companion (%s). Change \"remote\": {\"port\"} in config.json."
-             % (remote_port(), error.strerror))
+        remote_why = "CrossChat could not open port %d for the companion (%s)." % (remote_port(), error.strerror)
+        warn(remote_why + " Change \"remote\": {\"port\"} in config.json.")
+
+
+def remote_bind():
+    return str((CFG.get("remote") or {}).get("bind") or "auto")
+
+
+async def remote_off():
+    global remote_server
+    if remote_server:
+        remote_server.close()
+        remote_server = None
+
+
+async def remote_watch():
+    """The companion closes when nothing is paired any more, and when the network changes: a laptop taken from home to
+    a café, or a network switched to Public. It opens again only on a Private network."""
+    rounds = 0
+    while True:
+        await asyncio.sleep(30)
+        rounds += 1
+        if not remote_server:
+            continue
+        if not DEV.devices and not DEV.pairing_open():
+            log.info("nothing is paired any more; the companion closes")
+            await remote_off()
+        elif remote_bind() == "auto" and (lan_ip() != remote_address or (rounds % 4 == 0 and await network_refusal(remote_address))):
+            log.info("this PC is on another network now; the companion starts over")
+            await remote_off()
+            await remote_on()
 
 
 def devices_event():
@@ -1323,7 +1683,7 @@ def pair_device(code, headers):
 
 
 REMOTE_GET = ("/", "/events", "/whoami", "/version")
-REMOTE_POST = ("/send", "/mod", "/feature", "/star", "/quick", "/test")
+REMOTE_POST = ("/send", "/mod", "/feature", "/star", "/quick", "/test", "/tts/say", "/tts/skip")
 
 
 # ---- the demo stream (--demo): made-up people and lines, nothing real ------------------------------------
@@ -1347,6 +1707,8 @@ async def demo_stream():
     rng = random.Random(7)
     counts = {"twitch": 128, "youtube": 342, "kick": 41, "x": 87}
     status.update({p: "on" for p in counts})
+    now = int(time.time() * 1000)
+    health.update({p: {"since": now - (i + 1) * 754000, "last": now, "reconnects": 1 if p == "kick" else 0} for i, p in enumerate(counts)})
     viewers.update(counts)
     send(status_event())
     send(viewer_event())
@@ -1376,14 +1738,32 @@ async def demo_stream():
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
          ".svg": "image/svg+xml", ".ico": "image/x-icon", ".png": "image/png", ".webmanifest": "application/manifest+json",
          ".json": "application/json"}
-OPEN = "Access-Control-Allow-Origin: *\r\n"    # the chat itself is public: an overlay page elsewhere may read it
-READ_ONLY = ("/", "/studio", "/events", "/settings", "/targets", "/version", "/themes", "/x/last")
+OPEN = "Access-Control-Allow-Origin: *\r\n"    # who may read it is decided in refused(): this only lets them
+# The CrossChat window, the Studio and the pairing page can't be put in another site's frame (where a hidden frame
+# could take the streamer's clicks).
+NO_FRAMES = "X-Frame-Options: DENY\r\nContent-Security-Policy: frame-ancestors 'none'; object-src 'none'; base-uri 'none'\r\n"
+# The widgets OBS shows: they load only the hub's own files, emote pictures and Google Fonts. A theme's custom CSS
+# can't fetch anything from elsewhere (which would tell that server the streamer's address each time OBS loads it).
+OVERLAY_CSP = ("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+               "font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://cdn.7tv.app https://cdn.betterttv.net "
+               "https://cdn.frankerfacez.com https://static-cdn.jtvnw.net; media-src 'self'; connect-src 'self'; object-src 'none'; "
+               "base-uri 'none'; form-action 'none'\r\n")
+# Your own overlay pages (custom_overlays) get an address of their own, http://localhost:<port>/custom/, which the
+# browser keeps apart from the CrossChat window's http://127.0.0.1:<port>/. They read the public chat feed and their
+# own files, but can't reply, moderate, read history, change settings or script the CrossChat window, so an overlay
+# downloaded from somewhere can't act as you.
+READ_ONLY = ("/events", "/settings", "/version", "/themes")      # what your overlay pages may read
+OVERLAY_ZONE = ("/custom/", "/web/", "/overlay/", "/themes/")    # ... and load, at their own address
 BODY_LIMIT = 256 * 1024
 
 
 def page(*path):
     with open(os.path.join(*path), "rb") as f:
         return f.read()
+
+
+def html_text(text):
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 
 CUSTOM_TYPES = {**TYPES, ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif", ".webm": "video/webm",
@@ -1412,6 +1792,22 @@ async def reply(writer, code, kind, body, extra=""):
     await writer.drain()
 
 
+def overlay_address(headers):
+    """Addressed to your overlay pages' own address (localhost) rather than the CrossChat window's (127.0.0.1)."""
+    return headers.get("host", "") == "localhost:%d" % PORT
+
+
+def from_overlay_page(headers):
+    """Sent by one of your overlay pages to the CrossChat address. No website can make the browser say this."""
+    return headers.get("origin", "") == "http://localhost:%d" % PORT
+
+
+def from_elsewhere(headers, home=None):
+    """Sent by a page from another website (or another site's frame), not by the pages at `home`, OBS or a program."""
+    return (headers.get("sec-fetch-site") in ("cross-site", "same-site")
+            or headers.get("origin", "") not in ("", home or "http://127.0.0.1:%d" % PORT))
+
+
 def refused(method, headers, path):
     """Why a request is turned away, or '' when it is fine.
 
@@ -1422,9 +1818,22 @@ def refused(method, headers, path):
     """
     if headers.get("host", "") not in ("127.0.0.1:%d" % PORT, "localhost:%d" % PORT):
         return "not this address"
+    # /kick/callback is Kick's own redirect back to this PC: a top-level visit from id.kick.com. It is only acted on
+    # with the one-time state this hub made when the streamer pressed Connect Kick.
+    if path == "/kick/callback" and method == "GET":
+        return ""
+    if overlay_address(headers):                 # your overlay pages' address: their files and the public chat, nothing more
+        if method != "GET" or from_elsewhere(headers, "http://localhost:%d" % PORT):
+            return "not from another website"
+        if not (path in READ_ONLY or path == "/favicon.ico" or path.startswith(OVERLAY_ZONE)):
+            return "not for overlay pages"
+        return ""
     origin = headers.get("origin", "")
-    outsider = headers.get("sec-fetch-site") == "cross-site" or origin not in ("", "http://127.0.0.1:%d" % PORT, "http://localhost:%d" % PORT)
-    readable = method == "GET" and (path in READ_ONLY or path.startswith(("/overlay/", "/web/", "/themes/", "/custom/")))
+    outsider = from_elsewhere(headers)
+    # Pages and files may be loaded from anywhere (a browser doesn't let another site read them); the live data only by
+    # your overlay pages.
+    readable = method == "GET" and (path.startswith(("/overlay/", "/web/", "/custom/")) or (
+        from_overlay_page(headers) and (path in READ_ONLY or path.startswith("/themes/"))))
     if outsider and not readable and not (method == "GET" and origin.startswith("chrome-extension://")):
         return "not from another website"
     if method == "POST" and (outsider or headers.get("content-type", "").split(";")[0].strip() != "application/json"):
@@ -1434,7 +1843,10 @@ def refused(method, headers, path):
 
 def remote_refused(method, headers, path, device):
     """For the companion port: why a request is turned away, or ''. Everything needs a paired device's cookie except
-    pairing itself; changes must come from the companion page itself, as JSON."""
+    pairing itself; changes must come from the companion page itself, as JSON. The address must be a plain IP: a
+    website that points its own name at this PC (DNS rebinding) is turned away before it can even try a code."""
+    if not re.fullmatch(r"\d{1,3}(\.\d{1,3}){3}(:\d{1,5})?", headers.get("host", "")):
+        return "not this address"
     if path == "/pair":
         pass
     elif not device:
@@ -1447,16 +1859,46 @@ def remote_refused(method, headers, path, device):
     return ""
 
 
+HEAD_LIMIT, HEAD_LINES, HEAD_SECONDS = 16 * 1024, 100, 10   # a request's first line and headers
+REMOTE_CONNECTIONS = 64                      # at once on the companion port: more are turned away
+remote_open = 0
+
+
+async def read_head(reader):
+    """The request line and headers, or None when they are too big, too many or too slow (so nobody on the network can
+    tie the hub up by sending headers forever)."""
+    lines, size = [], 0
+    while True:
+        line = await reader.readline()
+        size += len(line)
+        if size > HEAD_LIMIT or len(lines) > HEAD_LINES:
+            return None
+        if line in (b"\r\n", b"\n", b""):
+            break
+        lines.append(line.decode("latin1"))
+    if not lines:
+        return None
+    headers = {}
+    for line in lines[1:]:
+        key, _, value = line.partition(":")
+        headers[key.strip().lower()] = value.strip()
+    return lines[0].split(), headers
+
+
 async def serve(reader, writer, remote=False):
+    global remote_open
+    if remote:
+        remote_open += 1
     try:
-        request = (await asyncio.wait_for(reader.readline(), 10)).decode("latin1").split()
-        headers = {}
-        while True:
-            line = (await asyncio.wait_for(reader.readline(), 10)).decode("latin1")
-            if line in ("\r\n", "\n", ""):
-                break
-            key, _, value = line.partition(":")
-            headers[key.strip().lower()] = value.strip()
+        if remote and remote_open > REMOTE_CONNECTIONS:
+            return
+        try:
+            head = await asyncio.wait_for(read_head(reader), HEAD_SECONDS)
+        except ValueError:                         # one line longer than the reader takes
+            head = None
+        if not head:
+            return
+        request, headers = head
         if len(request) < 2 or request[0] not in ("GET", "POST"):
             return
         method = request[0]
@@ -1464,12 +1906,12 @@ async def serve(reader, writer, remote=False):
         query = urllib.parse.parse_qs(url.query)
         device = DEV.check(cookie_token(headers)) if remote and DEV else None
         why = remote_refused(method, headers, url.path, device) if remote else refused(method, headers, url.path)
-        if remote and method == "GET" and (url.path == "/pair" or (url.path == "/" and not device)):
+        if remote and method == "GET" and why != "not this address" and (url.path == "/pair" or (url.path == "/" and not device)):
             token = pair_device((query.get("code") or [""])[0], headers) if query.get("code") else None
             if token:                              # the link from the QR code: paired, on to the companion
                 await reply(writer, "303 See Other", "text/plain", b"", "Location: /\r\n" + device_cookie(token))
             else:
-                await reply(writer, "200 OK", TYPES[".html"], PAIR_PAGE)
+                await reply(writer, "200 OK", TYPES[".html"], PAIR_PAGE, NO_FRAMES)
         elif why:
             await reply(writer, "401 Unauthorized" if why.startswith("pair") else "403 Forbidden", "text/plain", why.encode())
         elif method == "POST":
@@ -1478,17 +1920,51 @@ async def serve(reader, writer, remote=False):
             body = {"remote": remote, "device": device["name"] if device else None, "version": VERSION, "lan_url": lan_url()}
             await reply(writer, "200 OK", TYPES[".json"], json.dumps(body).encode())
         elif url.path == "/":
-            await reply(writer, "200 OK", TYPES[".html"], page(WEB, "window.html"))
+            await reply(writer, "200 OK", TYPES[".html"], page(WEB, "window.html"), NO_FRAMES)
+        elif url.path == "/favicon.ico":           # browsers ask for it by themselves (OBS's overlays too)
+            await reply(writer, "200 OK", TYPES[".ico"], page(WEB, "crosschat.ico"))
         elif url.path == "/studio":                # the Theme Studio
-            await reply(writer, "200 OK", TYPES[".html"], page(WEB, "studio.html"))
+            await reply(writer, "200 OK", TYPES[".html"], page(WEB, "studio.html"), NO_FRAMES)
         elif url.path.startswith("/overlay/") and url.path[9:] in WIDGETS:     # what viewers see: OBS browser sources
-            await reply(writer, "200 OK", TYPES[".html"], page(WEB, "overlay.html"), OPEN)
+            await reply(writer, "200 OK", TYPES[".html"], page(WEB, "overlay.html"), OVERLAY_CSP)
         elif re.fullmatch(r"/web/(vendor/)?[\w-]+\.(js|css|svg|ico|png|webmanifest)", url.path):
             await reply(writer, "200 OK", TYPES[os.path.splitext(url.path)[1]], page(WEB, url.path[5:]), OPEN)
+        elif url.path == "/logs" and LOG:               # chat history (this PC only)
+            await reply(writer, "200 OK", TYPES[".json"], json.dumps({"logs": LOG.listing()}).encode())
+        elif re.fullmatch(r"/logs/[\w-]+\.(json|csv|html)", url.path) and LOG:
+            name, kind = url.path[6:].rsplit(".", 1)
+            if kind == "json":
+                rows = LOG.messages(name)
+                body = json.dumps(rows, ensure_ascii=False).encode() if rows is not None else None
+            else:
+                body = LOG.csv(name) if kind == "csv" else LOG.html(name)
+            if body is None:
+                await reply(writer, "404 Not Found", "text/plain", b"no such chat history")
+            else:
+                types = {"json": TYPES[".json"], "csv": "text/csv; charset=utf-8", "html": TYPES[".html"]}
+                extra = "" if kind == "json" else 'Content-Disposition: attachment; filename="crosschat-%s.%s"\r\n' % (name, kind)
+                await reply(writer, "200 OK", types[kind], body, extra)
+        elif url.path == "/kick/callback":            # Kick sends the browser back here after the streamer signs in
+            code, got_state = (query.get("code") or [""])[0], (query.get("state") or [""])[0]
+            try:
+                if not code:
+                    raise KickError((query.get("error_description") or query.get("error") or ["Kick did not sign in."])[0])
+                await asyncio.to_thread(KK.finish, code, got_state)
+                log.info("Kick connected as %s", KK.user.get("login"))
+                text = "Kick is connected to CrossChat as %s. You can close this tab." % KK.user.get("login", "")
+            except (KickError, requests.RequestException, KeyError, ValueError) as error:
+                KK.why = str(error)
+                text = "Kick was not connected: %s" % error
+            send(kick_event())
+            page_ = ("<!doctype html><meta charset=utf-8><title>CrossChat</title><body style=\"font:16px 'Segoe UI',sans-serif;"
+                     "background:#0d141c;color:#f0e8dc;display:grid;place-items:center;height:90vh\"><p>%s</p>" % html_text(text)).encode()
+            await reply(writer, "200 OK", TYPES[".html"], page_, NO_FRAMES)
+        elif url.path.startswith("/custom/") and not overlay_address(headers):   # an old 127.0.0.1 address: to their own
+            await reply(writer, "302 Found", "text/plain", b"", "Location: http://localhost:%d%s\r\n" % (PORT, request[1]))
         elif url.path.startswith("/custom/"):          # your own overlay pages (custom_overlays in config.json)
             found = custom_file(urllib.parse.unquote(url.path[8:]))
-            if found:
-                await reply(writer, "200 OK", CUSTOM_TYPES[os.path.splitext(found)[1].lower()], page(found))   # no CORS: other sites can't read them
+            if found:                                  # no CORS: other sites can't read them
+                await reply(writer, "200 OK", CUSTOM_TYPES[os.path.splitext(found)[1].lower()], page(found))
             else:
                 await reply(writer, "404 Not Found", "text/plain", b"not found")
         elif url.path == "/themes":
@@ -1512,20 +1988,25 @@ async def serve(reader, writer, remote=False):
         elif url.path == "/events":
             writer.write(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-store\r\n" + OPEN.encode()
                          + b"Connection: keep-alive\r\n\r\nretry: 2000\n\n")
-            queue = asyncio.Queue()
+            outsider = not remote and (overlay_address(headers) or from_elsewhere(headers))
+            queue = PublicFeed() if outsider else asyncio.Queue()
             for old in list(messages):
                 queue.put_nowait(old)
             for event in (status_event(), viewer_event(), {"type": "feature", "msg": state["featured"]},
-                          {"type": "starred", "ids": list(starred)}, {"type": "quick", "replies": quick_replies()}, twitch_event()):
+                          {"type": "starred", "ids": list(starred)}, {"type": "quick", "replies": quick_replies()}, twitch_event(),
+                          kick_event(), {"type": "emotes", "emotes": EMOTES}, {"type": "tts", "settings": TTS},
+                          {"type": "filters", "settings": FILTERS}):
                 queue.put_nowait(event)
             clients.add(queue)
-            if not remote:
+            if not remote and not outsider:
                 local_clients.add(queue)
                 queue.put_nowait(devices_event())
                 if query.get("executor") == ["1"]:           # the chat window with the extension: it posts for everyone
-                    state["executor"] = queue
+                    take_role("executor", queue)
                     send(executor_event())
-            queue.put_nowait(executor_event())
+                if query.get("speaker") == ["1"]:            # the chat window on this PC (not in OBS): it reads chat aloud
+                    take_role("speaker", queue)
+            queue.put_nowait(executor_event())        # (not to a PublicFeed)
             try:
                 while True:
                     try:                   # the executor is checked often, so paired devices soon learn it has gone
@@ -1537,9 +2018,9 @@ async def serve(reader, writer, remote=False):
             finally:
                 clients.discard(queue)
                 local_clients.discard(queue)
-                if state["executor"] is queue:
-                    state["executor"] = None
+                if drop_role("executor", queue):
                     send(executor_event())
+                drop_role("speaker", queue)
         elif url.path == "/show":
             await show_window()
             await reply(writer, "200 OK", "text/plain", b"ok")
@@ -1570,6 +2051,8 @@ async def serve(reader, writer, remote=False):
     except (OSError, asyncio.TimeoutError, ConnectionError):
         pass
     finally:
+        if remote:
+            remote_open -= 1
         try:
             writer.close()
         except OSError:
@@ -1578,6 +2061,7 @@ async def serve(reader, writer, remote=False):
 
 async def serve_post(reader, writer, headers, path, remote=False):
     """The Theme Studio's, the chat window's and paired devices' changes, as JSON."""
+    global TTS, FILTERS
     try:
         size = int(headers.get("content-length", "0"))
     except ValueError:
@@ -1619,6 +2103,8 @@ async def serve_post(reader, writer, headers, path, remote=False):
         if future and not future.done():
             future.set_result(body.get("answer") if isinstance(body.get("answer"), dict) else {})
         result = {"ok": bool(future)}
+    elif path in ("/kick/connect", "/kick/disconnect", "/twitch/connect", "/twitch/disconnect", "/devices/revoke") and DEMO:
+        result = {"ok": False, "why": "The demo never touches your real accounts or devices."}
     elif path == "/pair/start" and DEMO:
         result = {"ok": False, "why": "Pairing is switched off in the demo."}
     elif path == "/pair/start" and not remote:
@@ -1627,21 +2113,63 @@ async def serve_post(reader, writer, headers, path, remote=False):
         url = lan_url()
         result = {"ok": bool(remote_server), "code": code, "url": (url + "pair?code=" + code) if url else None, "expires": int(expires)}
         if not remote_server:
-            result["why"] = "The companion is switched off in config.json (\"remote\": {\"enabled\"})."
+            result["why"] = remote_why or "The companion is switched off in config.json (\"remote\": {\"enabled\"})."
         send({"type": "pair", **result}, only=local_clients)
     elif path == "/devices/revoke" and not remote:
         result = {"ok": DEV.revoke(str(body.get("id") or ""))}
         send(devices_event(), only=local_clients)
+        if not DEV.devices and not DEV.pairing_open():
+            await remote_off()                     # nothing left to answer
     elif path == "/twitch/connect" and not remote:
         if not TW.client_id:
             result = {"ok": False, "why": "This CrossChat has no Twitch app Client ID (\"twitch_client_id\" in config.json)."}
         else:
             asyncio.create_task(twitch_connect())
             result = {"ok": True}
-    elif path == "/twitch/disconnect" and not remote:
-        await asyncio.to_thread(TW.forget)
-        send(twitch_event())
+    elif path == "/tts" and not remote:
+        try:
+            TTS = clean_tts(body.get("settings") if isinstance(body.get("settings"), dict) else body)
+            write_file(settings_path("tts.json"), json.dumps(TTS, indent=1))
+            send({"type": "tts", "settings": TTS})
+            result = {"ok": True}
+        except (TypeError, ValueError) as error:
+            result = {"ok": False, "why": "Those text-to-speech settings don't work: %s" % error}
+    elif path == "/tts/say":
+        found = next((m for m in reversed(messages) if m["id"] == str(body.get("id") or "")), None)
+        text = speech(found, force=True) if found and not found.get("hidden") else ""
+        result = {"ok": bool(text and state.get("speaker") is not None)}
+        if not text:
+            result["why"] = "That message is too old, hidden by your filters, or has nothing to read."
+        elif state.get("speaker") is None:
+            result["why"] = "Open the CrossChat window on the streaming PC: it does the talking."
+        else:
+            say(text, found["id"])
+    elif path == "/tts/skip":
+        if state.get("speaker") is not None:
+            send({"type": "say_stop"}, only=[state["speaker"]])
         result = {"ok": True}
+    elif path == "/filters" and not remote:
+        try:
+            FILTERS = clean_filters(body.get("settings") if isinstance(body.get("settings"), dict) else body)
+            write_file(settings_path("filters.json"), json.dumps(FILTERS, indent=1, ensure_ascii=False))
+            send({"type": "filters", "settings": FILTERS})
+            hide_earlier()
+            result = {"ok": True}
+        except ValueError as error:
+            result = {"ok": False, "why": str(error)}
+    elif path == "/kick/connect" and not remote:
+        if not KK.client_id:
+            result = {"ok": False, "why": "This CrossChat has no Kick app (\"kick_client_id\" in config.json)."}
+        else:
+            url = KK.start()
+            send(kick_event())
+            result = {"ok": True, "url": url}
+    elif path == "/kick/disconnect" and not remote:
+        result = signed_out("Kick", await asyncio.to_thread(KK.forget), "kick.com, in your account settings")
+        send(kick_event())
+    elif path == "/twitch/disconnect" and not remote:
+        result = signed_out("Twitch", await asyncio.to_thread(TW.forget), "https://www.twitch.tv/settings/connections")
+        send(twitch_event())
     elif path in ("/themes/save", "/themes/delete", "/themes/default"):
         try:
             result = theme_change(body, path[8:])
@@ -1675,9 +2203,15 @@ def start_log():
 
 def companion_setup():
     """Paired devices and the Twitch connection, kept in your folder."""
-    global DEV, TW
-    DEV = Devices(os.path.join(HOME, "devices.json"))
+    global DEV, TW, KK, LOG, FILTERS, TTS
+    DEV = Devices(settings_path("devices.json"))
     TW = Twitch(CFG.get("twitch_client_id") or TWITCH_CLIENT_ID, os.path.join(HOME, "twitch.bin"))
+    own = bool(CFG.get("kick_client_id"))            # your own Kick app replaces CrossChat's, id and secret together
+    KK = Kick(CFG["kick_client_id"] if own else KICK_CLIENT_ID, CFG.get("kick_client_secret", "") if own else KICK_CLIENT_SECRET,
+              os.path.join(HOME, "kick.bin"), "http://localhost:%d/kick/callback" % PORT)
+    LOG = ChatLog(os.path.join(HOME, "logs"), int((CFG.get("logs") or {}).get("keep_days") or 90))
+    FILTERS = settings_file("filters.json", FILTER_DEFAULTS)
+    TTS = settings_file("tts.json", TTS_DEFAULTS)
 
 
 async def main():
@@ -1701,6 +2235,9 @@ async def main():
         status["x"] = "off"
         tasks.append(asyncio.create_task(x_watch()))
     tasks.append(asyncio.create_task(demo_stream() if DEMO else audience()))
+    tasks.append(asyncio.create_task(emotes_refresh()))
+    if not DEMO:
+        tasks.append(asyncio.create_task(remote_watch()))
     async with server:
         if TEST:
             await stream_started()

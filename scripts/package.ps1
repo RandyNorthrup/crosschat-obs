@@ -18,7 +18,7 @@ foreach ($folder in 'extension', 'hub', 'obs') {
 }
 New-Item -ItemType Directory -Force (Join-Path $Stage 'scripts'), (Join-Path $Stage 'docs') | Out-Null
 Copy-Item (Join-Path $Root 'scripts\install.ps1'), (Join-Path $Root 'scripts\uninstall.ps1') (Join-Path $Stage 'scripts')
-Copy-Item (Join-Path $Root 'docs\THEMES.md'), (Join-Path $Root 'docs\COMPANION.md') (Join-Path $Stage 'docs')
+Copy-Item (Join-Path $Root 'docs\THEMES.md'), (Join-Path $Root 'docs\COMPANION.md'), (Join-Path $Root 'docs\API.md') (Join-Path $Stage 'docs')
 foreach ($file in 'Install.cmd', 'Uninstall.cmd', 'config.example.json', 'README.md', 'CHANGELOG.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md') {
     Copy-Item (Join-Path $Root $file) $Stage
 }

@@ -4,6 +4,11 @@
 /quick.json
 /devices.json
 /twitch.bin
+/kick.bin
+/filters.json
+/tts.json
+/*-demo.json
+/logs/
 *.log
 *.tmp
 

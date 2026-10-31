@@ -6,6 +6,7 @@ The CrossChat window on your streaming PC can also be opened on a **phone, table
 - send quick replies;
 - show a message on stream;
 - star messages to answer later;
+- have a message read aloud on the streaming PC;
 - moderate.
 
 Nothing is installed on the other device: it's a web page, and you can add it to the home screen like an app.
@@ -51,9 +52,11 @@ The companion talks to the CrossChat hub on the streaming PC, so that PC must be
 |---|---|
 | Reading chat, viewer counts, live status | The hub running (it starts with OBS) |
 | Show on stream, Answer later, quick-reply editing, test events | The hub running |
-| Replies and moderation on **Twitch** | **Twitch connected** in Settings on the streaming PC; otherwise the CrossChat window open on the streaming PC |
+| Replies and moderation on **Twitch** | **Twitch connected** in Settings on the streaming PC |
+| Replies and moderation on **Kick** | **Kick connected** in Settings on the streaming PC |
 | Replies and moderation on **YouTube**, replies on **X** | The **CrossChat window open on the streaming PC**, in Chrome or Edge with the CrossChat extension. It opens by itself when you go live. |
-| **Kick** | Read only: Kick chat can't be answered or moderated from CrossChat yet |
+| **Read aloud** | The CrossChat window open on the streaming PC, in Chrome or Edge (the copy docked inside OBS doesn't speak). It reads through that PC's speakers. |
+| Text-to-speech settings, filters, chat history | Only on the streaming PC (Settings there) |
 
 When something isn't available, the companion says why: in the bar under the header, next to the action (greyed out with a reason), or in the chat list after you try.
 
@@ -63,15 +66,20 @@ When something isn't available, the companion says why: in the bar under the hea
   - **Reply**: answers that person on their own platform. On Twitch it's a threaded reply.
   - **Show on stream / Hide from stream**: puts it in the featured-message widget.
   - **Answer later**: stars it.
+  - **Read aloud**: reads it on the streaming PC's speakers.
   - **Copy text**.
+  - **Filter this user** (streaming PC only): hides everything they write, here and on stream. Press it again on one of their messages to stop.
   - **Moderate**: see below.
   - **Quick reply to *name***: one of your quick replies, sent to that person.
+- **Marks in the list:**
+  - **NEW** (green): a viewer's first message in your channel ever (Twitch says when). **1ST**: their first message this stream.
+  - **Dimmed, with "hidden · word"** (or viewer, command, bot): your filters hid it. It isn't on stream and isn't read aloud.
 - **Mouse:** hovering a message shows **reply**, **show**, **☆** and **⋯**.
 - **Keyboard:**
   - **↑ ↓** move between messages, and **Enter** opens the actions;
   - **r** replies, and **s** stars;
   - **Esc** cancels a reply.
-- **The box** sends to every live chat that takes replies. Use **only:** to send to one platform. The counter warns when a message is too long for a platform: X takes 140 characters, YouTube 200, Twitch 500.
+- **The box** sends to every live chat that takes replies. Use **only:** to send to one platform. The counter warns when a message is too long for a platform: X takes 140 characters, YouTube 200, Twitch and Kick 500.
 
 ### Quick replies
 
@@ -92,23 +100,42 @@ The list is kept by the hub, so every device and the streaming PC share it.
 | | Delete a message | Timeout | Ban |
 |---|---|---|---|
 | **Twitch** (Twitch connected) | ✓ | 10 minutes, 1 hour, or any length up to 14 days | ✓ (and unban) |
+| **Kick** (Kick connected) | ✓ | 10 minutes, 1 hour, or any length up to 7 days, in whole minutes | ✓ (and unban) |
 | **YouTube** (CrossChat window open on the streaming PC) | ✓ (remove) | 5 minutes (YouTube's fixed length) | Hide user on this channel |
-| **X**, **Kick** | — | — | — |
+| **X** | — | — | — |
 
 - A ban always asks first.
 - On YouTube, CrossChat uses YouTube's own chat menu in the CrossChat window on the streaming PC. The YouTube account signed in there must own the channel or be a moderator.
-- **Connect Twitch:**
-  1. On the streaming PC: Settings → **Connect Twitch**.
+- **Connect Twitch** (needed to reply on Twitch, too):
+  1. On the streaming PC: Settings → Connections → **Connect Twitch**.
   2. Go to **twitch.tv/activate** and enter the code shown, signed in as the streamer or a moderator.
-  3. After that, Twitch replies and moderation work without the browser extension, from every device.
+  3. After that, Twitch replies and moderation work from every device.
+- **Connect Kick:**
+  1. On the streaming PC: Settings → Connections → **Connect Kick**.
+  2. A kick.com tab opens. Sign in as the streamer and approve CrossChat.
+  3. After that, Kick replies and moderation work from every device.
+
+## Read aloud, filters and chat history
+
+These are set up on the streaming PC, in Settings there.
+
+- **Text to speech** reads chat through the streaming PC's speakers: every message, questions only, events (subs, raids…), messages that start with a command such as `!tts`, or just the message you show on stream. Pick the voice, speed and volume, whether to say who wrote it, and whether to skip links. **Test the voice** tries it; **Stop reading** (also on the companion, and in the bar above the box while it reads) stops and skips what's waiting.
+  - Voices listed **On this PC** stay on the PC. Voices listed **Online** (Edge's "Natural" voices, Chrome's Google voices) send the text they read to Microsoft or Google to make the audio; Settings says so when you pick one. CrossChat never picks an online voice by itself.
+  - Lines are read one at a time, never over each other. Hidden messages are never read.
+- **Filters** hide messages by word or phrase, by viewer (name or @handle), `!commands`, and known chat bots. Hidden messages never reach the widgets in OBS; in the chat list they stay, dimmed, with why.
+- **Chat history**: every stream's chat is saved on the streaming PC. Settings → **Open chat history** lists your streams, newest first. Open one to search it by name or words, show one platform or questions only, and **Export** it as a spreadsheet (CSV) or a web page (HTML).
+- **Connections** shows how each chat is doing: how long it has been connected, when the last message came and how often it reconnected. The same line is in the tooltip of each platform pill at the top.
 
 ## Settings
 
 | | |
 |---|---|
 | **Look and sound** | Auto (follows the device), Light or Dark; a ding when a message arrives. Each device remembers its own. |
-| **Twitch** | Connect or disconnect (on the streaming PC). |
+| **Text to speech** | What to read, voice, speed, volume (on the streaming PC). **Stop reading** works from any device. |
+| **Filters** | Words, viewers, `!commands`, bots (on the streaming PC). |
+| **Connections** | Each chat's health; connect or disconnect Twitch and Kick (on the streaming PC). |
 | **Paired devices** | The list, **Remove**, and **Pair a device** (on the streaming PC). |
+| **Chat history** | Saved chat of every stream: search and export (on the streaming PC). |
 | **Check the stream** | Test chat, alert, featured message or viewer count on the widgets in OBS, without going live. |
 | **About** | The version, and on the streaming PC the address other devices use. |
 
@@ -132,5 +159,7 @@ The list is kept by the hub, so every device and the streaming PC share it.
 | The address doesn't load on the phone | Same Wi-Fi as the PC (not a guest network, which often keeps devices apart)? Did Windows ask about the network and get **Allow** for private networks? If not, open Windows Security → Firewall → *Allow an app through firewall* and tick **Private** for Python. |
 | It worked yesterday, not today | The PC may have a new address on your network. Pair again; the new address is in the QR code and under Settings → About. |
 | "This device is no longer paired" | It was removed, or its key was cleared with the browser's data. Pair it again. |
-| "Needs the CrossChat window open on the streaming PC" | Open it there: Start menu → CrossChat → **Open chat** (Chrome or Edge with the extension), or go live and it opens by itself. For Twitch, connecting Twitch removes the need. |
-| Twitch says "This CrossChat has no Twitch app Client ID" | This build can't connect to Twitch's API. Twitch replies still go out through the CrossChat window on the streaming PC. |
+| "Needs the CrossChat window open on the streaming PC" | Open it there: Start menu → CrossChat → **Open chat** (Chrome or Edge with the extension), or go live and it opens by itself. |
+| "Connect Twitch in Settings to reply on Twitch" | Twitch replies and moderation go through Twitch's official API: Settings → Connections → **Connect Twitch** on the streaming PC. The same goes for Kick. |
+| Twitch says "This CrossChat has no Twitch app Client ID" | This build can't connect to Twitch's API, so Twitch chat is read only in it. |
+| Nothing is read aloud | Is **Read chat aloud** on (Settings → Text to speech)? Is the CrossChat window open on the streaming PC in Chrome or Edge (not just docked in OBS)? If it says "Click anywhere in this window once", do that: browsers only speak after a click. |

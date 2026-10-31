@@ -24,6 +24,12 @@ body { font: var(--cc-weight, 500) var(--cc-size, 20px)/var(--cc-line, 1.35) var
 .cc-emote { height: var(--cc-emote); width: auto; vertical-align: middle; margin: -.3em .06em -.2em; filter: var(--cc-icon-filter); }
 [data-badges="false"] .cc-badge, [data-timestamps="false"] .cc-time { display: none; }
 [data-platform-style="none"] .cc-icon, [data-platform-style="none"] .cc-tag, [data-platform-style="bar"] .cc-icon, [data-platform-style="bar"] .cc-tag { display: none; }
+/* a viewer's first message in the channel ever (theme message.firstHighlight); data-first="stream" marks a first
+   message this stream, unstyled unless a theme's CSS picks it up */
+.cc-first-tag { display: inline-block; margin-right: .45em; padding: .14em .42em; border-radius: .38em; background: var(--cc-accent); color: var(--cc-accent-ink);
+  font-size: .56em; font-weight: 800; letter-spacing: .07em; line-height: 1.2; vertical-align: .22em; text-shadow: none; }
+:where([data-layout="card"], [data-layout="compact"]) .cc-msg.cc-first,
+:where([data-layout="bubble"]) .cc-first .cc-main { box-shadow: var(--cc-shadow), 0 0 0 2px color-mix(in srgb, var(--cc-accent) 80%, transparent); }
 .cc-msg[data-kind="event"] .cc-name { display: none; }
 .cc-msg[data-kind="event"] .cc-text { font-weight: var(--cc-name-weight); color: var(--cc-accent); }
 

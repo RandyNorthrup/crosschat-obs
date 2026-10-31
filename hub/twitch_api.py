@@ -93,17 +93,20 @@ class Twitch:
         os.replace(self.path + ".tmp", self.path)
 
     def forget(self):
+        """Sign out: the tokens are deleted here and revoked at Twitch. False when Twitch didn't confirm it."""
         token = self.tokens.get("access_token")
         self.tokens, self.user, self.pending, self.why = {}, {}, None, ""
         try:
             os.remove(self.path)
         except OSError:
             pass
-        if token:                                # tell Twitch too, so the token stops working everywhere
-            try:
-                requests.post(ID + "/revoke", data={"client_id": self.client_id, "token": token}, timeout=10)
-            except requests.RequestException:
-                pass
+        if not token:
+            return True
+        try:                                     # tell Twitch too, so the token stops working everywhere
+            r = requests.post(ID + "/revoke", data={"client_id": self.client_id, "token": token}, timeout=10)
+            return r.status_code == 200 or (r.status_code == 400 and "invalid token" in r.text.lower())
+        except requests.RequestException:
+            return False
 
     # ---- sign-in: device code flow -------------------------------------------------------------------------
     def start(self):
@@ -112,7 +115,10 @@ class Twitch:
             raise TwitchError("Twitch refused to start the sign-in (%s)" % r.status_code)
         d = r.json()
         self.why = ""
-        self.pending = {"device_code": d["device_code"], "user_code": d["user_code"], "verification_uri": d["verification_uri"],
+        page = str(d.get("verification_uri") or "")
+        if not page.startswith("https://www.twitch.tv/"):       # only ever send the streamer to Twitch's own page
+            page = "https://www.twitch.tv/activate"
+        self.pending = {"device_code": d["device_code"], "user_code": d["user_code"], "verification_uri": page,
                         "interval": max(int(d.get("interval", 5)), 1), "expires": time.time() + int(d.get("expires_in", 1800))}
         return self.pending
 

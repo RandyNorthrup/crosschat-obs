@@ -6,6 +6,25 @@ Please report security problems privately through GitHub: **[Report a vulnerabil
 
 Fixes go into the newest release only.
 
+## What leaves your PC
+
+CrossChat has no server of its own. It makes no analytics, crash-report or update-check connections. Everything it sends goes straight from your PC to the services below, over HTTPS or TLS, and only for the features you turn on.
+
+| Where | What is sent | When |
+|---|---|---|
+| Twitch chat (`irc.chat.twitch.tv`) | Nothing about you: chat is read signed out, as an anonymous viewer | A Twitch channel is set |
+| Twitch (`gql.twitch.tv`, fallback `decapi.me`) | Your channel name, to get the viewer count | A Twitch channel is set and you're live |
+| Twitch API (`id.twitch.tv`, `api.twitch.tv`) | Your Twitch token, your replies, your moderation actions | You pressed **Connect Twitch** |
+| YouTube (`www.youtube.com`) | Your channel or video id, signed out, to read chat | A YouTube channel is set |
+| Kick (`kick.com`, Pusher) | Your channel name, signed out, to read chat | A Kick channel is set |
+| Kick API (`id.kick.com`, `api.kick.com`) | Your Kick token, your replies, your moderation actions | You pressed **Connect Kick** |
+| X and YouTube, in your browser | The reply you typed, typed into the site's own chat box by the extension | You reply or moderate there |
+| 7TV, BetterTTV, FrankerFaceZ | Your Twitch channel's public numeric id | Emotes are on (the default), once an hour |
+| Google Fonts | A font request from your browser or OBS | Only if a theme uses a Google font |
+| Microsoft or Google speech | The chat line being read aloud | Only if you pick a voice marked **online** for text-to-speech |
+
+Viewers' names and messages are public chat. CrossChat keeps them only on your PC (see **Chat history** below).
+
 ## How CrossChat is built to be safe
 
 **It runs only on your PC.**
@@ -13,65 +32,110 @@ Fixes go into the newest release only.
 - The hub listens on `127.0.0.1` and nowhere else.
 - It answers only requests addressed to `127.0.0.1:<port>` or `localhost:<port>`, so a website can't reach it under another name (DNS rebinding).
 
-**Other websites can't make it do anything.**
+**Other websites get nothing from it.**
 
-- Reading the public chat feed, the widgets and the theme list is allowed from anywhere on your PC. That's how OBS shows the widgets.
-- Anything that acts (opening a window, going live on X, featuring a message, sending test events) is refused when another website asks for it.
-- Changes (saving, deleting or picking a theme, test events) are accepted only as JSON from the hub's own pages. A page elsewhere can't send that without the browser checking first, and the hub refuses those checks.
-- Bodies are limited to 256 KB and theme files to 64 KB.
-- Theme names are restricted to lowercase letters, digits and dashes, so a request can't reach other files.
+- A page from another website can't read anything from the hub, not even the chat, and can't make it do anything: open a window, go live on X, feature a message, send test events, read chat history.
+- The CrossChat window, the Theme Studio and the pairing page refuse to be put in another site's frame, where a hidden frame could take your clicks.
+- Changes are accepted only as JSON from the hub's own pages. A page elsewhere can't send that without the browser checking first, and the hub refuses those checks.
+- If a second CrossChat window takes over posting replies or reading aloud and then closes, the job goes back to the window that had it.
+- Requests are limited: headers to 16 KB, bodies to 256 KB, theme files to 64 KB.
+- Theme and history names are restricted to letters, digits and dashes, so a request can't reach other files.
+
+**Your own overlay pages can't act as you.**
+
+- Pages in your `custom_overlays` folder are served at `http://localhost:4466/custom/`. The browser keeps that address apart from the CrossChat window's `http://127.0.0.1:4466/`.
+- They get their own files and the chat as viewers see it on stream: no filtered messages, notes, accounts, devices, filters, history or replies.
+- They can't reply, moderate, change settings or open the CrossChat window, so an overlay pack downloaded from somewhere is safe to try.
+
+**The widgets load nothing from elsewhere.** OBS's widgets only load CrossChat's own files, emote pictures from 7TV, BetterTTV, FrankerFaceZ and Twitch, and Google Fonts. A shared theme's custom CSS can't make them contact any other server. Custom CSS can still change what the widgets show, so only import themes from people you trust.
 
 **The companion (paired devices on your home network)** runs on a second port, 4467 by default.
 
 - It only starts listening once you pair a device or start a pairing, so nothing is exposed before you ask for it.
+- It listens on your PC's home-network address only, not on every network adapter.
+- **It refuses to start on a network Windows calls Public**, such as café or hotel Wi-Fi, where other people could listen in, or when Windows can't say. If your home network shows as Public, set it to Private: Settings > Network & internet > your network.
+- If your PC moves to another network (a laptop taken out), or the network is switched to Public, the companion closes and starts again only on a Private network.
+- It closes when no device is paired and no pairing is in progress.
+- Oversized or slow requests are dropped, and it takes at most 64 connections at once, so nobody on the network can tie it up.
+- It answers only requests addressed to a plain IP address, so a website can't reach it under its own name (DNS rebinding).
 - Every request needs a paired device's key, except the pairing page itself.
   - The key is 32 random bytes in an HttpOnly, SameSite=Strict cookie.
   - CrossChat stores only its SHA-256 hash, in `devices.json`.
 - Pairing codes are 6 random digits. They last 5 minutes, allow 5 wrong tries, and work once.
 - Changes must come from the companion page itself, as JSON.
-- Paired devices can read chat and reply, moderate, star, feature and send test events. They can't:
+- Paired devices can read chat and reply, moderate, star, feature, read a chat message aloud and send test events. They can't:
   - pair other devices;
-  - connect Twitch;
-  - change themes;
+  - connect Twitch or Kick;
+  - change themes, filters or text-to-speech settings;
+  - read chat history;
   - open windows;
   - go live on X;
-  - act as the extension.
-- It is plain `http` on your local network. Use it on a network you trust and don't forward the port; for remote use, a private network such as Tailscale is the safe way.
+  - act as the extension;
+  - make the PC say anything that isn't a message from the chat.
+- It is plain `http` on your local network. Don't forward the port. For use away from home, a private network such as Tailscale is the safe way: set `"remote": {"bind": "<your Tailscale IP>"}` in `config.json`.
 
-**Twitch's API:**
+**Twitch:**
 
 - CrossChat signs in with Twitch's device code flow as a public app. There is no client secret to leak.
 - It asks for three permissions only: `user:write:chat`, `moderator:manage:chat_messages`, `moderator:manage:banned_users`.
 - The tokens are encrypted for your Windows account with DPAPI (`twitch.bin`), so a copy of the file is useless elsewhere.
-- **Disconnect** deletes the file and revokes the token at Twitch.
+- **Disconnect** deletes the file and revokes the token at Twitch. If Twitch doesn't confirm, CrossChat says so, and you can remove it at twitch.tv → Settings → Connections.
+- The sign-in page CrossChat opens is always on `https://www.twitch.tv/`.
 
-**Chat text is never treated as code.** The pages put names and messages on screen as plain text, never as HTML.
+**Kick:**
 
-**Your accounts:**
+- CrossChat signs in with Kick's OAuth 2.1 code flow with PKCE. Kick sends your browser back to `http://localhost:4466/kick/callback` on your own PC, and nowhere else.
+- The sign-in is accepted only with the one-time random `state` CrossChat made when you pressed **Connect Kick**, so another site can't slip its own sign-in in.
+- It asks for: `user:read`, `channel:read`, `chat:write`, `moderation:ban`, `moderation:chat_message:manage`.
+- The tokens are encrypted for your Windows account with DPAPI (`kick.bin`). **Disconnect** deletes the file and revokes both tokens at Kick, and says so if Kick doesn't confirm.
+- **About the Kick app secret.** Kick requires an app secret even for apps installed on people's PCs, so CrossChat's ships inside it, like every desktop app that signs in to Kick. It can't be used to get anyone's tokens: Kick only ever sends a sign-in back to the `localhost` address registered for the app, which is each person's own PC, and the PKCE code only works with the one-time key the hub made. If you'd rather use your own Kick app, register one at kick.com and set `"kick_client_id"` and `"kick_client_secret"` in `config.json`.
 
-- Chat is read through each platform's public, signed-out feed.
-- Replies are posted from your own browser by the CrossChat extension, with the accounts already signed in there.
-- For Twitch, the extension reads the browser's Twitch login cookie to post your reply over Twitch's own chat connection. It's read for that connection only, is never stored, and goes nowhere else.
-- On YouTube and X, the extension types into those sites' own chat boxes.
+**The extension reads no logins.**
 
-**The extension's permissions:**
-
-- `cookies`, for the Twitch login described above.
-- Pages it may touch:
+- It has no Chrome permissions at all: no cookies, no tabs, no storage.
+- It may only touch these pages:
   - `127.0.0.1:4466`, the CrossChat window;
   - `studio.x.com`, for X Live;
-  - `www.twitch.tv`, for that cookie;
   - `www.youtube.com/live_chat`, YouTube's chat box.
+- On YouTube and X it types your reply into the site's own chat box, as the account already signed in there. YouTube moderation goes through YouTube's own message menu.
+- Twitch and Kick replies don't use the extension at all: they go through those platforms' official APIs, from the hub.
+
+**Chat text is never treated as code.**
+
+- The pages put names and messages on screen as plain text, never as HTML.
+- Emotes from 7TV, BetterTTV and FrankerFaceZ are kept only when the name is a plain word and the picture is on that service's own `https` address.
+- Text-to-speech reads only messages from the chat. Filtered messages and your own messages are never read, and filtered messages can't be put on stream, from any device.
+
+**Chat history:**
+
+- Each stream's chat is saved on your PC, in `logs\` in your CrossChat folder, one file per stream, and deleted after 90 days. Set `"logs": {"enabled": false}` in `config.json` to keep none, or delete the folder at any time.
+- History is only readable from the CrossChat window on your PC. Paired devices and websites can't read it.
+- CSV exports neutralise spreadsheet formulas: a chat line starting with `=`, `+`, `-` or `@` is written as text, so opening the file in Excel can't run anything a viewer typed.
+- HTML exports escape everything.
 
 **OBS:** the hub reads OBS's WebSocket port and password from OBS's own settings file each time it connects. It never writes them anywhere and never logs them.
-
-**No telemetry.** CrossChat makes no analytics, crash-report or update-check connections. The only connections it makes are to the chat platforms you configured and, if a theme names one, Google Fonts.
 
 **Your files** are in `%LOCALAPPDATA%\CrossChat`:
 
 - `config.json`, your channels;
 - `themes\`;
 - `quick.json`, your quick replies;
+- `filters.json` and `tts.json`, your filter and text-to-speech settings;
 - `devices.json`, hashes of paired devices' keys;
-- `twitch.bin`, the Twitch token, encrypted for your Windows account;
+- `twitch.bin` and `kick.bin`, the tokens, encrypted for your Windows account;
+- `logs\`, chat history;
 - `crosschat.log`. The log has no passwords, keys, tokens or cookies.
+
+## Checking a download
+
+Every release zip comes with a `.sha256` file and a signed build provenance attestation. The attestation proves the zip was built by this repository's release workflow from the tagged source. With the GitHub CLI:
+
+```powershell
+gh attestation verify CrossChat-1.4.0-windows.zip --repo RandyNorthrup/crosschat-obs
+```
+
+How releases are made:
+
+- The release is built from a fresh checkout by a job that installs nothing. Tests run in a separate job with read-only access.
+- GitHub Actions are pinned to exact commits.
+- The installer installs CrossChat's two Python packages and their dependencies at the exact versions it was tested with, checked against their SHA-256 hashes (`hub/requirements.lock`). pip refuses anything that doesn't match.
