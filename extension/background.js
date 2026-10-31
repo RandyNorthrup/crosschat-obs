@@ -1,12 +1,12 @@
 // Background part of the CrossChat extension. Two jobs:
-//   1. carry questions and reports between X's Live Studio page and the CrossChat hub on this PC (hub/hub.py),
-//      which a page script may not call directly;
-//   2. post a reply typed in the CrossChat window to YouTube and X by typing it into those sites' own chat boxes,
-//      as the accounts logged in to this browser. (Twitch and Kick replies go through their official APIs in the
-//      hub; the extension never reads any login, cookie or token.)
+//   1. carry questions and reports between X's Live Studio page, the streamer's own TikTok LIVE page and the
+//      CrossChat hub on this PC (hub/hub.py), which a page script may not call directly;
+//   2. post a reply typed in the CrossChat window to YouTube, X and TikTok by typing it into those sites' own chat
+//      boxes, as the accounts logged in to this browser. (Twitch and Kick replies go through their official APIs in
+//      the hub; the extension never reads any login, cookie or token.)
 const HUB = 'http://127.0.0.1:4466';
-const LIMIT = { youtube: 200, x: 140 };
-const NAME = { youtube: 'YouTube', x: 'X' };
+const LIMIT = { youtube: 200, x: 140, tiktok: 150 };
+const NAME = { youtube: 'YouTube', x: 'X', tiktok: 'TikTok' };
 const hub = (path) => fetch(HUB + path, { cache: 'no-store' }).then((r) => r.json());
 
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
@@ -17,6 +17,15 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   }
   if (message.type === 'mod' && from.startsWith(HUB + '/')) {
     moderate(message.data || {}, sender.tab).then(respond, () => respond({ ok: false, why: 'it failed' }));
+    return true;
+  }
+  if (message.type === 'tt-check' && from.startsWith('https://www.tiktok.com/')) {     // which account is the streamer's
+    hub('/targets').then((t) => respond({ tiktok: t.tiktok || '', live: !!t.live }), () => respond(null));
+    return true;
+  }
+  if (message.type === 'tt-feed' && from.startsWith('https://www.tiktok.com/')) {
+    hub('/tiktok/feed?' + new URLSearchParams(message.data || {}))
+      .then((data) => respond({ reached: true, data }), () => respond({ reached: false }));
     return true;
   }
   if (['state', 'result', 'feed'].includes(message.type) && from.startsWith('https://studio.x.com/')) {
@@ -33,6 +42,7 @@ async function post(data, tab) {
   const jobs = {
     youtube: () => youtube(targets.youtube_video, text, tab, !!data.dry),
     x: () => ask(chrome.tabs.query({ url: 'https://studio.x.com/live/*' }), { type: 'x-say', text }, 'the X livestream page is not open'),
+    tiktok: () => ask(chrome.tabs.query({ url: 'https://www.tiktok.com/*' }), { type: 'tt-say', text }, 'the TikTok LIVE page is not open'),
   };
   const out = {};
   await Promise.all([...new Set(data.to || [])].map(async (p) => {

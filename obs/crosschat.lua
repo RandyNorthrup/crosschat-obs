@@ -15,14 +15,25 @@ pcall(ffi.cdef, [[
   unsigned long GetFileAttributesW(const wchar_t* path);
   unsigned long GetModuleFileNameW(void* module, wchar_t* out, unsigned long room);
   const wchar_t* GetCommandLineW(void);
+  typedef struct {
+    unsigned long cbSize; unsigned long fMask; void* hwnd; const wchar_t* lpVerb; const wchar_t* lpFile;
+    const wchar_t* lpParameters; const wchar_t* lpDirectory; int nShow; void* hInstApp; void* lpIDList;
+    const wchar_t* lpClass; void* hkeyClass; unsigned long dwHotKey; void* hIconOrMonitor; void* hProcess;
+  } CROSSCHAT_SHELLEXECUTEINFOW;
+  int ShellExecuteExW(CROSSCHAT_SHELLEXECUTEINFOW* info);
+  int GetExitCodeProcess(void* process, unsigned long* code);
+  int CloseHandle(void* handle);
 ]])
 local kernel32 = ffi.load("kernel32")
 local shell32 = ffi.load("shell32")
 
-local VERSION = "1.4.0"
+local VERSION = "1.5.0"
 local PORT = 4466
 local python_setting = ""
 local hotkeys = {}
+local hub_process = nil       -- the hub this script started, watched so a crash doesn't leave you without chat
+local restarts = {}           -- when it was restarted, to give up on a hub that can't stay up
+local STILL_ACTIVE = 259
 
 -- Windows wants UTF-16; OBS and Lua speak UTF-8 (so folders with accents or other scripts work).
 local function wide(text)
@@ -84,10 +95,35 @@ local function python()
   return "pyw.exe", "-3 "
 end
 
-local function python_run(script, arguments)
+-- Like run(), but keeps a handle on the new process so the watchdog below can see whether it is still running.
+local function run_watched(file, parameters, directory)
+  local info = ffi.new("CROSSCHAT_SHELLEXECUTEINFOW")
+  info.cbSize = ffi.sizeof(info)
+  info.fMask = 0x40           -- SEE_MASK_NOCLOSEPROCESS
+  local verb, path, args, folder = wide("open"), wide(file), wide(parameters), wide(directory)   -- kept until the call returns
+  info.lpVerb, info.lpFile, info.lpParameters, info.lpDirectory = verb, path, args, folder
+  info.nShow = 0
+  local started = shell32.ShellExecuteExW(info)
+  if started == 0 or info.hProcess == nil then
+    return false
+  end
+  if hub_process ~= nil then
+    kernel32.CloseHandle(hub_process)
+  end
+  hub_process = info.hProcess
+  return true
+end
+
+local function python_run(script, arguments, watched)
   local exe, prefix = python()
   local hub = app_folder() .. "\\hub"
-  local ok = run(exe, prefix .. '"' .. hub .. "\\" .. script .. '" ' .. (arguments or ""), hub)
+  local parameters = prefix .. '"' .. hub .. "\\" .. script .. '" ' .. (arguments or "")
+  local ok
+  if watched then
+    ok = run_watched(exe, parameters, hub)
+  else
+    ok = run(exe, parameters, hub)
+  end
   if not ok then
     obs.script_log(obs.LOG_WARNING, "could not start Python (" .. exe .. "). Run Install.cmd again, or set the Python field in "
       .. "Tools > Scripts > crosschat.lua.")
@@ -98,7 +134,40 @@ end
 local function start_hub()
   local folder = obs_config_folder()
   obs.script_log(obs.LOG_INFO, "starting the hub (OBS settings in " .. folder .. ")")
-  python_run("hub.py", string.format('--obs-pid %d --obs-config "%s"', kernel32.GetCurrentProcessId(), folder))
+  python_run("hub.py", string.format('--obs-pid %d --obs-config "%s"', kernel32.GetCurrentProcessId(), folder), true)
+end
+
+-- The watchdog: if the hub stops with an error (not because OBS is closing or another hub already runs, which end
+-- it normally), start it again. Five restarts in ten minutes means something is really wrong: then it stops trying
+-- and says so in the script log.
+local function watch_hub()
+  if hub_process == nil then
+    return
+  end
+  local code = ffi.new("unsigned long[1]")
+  if kernel32.GetExitCodeProcess(hub_process, code) == 0 or code[0] == STILL_ACTIVE then
+    return
+  end
+  kernel32.CloseHandle(hub_process)
+  hub_process = nil
+  if code[0] == 0 or not exists(app_folder() .. "\\hub\\hub.py") then
+    return                    -- it ended normally, or CrossChat was uninstalled
+  end
+  local now = os.time()
+  local recent = {}
+  for _, at in ipairs(restarts) do
+    if now - at < 600 then
+      table.insert(recent, at)
+    end
+  end
+  restarts = recent
+  if #restarts >= 5 then
+    obs.script_log(obs.LOG_WARNING, "the hub keeps stopping with an error; see crosschat.log, then press Start the hub again")
+    return
+  end
+  table.insert(restarts, now)
+  obs.script_log(obs.LOG_WARNING, "the hub stopped with an error (code " .. tonumber(code[0]) .. "); starting it again")
+  start_hub()
 end
 
 local function control(command)
@@ -131,6 +200,7 @@ function script_properties()
   obs.obs_properties_add_button(props, "x_live", "Go live on X now", control("x-live"))
   obs.obs_properties_add_button(props, "x_dry", "Test X (fill the form, never go live)", control("x-dry"))
   obs.obs_properties_add_button(props, "restart", "Start the hub again", function()
+    restarts = {}
     start_hub()
     return false
   end)
@@ -159,6 +229,15 @@ function script_load(settings)
     hotkeys[key[1]] = id
   end
   start_hub()
+  obs.timer_add(watch_hub, 5000)
+end
+
+function script_unload()
+  obs.timer_remove(watch_hub)
+  if hub_process ~= nil then
+    kernel32.CloseHandle(hub_process)
+    hub_process = nil
+  end
 end
 
 function script_save(settings)

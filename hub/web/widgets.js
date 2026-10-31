@@ -9,7 +9,7 @@
   const q = new URLSearchParams(location.search);
   const WIDGET = (/\/overlay\/(chat|featured|viewers|alerts)\b/.exec(location.pathname) || [])[1] || q.get('widget') || 'chat';
   const PREVIEW = q.has('preview'), DEMO = PREVIEW || q.has('demo'), STILL = q.get('demo') === 'still';
-  const SHORT = { twitch: 'TW', youtube: 'YT', kick: 'K', x: 'X' };
+  const SHORT = { twitch: 'TW', youtube: 'YT', kick: 'K', x: 'X', tiktok: 'TT', facebook: 'FB', rumble: 'RM' };
   const BADGES = { broadcaster: 'host', owner: 'host', moderator: 'mod', vip: 'vip', subscriber: 'sub', founder: 'sub', member: 'member', verified: '✓' };
   const root = doc.getElementById('cc-root');
   doc.documentElement.dataset.widget = WIDGET;
@@ -387,12 +387,13 @@
     { p: 'x', name: 'Lena Park', handle: 'lenapark' }, { p: 'twitch', name: 'kiwi_codes', color: '#9acd32', badges: ['subscriber'] },
     { p: 'kick', name: 'quietstorm', color: '#f4a261' }, { p: 'youtube', name: 'Rafael Gomes', badges: ['moderator'] },
     { p: 'twitch', name: 'AriaPlays', color: '#ff69b4', badges: ['vip'] }, { p: 'x', name: 'byte bandit', handle: 'bytebandit' },
+    { p: 'tiktok', name: 'luna.makes' },
   ];
   const LINES = [                                  // one line per person above, in the same order
     'first time catching this live! HeyGuys', 'hello from Lisbon 👋 the overlay looks so clean', 'one chat for every platform, finally',
     'W stream, the audio sounds great', 'welcome in everyone, be nice in chat', 'can you explain that last part again?',
     'lurking but loving it', 'that boss fight Kappa', 'how long have you been streaming today?', 'drop the settings pls 🙏',
-    'gg that was close', 'chat is moving fast today',
+    'gg that was close', 'chat is moving fast today', 'found you on TikTok, this setup is so clean',
   ];
   const EMOTES = { Kappa: '25', HeyGuys: '30259' };
   const demoAlerts = [
@@ -425,7 +426,7 @@
 
   function demo() {
     primed = true; live = true;
-    const counts = { twitch: 128, youtube: 342, kick: 41, x: 87 };
+    const counts = { twitch: 128, youtube: 342, kick: 41, x: 87, tiktok: 214 };
     const sum = () => Object.values(counts).reduce((a, b) => a + b, 0);
     if (WIDGET === 'chat') {
       for (tick = 0; tick < 8; tick++) chatAdd(demoLine(tick), false);
@@ -436,7 +437,7 @@
       feature(picks[0]);
       if (!STILL) { let n = 1; setInterval(() => feature(picks[n++ % picks.length]), 6000); }
     } else if (WIDGET === 'viewers') {
-      handle({ type: 'status', live: true, status: { twitch: 'on', youtube: 'on', kick: 'on', x: 'on' } });
+      handle({ type: 'status', live: true, status: { twitch: 'on', youtube: 'on', kick: 'on', x: 'on', tiktok: 'on' } });
       handle({ type: 'viewers', counts: { ...counts }, total: sum() });
       if (!STILL) setInterval(() => {
         Object.keys(counts).forEach((p) => { counts[p] = Math.max(3, counts[p] + Math.round((Math.random() - 0.4) * counts[p] * 0.06)); });

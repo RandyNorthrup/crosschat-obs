@@ -13,7 +13,7 @@
   <a href="https://www.paypal.com/donate/?hosted_button_id=Q9VC7B42R7K82"><img alt="Donate with PayPal" src="https://img.shields.io/badge/donate-PayPal-0070ba"></a>
 </p>
 
-**CrossChat** is a free companion for OBS Studio when you stream to several platforms at once. It reads **Twitch, YouTube, Kick and X** chat into one window, lets you **answer everyone with one message** (or one person on their own platform), **moderates** Twitch, YouTube and Kick, puts **themeable chat, featured messages, viewer counts and alerts** on your stream, and **starts and ends your X livestream together with OBS**. Pair your **phone or another PC** to read, answer and moderate chat from there. Everything runs on your own PC and home network.
+**CrossChat** is a free companion for OBS Studio when you stream to several platforms at once. It reads **Twitch, YouTube, Kick, X and TikTok** chat into one window, lets you **answer everyone with one message** (or one person on their own platform), **moderates** Twitch, YouTube and Kick, puts **themeable chat, featured messages, viewer counts and alerts** on your stream, and **starts and ends your X livestream together with OBS**. Pair your **phone or another PC** to read, answer and moderate chat from there. Everything runs on your own PC and home network.
 
 <p align="center">
   <img src="assets/video/overview.webp" alt="CrossChat in action: a question from YouTube is put on stream, then one reply goes out to Twitch, YouTube and X at once" width="100%"><br>
@@ -23,7 +23,7 @@
 ## Features
 
 **One chat window for every platform**
-- Twitch, YouTube, Kick and X chat in one list, each line tagged with where it came from.
+- Twitch, YouTube, Kick, X and TikTok LIVE chat in one list, each line tagged with where it came from.
 - Viewer counts per platform and in total.
 - Subs, raids, cheers, Super Chats and memberships are marked in the list.
 - Deleted messages and timed-out viewers are struck through.
@@ -134,9 +134,10 @@ Every setting, the CSS hooks and how to share themes are in **[docs/THEMES.md](d
 |---|---|
 | **PC** | Windows 10 or 11, 64-bit (tested on Windows 11) |
 | **OBS Studio** | 28 or newer, with its built-in WebSocket server. Tested with **33.0.1** (obs-websocket 5.7.6). |
-| **Browser** | Google Chrome, or Microsoft Edge. Needed only for replying and for X. |
+| **Browser** | Google Chrome, or Microsoft Edge. Needed only for replying, and for X and TikTok. |
 | **Python** | 3.10 or newer. If you don't have it, the installer offers to install it. |
 | **X Live** *(optional)* | X Premium with access to [X Live Studio](https://studio.x.com/live), and OBS sending video to X (see [X Live](#x-live)). |
+| **TikTok LIVE** *(optional)* | Signed in to TikTok in the same browser, and OBS sending video to TikTok (see [TikTok LIVE](#tiktok-live)). |
 
 CrossChat doesn't send your video anywhere. OBS does that. To stream to several platforms at once, use what you already use for that: an OBS multi-output plugin such as [obs-multi-rtmp](https://github.com/sorayuki/obs-multi-rtmp), or a restreaming service.
 
@@ -177,7 +178,7 @@ To check everything without going live, press **Send test to OBS** in the Theme 
 
 ## Try it without going live
 
-Start menu → CrossChat → **Try the demo**, or `python hub\hub.py --demo`. It opens the chat app on a made-up live stream with fictional chatters on Twitch, YouTube, Kick and X, including questions, subs, raids, Super Chats and moving viewer counts.
+Start menu → CrossChat → **Try the demo**, or `python hub\hub.py --demo`. It opens the chat app on a made-up live stream with fictional chatters on Twitch, YouTube, Kick, X and TikTok, including questions, subs, raids, Super Chats and moving viewer counts.
 
 Reply, moderate, star and feature messages as much as you like: in the demo everything "works", and nothing is posted anywhere. The demo runs on its own port (4477), so it never mixes with your real chat.
 
@@ -212,6 +213,7 @@ A Stream Deck can trigger them with a *Hotkey* action, or open the Start-menu sh
 | **YouTube** | ✅ | ✅ | remove, 5-minute timeout, hide user | ✅ | Super Chats, Super Stickers, members, gifted memberships |
 | **Kick** | ✅ | ✅ (official API once connected) | delete, timeout, ban, unban | ✅ | subs, gifts, hosts (see [Known limits](#known-limits)) |
 | **X** | ✅ | ✅ | — | ✅ | — |
+| **TikTok LIVE** | ✅ (your own LIVE page) | ✅ | in TikTok | ✅ | — (see [Known limits](#known-limits)) |
 
 ## X Live
 
@@ -234,6 +236,17 @@ The extension only acts in the two minutes after the hub asks it to, so opening 
 
 Turn off the automatic start with `"auto_go_live": false` and use **Go live on X** when you want it.
 
+## TikTok LIVE
+
+TikTok has no public chat API. The tools that read TikTok chat anyway mostly send your TikTok session to an outside "signing" service. CrossChat doesn't.
+
+1. Set `"tiktok": "@yourname"` in `config.json` (or answer the installer's question).
+2. Stay signed in to TikTok in Chrome or Edge, the browser with the CrossChat extension.
+3. When OBS starts streaming, CrossChat opens **your own TikTok LIVE page** in a small window under the chat window. Keep it open while you stream.
+4. The extension passes on the chat lines shown there and types your replies into TikTok's own chat box, as you. Replies are up to 150 characters.
+
+The extension first asks CrossChat which TikTok account is yours. On every other TikTok page, someone else's LIVE included, it reads nothing. Moderate TikTok chat in TikTok itself.
+
 ## Settings
 
 Your settings are in `%LOCALAPPDATA%\CrossChat\config.json` (start from [`config.example.json`](config.example.json)). Restart OBS after changing them.
@@ -241,6 +254,8 @@ Your settings are in `%LOCALAPPDATA%\CrossChat\config.json` (start from [`config
 | Key | Default | |
 |---|---|---|
 | `twitch`, `youtube`, `kick` | `""` | Your channels. A name, an `@handle`, a channel ID or a link all work. |
+| `tiktok` | `""` | Your TikTok `@name`. Its LIVE page opens in your browser when OBS goes live (see [TikTok LIVE](#tiktok-live)). |
+| `tiktok_window` | `"auto"` | Where that page goes: under the chat window, or `{"x", "y", "width", "height"}`. |
 | `port` | `4466` | The hub's port on `127.0.0.1`. The extension expects 4466. |
 | `browser` | `"auto"` | `"auto"` (Chrome, else Edge), `"chrome"`, `"edge"` or a full path. It must be the browser that has the extension. |
 | `window` | `"auto"` | `"auto"` docks the chat at the right edge of the main screen, or `{"x", "y", "width", "height"}`. Put it where OBS doesn't capture. |
@@ -344,6 +359,7 @@ More detail, and how to report a problem privately: [SECURITY.md](SECURITY.md).
 
 - **Windows only.** The hub uses Windows to place and close the chat window.
 - **Kick** replies and moderation use Kick's documented API. Sign-in was verified against Kick; the post and moderation calls are covered by tests, not yet by a live Kick stream. Kick alerts come from Kick's public feed and haven't been checked against a real Kick stream yet.
+- **TikTok LIVE** is new in 1.5. It is read from TikTok's own LIVE page, so a redesign by TikTok can break it until CrossChat is updated. It was built and tested against TikTok's current page, not yet on a real TikTok stream. Gifts don't show as alerts yet.
 - **X Live** depends on X Live Studio's page and needs X Premium. CrossChat clicks through it like a person would, so a redesign by X can break it until CrossChat is updated.
 - **YouTube** chat is read the same way YouTube's own chat pop-out reads it.
 - **YouTube moderation** clicks through YouTube's own chat menu in the CrossChat window, so the signed-in account must own the channel or moderate it. It hasn't been checked against a live YouTube stream yet.

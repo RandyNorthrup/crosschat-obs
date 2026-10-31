@@ -18,7 +18,8 @@ CrossChat has no server of its own. It makes no analytics, crash-report or updat
 | YouTube (`www.youtube.com`) | Your channel or video id, signed out, to read chat | A YouTube channel is set |
 | Kick (`kick.com`, Pusher) | Your channel name, signed out, to read chat | A Kick channel is set |
 | Kick API (`id.kick.com`, `api.kick.com`) | Your Kick token, your replies, your moderation actions | You pressed **Connect Kick** |
-| X and YouTube, in your browser | The reply you typed, typed into the site's own chat box by the extension | You reply or moderate there |
+| X, YouTube and TikTok, in your browser | The reply you typed, typed into the site's own chat box by the extension | You reply or moderate there |
+| TikTok (`www.tiktok.com`), in your browser | Nothing beyond what your browser already does: CrossChat reads chat from your own TikTok LIVE page there | A TikTok name is set and you're live |
 | 7TV, BetterTTV, FrankerFaceZ | Your Twitch channel's public numeric id | Emotes are on (the default), once an hour |
 | Google Fonts | A font request from your browser or OBS | Only if a theme uses a Google font |
 | Microsoft or Google speech | The chat line being read aloud | Only if you pick a voice marked **online** for text-to-speech |
@@ -96,7 +97,9 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 - It may only touch these pages:
   - `127.0.0.1:4466`, the CrossChat window;
   - `studio.x.com`, for X Live;
-  - `www.youtube.com/live_chat`, YouTube's chat box.
+  - `www.youtube.com/live_chat`, YouTube's chat box;
+  - `www.tiktok.com`, for your own TikTok LIVE page. It first asks CrossChat which TikTok account is yours, and on every other TikTok page, someone else's LIVE included, it reads nothing and sends nothing.
+- TikTok has no public chat API. Unlike tools that send your TikTok session to an outside "signing" service, CrossChat reads chat only from your own LIVE page, in your own browser.
 - On YouTube and X it types your reply into the site's own chat box, as the account already signed in there. YouTube moderation goes through YouTube's own message menu.
 - Twitch and Kick replies don't use the extension at all: they go through those platforms' official APIs, from the hub.
 

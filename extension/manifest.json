@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "CrossChat",
-  "version": "1.4.0",
-  "description": "Companion to the CrossChat hub for OBS: starts and ends your X livestream with OBS, and posts chat replies to YouTube and X. Talks only to the hub on this PC and reads no logins.",
+  "version": "1.5.0",
+  "description": "Companion to the CrossChat hub for OBS: starts and ends your X livestream with OBS, brings in chat from your own TikTok LIVE page, and posts chat replies to YouTube, X and TikTok. Talks only to the hub on this PC and reads no logins.",
   "minimum_chrome_version": "116",
   "icons": {
     "16": "icons/icon-16.png",
@@ -14,7 +14,8 @@
   "host_permissions": [
     "http://127.0.0.1:4466/*",
     "https://studio.x.com/*",
-    "https://www.youtube.com/live_chat*"
+    "https://www.youtube.com/live_chat*",
+    "https://www.tiktok.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -47,6 +48,15 @@
         "youtube.js"
       ],
       "all_frames": true,
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.tiktok.com/*"
+      ],
+      "js": [
+        "tiktok.js"
+      ],
       "run_at": "document_idle"
     }
   ]

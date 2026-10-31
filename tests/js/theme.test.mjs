@@ -10,6 +10,7 @@ const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const T = require('../../hub/web/theme.js');
 const I = require('../../hub/web/icons.js');
+const A = require('../../hub/web/app.js');
 const presetDir = path.join(here, '..', '..', 'hub', 'presets');
 
 test('an empty theme is the defaults', () => {
@@ -69,7 +70,8 @@ test('chat platform filter', () => {
   assert.deepEqual(T.platforms('twitch, YouTube'), ['twitch', 'youtube']);
   assert.deepEqual(T.platforms(['x', 'x', 'kick']), ['x', 'kick']);
   assert.equal(T.platforms(['nothing']), 'all');
-  assert.equal(T.platforms(['twitch', 'youtube', 'kick', 'x']), 'all');
+  assert.equal(T.platforms(['twitch', 'youtube', 'kick', 'x', 'tiktok', 'facebook', 'rumble']), 'all');
+  assert.deepEqual(T.platforms(['tiktok', 'myspace']), ['tiktok']);
   assert.deepEqual(T.merge({ chat: { platforms: 'twitch' } }).chat.platforms, ['twitch']);
   // the address wins over the theme
   assert.deepEqual(T.wanted(['twitch'], 'youtube,x'), ['youtube', 'x']);
@@ -161,5 +163,7 @@ test('every built-in preset is valid', () => {
 
 test('icons exist for every platform', () => {
   for (const p of [...T.PLATFORMS, 'chat']) assert.match(I.PATHS[p], /^M[\d.]/);
-  assert.equal(Object.keys(I.NAMES).length, 4);
+  assert.deepEqual(Object.keys(I.NAMES).sort(), [...T.PLATFORMS].sort());
+  for (const p of Object.keys(A.NAMES)) assert.ok(I.PATHS[p] && I.NAMES[p], p + ' has an icon and a name');
+  for (const p of T.PLATFORMS) assert.match(T.DEFAULTS.colors[p], /^#[0-9a-f]{6}$/i);
 });

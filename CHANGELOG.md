@@ -4,6 +4,25 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-31
+
+### Added
+
+- **TikTok LIVE chat**, read from your own TikTok LIVE page in your browser, with replies typed into TikTok's own chat box.
+  - Set `"tiktok": "@yourname"`. CrossChat opens your LIVE page when OBS goes live.
+  - No outside signing service and no TikTok login leaves your browser. On every other TikTok page the extension reads nothing.
+  - TikTok shows in the chat window, the companion, the widgets (with its logo and viewer count), the Theme Studio and the history.
+- **CrossChat repairs itself.**
+  - A chat message a platform sends that CrossChat can't read is skipped; the rest of the chat carries on.
+  - A platform connection that fails on something unexpected starts again by itself, and the problem goes in the log.
+  - If CrossChat itself stops with an error, the OBS script starts it again within seconds (up to 5 times in 10 minutes).
+- Measured: 30,000 chat messages at 1,000 a second reached every widget, in order, with none lost or doubled and a median delay of about 1 ms.
+
+### Changed
+
+- The extension may now also touch `www.tiktok.com`, only for your own TikTok LIVE page.
+- Kick's chat connection notes in the log why it dropped.
+
 ## [1.4.0] - 2026-10-31
 
 ### Added
@@ -163,7 +182,8 @@ First public release.
 - Overlays are served by the hub over `http://127.0.0.1`. OBS 33 blocks local-file overlays from reaching the hub.
 - Fonts are Windows' own: Segoe UI Variable and Cascadia Mono.
 
-[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.1.0...v1.2.0

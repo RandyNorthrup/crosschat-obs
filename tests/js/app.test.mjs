@@ -70,10 +70,10 @@ test('custom timeouts fit each platform', () => {
 test('text-to-speech settings are filled in and kept in range', () => {
   const d = A.ttsSettings(null);
   assert.deepEqual(d, { enabled: false, read: 'all', command: '!tts', names: true, max_chars: 200, skip_links: true, platforms: 'all', voice: '', rate: 1, volume: 1 });
-  const s = A.ttsSettings({ enabled: true, read: 'nope', max_chars: 9000, rate: '0.1', volume: -3, platforms: ['kick', 'x', 'facebook'], command: '  ' });
+  const s = A.ttsSettings({ enabled: true, read: 'nope', max_chars: 9000, rate: '0.1', volume: -3, platforms: ['kick', 'x', 'tiktok', 'myspace'], command: '  ' });
   assert.equal(s.read, 'all'); assert.equal(s.max_chars, 500); assert.equal(s.rate, 0.5); assert.equal(s.volume, 0);
-  assert.deepEqual(s.platforms, ['kick', 'x']); assert.equal(s.command, '!tts');
-  assert.equal(A.ttsSettings({ platforms: ['twitch', 'youtube', 'kick', 'x'] }).platforms, 'all');
+  assert.deepEqual(s.platforms, ['kick', 'x', 'tiktok']); assert.equal(s.command, '!tts');
+  assert.equal(A.ttsSettings({ platforms: ['twitch', 'youtube', 'kick', 'x', 'tiktok', 'facebook', 'rumble'] }).platforms, 'all');
 });
 
 const V = (name, localService, lang = 'en-US') => ({ name, localService, lang });
@@ -179,4 +179,28 @@ test('the vendored QR encoder makes a code for a pairing address', () => {
   code.make();
   assert.ok(code.getModuleCount() >= 25);
   assert.equal(typeof code.isDark(0, 0), 'boolean');
+});
+
+test('TikTok, Facebook and Rumble reply through the CrossChat window, like YouTube and X', () => {
+  assert.equal(A.LIMIT.tiktok, 150); assert.equal(A.LIMIT.facebook, 8000); assert.equal(A.LIMIT.rumble, 200);
+  assert.equal(A.name('tiktok'), 'TikTok'); assert.equal(A.NAMES.rumble[1], 'RM');
+  const states = { tiktok: 'on', facebook: 'on', rumble: 'off' };
+  const m = { p: 'tiktok', kind: 'chat', name: 'luna.makes', text: 'hi' };
+  assert.equal(A.canReply(m, { executor: true, states }).ok, true);
+  assert.equal(A.canReply(m, { executor: false, states }).ok, false);                   // needs the window with the extension
+  assert.match(A.canReply(m, { executor: false, remote: true, states }).why, /streaming PC/);
+  assert.equal(A.canReply({ ...m, p: 'rumble' }, { executor: true, states }).ok, false);  // that chat isn't open
+  assert.deepEqual(A.targetsFor(states, null, 'off'), ['tiktok', 'facebook']);
+  assert.deepEqual(A.tooLong('x'.repeat(151), ['tiktok', 'facebook']), ['tiktok']);
+  const mod = A.modMenu(m, { executor: true, states });
+  assert.equal(mod.every((e) => !e.ok), true); assert.match(mod[0].why, /Moderate TikTok chat in TikTok/);
+});
+
+test('a platform CrossChat does not know never breaks anything', () => {
+  const m = { p: 'myspace', kind: 'chat', name: 'tom', text: 'hello' };
+  assert.equal(A.name('myspace'), 'myspace');
+  assert.equal(A.canReply(m, { executor: true, states: { myspace: 'on' } }).ok, false);
+  assert.equal(A.modMenu(m, { executor: true }).every((e) => !e.ok), true);
+  assert.deepEqual(A.targetsFor({ myspace: 'on', twitch: 'off' }, null, 'off'), []);
+  assert.deepEqual(A.logFilter([m, { p: 'tiktok', name: 'a', text: 'b' }], { p: 'tiktok' }).length, 1);
 });

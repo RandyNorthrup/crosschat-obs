@@ -8,7 +8,8 @@
     viewers: { label: 'Viewer counter', size: [600, 120], at: [40, 36], test: 'viewers', help: 'Everyone watching, per platform.' },
     alerts: { label: 'Alerts', size: [800, 300], at: [720, 40], test: 'alert', help: 'Subs, members, Super Chats, raids.' },
   };
-  const BRAND = { twitch: '#9146ff', youtube: '#ff0033', kick: '#53fc18', x: '#e7e9ea' };
+  const BRAND = { twitch: '#9146ff', youtube: '#ff0033', kick: '#53fc18', x: '#e7e9ea', tiktok: '#fe2c55', facebook: '#0866ff', rumble: '#85c742' };
+  const PLATFORM_NAMES = { twitch: 'Twitch', youtube: 'YouTube', kick: 'Kick', x: 'X', tiktok: 'TikTok', facebook: 'Facebook', rumble: 'Rumble' };
   const FONTS = [
     ['Segoe UI Variable (Windows default)', T.DEFAULTS.font.family],
     ['Segoe UI Variable Display', '"Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif'],
@@ -54,6 +55,8 @@
     { title: 'Platform colours', fields: [
       { path: 'colors.twitch', type: 'color', label: 'Twitch' }, { path: 'colors.youtube', type: 'color', label: 'YouTube' },
       { path: 'colors.kick', type: 'color', label: 'Kick' }, { path: 'colors.x', type: 'color', label: 'X' },
+      { path: 'colors.tiktok', type: 'color', label: 'TikTok' }, { path: 'colors.facebook', type: 'color', label: 'Facebook' },
+      { path: 'colors.rumble', type: 'color', label: 'Rumble' },
       { type: 'button', label: 'Use the brand colours', run: () => { Object.assign(work.colors, BRAND); changed(); fill(); } },
     ] },
     { title: 'Messages', fields: [
@@ -168,7 +171,7 @@
     } else if (f.type === 'platforms' || f.type === 'alerts') {
       const names = f.type === 'platforms' ? T.PLATFORMS : T.ALERTS;
       const set = el('fieldset', { class: 'checks', 'data-group': f.path }, el('legend', { class: 'sr', text: f.label }),
-        names.map((n) => el('label', {}, el('input', { type: 'checkbox', value: n }), f.type === 'platforms' ? { twitch: 'Twitch', youtube: 'YouTube', kick: 'Kick', x: 'X' }[n] : ALERT_NAMES[n])));
+        names.map((n) => el('label', {}, el('input', { type: 'checkbox', value: n }), f.type === 'platforms' ? PLATFORM_NAMES[n] || n : ALERT_NAMES[n])));
       wrap.append(el('span', { class: 'legend', 'aria-hidden': 'true', text: f.label }), set);
     } else if (f.type === 'labels') {
       wrap.append(el('span', { class: 'legend', text: f.label }));
