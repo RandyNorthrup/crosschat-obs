@@ -6,6 +6,7 @@
   pythonw control.py x-private   test: a livestream on X only you can see
   pythonw control.py x-dry       test: fill X's form, never press Go Live
   pythonw control.py unfeature   take the featured message off the stream
+  pythonw control.py demo        try CrossChat with a made-up live stream (its own port, nothing is posted anywhere)
 """
 import json
 import os
@@ -33,8 +34,23 @@ def start_hub():
                      creationflags=0x08000008, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+DEMO_PORT = 4477
+
+
 def main(command):
     base = "http://127.0.0.1:%d" % port()
+    if command == "demo":
+        demo = "http://127.0.0.1:%d/" % DEMO_PORT
+        try:
+            urllib.request.urlopen(demo + "version", timeout=2).read()
+        except OSError:
+            pythonw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
+            subprocess.Popen([pythonw if os.path.exists(pythonw) else sys.executable, os.path.join(HERE, "hub.py"), "--demo", "--quiet",
+                              "--no-window", "--port", str(DEMO_PORT)], cwd=HERE, creationflags=0x08000008,
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            time.sleep(3)
+        os.startfile(demo)
+        return 0
     if command == "studio":
         os.startfile(base + "/studio")
         return 0

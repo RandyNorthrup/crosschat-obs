@@ -19,7 +19,7 @@ pcall(ffi.cdef, [[
 local kernel32 = ffi.load("kernel32")
 local shell32 = ffi.load("shell32")
 
-local VERSION = "1.2.0"
+local VERSION = "1.3.0"
 local PORT = 4466
 local python_setting = ""
 local hotkeys = {}

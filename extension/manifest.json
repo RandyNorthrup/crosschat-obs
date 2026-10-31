@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CrossChat",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Companion to the CrossChat hub for OBS: starts and ends your X livestream with OBS, and posts chat replies to Twitch, YouTube and X. Talks only to the hub on this PC.",
   "minimum_chrome_version": "116",
   "icons": {"16": "icons/icon-16.png", "32": "icons/icon-32.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png"},

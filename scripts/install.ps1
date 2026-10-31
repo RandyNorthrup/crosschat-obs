@@ -67,9 +67,12 @@ Say "Python $($python.Version) found."
 
 # ---- files ------------------------------------------------------------------------------------------------
 Step 'Copying CrossChat'
-Get-CimInstance Win32_Process -Filter "Name like 'python%'" | Where-Object { $_.CommandLine -and $_.CommandLine -like "*$App\hub\hub.py*" } | ForEach-Object {
-    Say 'Stopping the running CrossChat hub (OBS starts it again).'
-    Stop-Process -Id $_.ProcessId -Force
+# OBS starts the hub as ...\CrossChat\obs\..\hub\hub.py, so match the folder and the file separately.
+$restartFor = $null
+Get-CimInstance Win32_Process -Filter "Name like 'python%'" | Where-Object { $_.CommandLine -and $_.CommandLine -like "*$App\*" -and $_.CommandLine -like '*hub.py*' -and $_.CommandLine -notlike '*--demo*' } | ForEach-Object {
+    Say 'Stopping the running CrossChat hub (it starts again at the end).'
+    if ($_.CommandLine -match '--obs-pid (\d+)') { $restartFor = $_.CommandLine }
+    Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue      # the venv launcher and its child: one may be gone already
 }
 New-Item -ItemType Directory -Force $App | Out-Null
 foreach ($folder in 'extension', 'hub', 'obs') {
@@ -159,6 +162,7 @@ function Shortcut($name, $target, $arguments, $description) {
     $link.Save()
 }
 Shortcut 'Open chat' $pythonw "`"$control`" show" 'Open the CrossChat window'
+Shortcut 'Try the demo' $pythonw "`"$control`" demo" 'CrossChat with a made-up live stream; nothing is posted anywhere'
 Shortcut 'Theme Studio' $pythonw "`"$control`" studio" 'Change how chat looks on stream'
 Shortcut 'Go live on X' $pythonw "`"$control`" x-live" 'Start the X livestream now'
 Shortcut 'Test X (never goes live)' $pythonw "`"$control`" x-dry" 'Fill in the X form without going live'
@@ -166,6 +170,15 @@ Shortcut 'Hide featured message' $pythonw "`"$control`" unfeature" 'Take the fea
 Shortcut 'CrossChat folder' (Join-Path $env:WINDIR 'explorer.exe') "`"$App`"" 'Settings, themes and the log'
 Shortcut 'Uninstall CrossChat' (Join-Path $App 'Uninstall.cmd') '' 'Remove CrossChat'
 Say "Start menu > CrossChat"
+
+# ---- the hub that was running for an open OBS: start the updated one in its place ------------------------
+if ($restartFor -and $restartFor -match '--obs-pid (\d+)' -and (Get-Process -Id $Matches[1] -ErrorAction SilentlyContinue)) {
+    $obsPid = $Matches[1]
+    $obsConfig = if ($restartFor -match '--obs-config "([^"]+)"') { $Matches[1] } else { Join-Path $env:APPDATA 'obs-studio' }
+    Start-Process (Join-Path $App '.venv\Scripts\pythonw.exe') -WorkingDirectory (Join-Path $App 'hub') `
+        -ArgumentList "`"$(Join-Path $App 'hub\hub.py')`" --obs-pid $obsPid --obs-config `"$obsConfig`""
+    Say 'Started the updated hub for the OBS that is open.'
+}
 
 # ---- the two steps that need you --------------------------------------------------------------------------
 $lua = Join-Path $App 'obs\crosschat.lua'

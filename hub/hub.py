@@ -8,6 +8,8 @@ Settings are in config.json in the folder above this one (see config.example.jso
 
   python hub.py --test [--twitch NAME] [--youtube @HANDLE_OR_CHANNEL_ID] [--kick SLUG[:CHATROOM_ID]]
       run without OBS, as if a stream had just started (for trying it against any public channel)
+  python hub.py --demo             a made-up live stream on every platform: try every page; replies and moderation
+                                   "work" but nothing leaves this PC
   python hub.py --config PATH      another settings file
   python hub.py --obs-config DIR   OBS's settings folder (the OBS script passes it, so portable OBS works too)
   python hub.py --obs-pid PID      stay until that OBS closes (the OBS script passes it)
@@ -40,7 +42,7 @@ from websockets.exceptions import ConnectionClosed, InvalidHandshake
 from devices import Devices, device_name
 from twitch_api import Twitch, TwitchError
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 # CrossChat's public Twitch app (Client ID only: public apps have no secret). "twitch_client_id" in config.json overrides it.
 TWITCH_CLIENT_ID = "gg5cmjfvr1l09niyes19ccclashuth"  # gitleaks:allow (a public client ID, not a secret)
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -88,6 +90,7 @@ DEFAULTS = {
 ARGV, CFG, X = [], {}, {}
 HOME = APP                                   # your folder: config.json, crosschat.log and themes/ (the one config.json is in)
 TEST, PORT = False, DEFAULTS["port"]
+DEMO = False                                 # --demo: a made-up live stream, for trying CrossChat without going live
 TWITCH = YOUTUBE = KICK = ""
 KICK_ROOM = 0
 
@@ -123,8 +126,9 @@ def channel(value, platform):
 
 def configure(argv):
     """Settings: the defaults, then config.json (or --config PATH, or the file CROSSCHAT_CONFIG names), then the command line."""
-    global ARGV, CFG, X, HOME, TEST, PORT, TWITCH, YOUTUBE, KICK, KICK_ROOM
+    global ARGV, CFG, X, HOME, TEST, DEMO, PORT, TWITCH, YOUTUBE, KICK, KICK_ROOM
     ARGV = list(argv)
+    DEMO = "--demo" in ARGV
     path = os.path.abspath(arg("--config", os.environ.get("CROSSCHAT_CONFIG") or os.path.join(APP, "config.json")))
     HOME = os.path.dirname(path)
     try:
@@ -137,7 +141,7 @@ def configure(argv):
         mine = {}
     CFG = merged(DEFAULTS, mine if isinstance(mine, dict) else {})
     X = CFG["x"] if CFG["x"].get("enabled") else {}
-    TEST = "--test" in ARGV
+    TEST = "--test" in ARGV or DEMO
     PORT = int(arg("--port", CFG["port"]))
     TWITCH = channel(arg("--twitch", CFG["twitch"]), "twitch")
     YOUTUBE = channel(arg("--youtube", CFG["youtube"]), "youtube")
@@ -222,7 +226,15 @@ TWITCH_ALERTS = {"sub": ("sub", ""), "resub": ("resub", "msg-param-cumulative-mo
 def twitch_notice(tags):
     """(alert, amount) for a USERNOTICE: a sub, resub, gift or raid, else ("other", "")."""
     alert, count = TWITCH_ALERTS.get(tags.get("msg-id", ""), ("other", ""))
-    return alert, tags.get(count, "") if count else ""
+    amount = tags.get(count, "") if count else ""
+    if alert == "gift":                          # the alert says "gifted {amount}": the unit goes with the number
+        amount = gifts(amount or "1", "sub")
+    return alert, amount
+
+
+def gifts(count, unit):
+    """'a sub', '5 subs', '3 memberships'."""
+    return ("a " + unit) if count in ("", "1") else "%s %ss" % (count, unit)
 
 
 async def twitch(channel_name):
@@ -381,7 +393,7 @@ def yt_poll(chat):
                 system = yt_text(r.get("headerPrimaryText")) or yt_text(r.get("headerSubtext")) or "New member"
             elif kind == "liveChatSponsorshipsGiftPurchaseAnnouncementRenderer":
                 system = yt_text(r.get("primaryText")) or "Gifted memberships"
-                amount = (re.search(r"\d+", system) or [""])[0]
+                amount = gifts((re.search(r"\d+", system) or [""])[0], "membership")
             event = {"type": "msg", "id": "yt-" + r.get("id", ""), "name": yt_text(r.get("authorName")),
                      "text": text, "badges": badges, "usec": int(r.get("timestampUsec", 0)), "kind": "event" if YT_KINDS[kind] else "chat",
                      "uid": r.get("authorExternalChannelId", "")}
@@ -447,7 +459,7 @@ def kick_alert(event, d):
     """(name, text, alert, amount) for Kick's subscription, gifted-subscription and host (raid) events."""
     if event.endswith("GiftedSubscriptionsEvent"):
         name, count = d.get("gifter_username") or "Someone", len(d.get("gifted_usernames") or [])
-        return name, "%s gifted %d sub%s" % (name, count, "" if count == 1 else "s"), "gift", str(count)
+        return name, "%s gifted %d sub%s" % (name, count, "" if count == 1 else "s"), "gift", gifts(str(count), "sub")
     if event.endswith("StreamHostEvent"):
         name, count = d.get("host_username") or "Someone", str(d.get("number_viewers") or 0)
         return name, "%s is raiding with %s viewers" % (name, count), "raid", count
@@ -1037,7 +1049,7 @@ SAMPLES = {
     "alert": [("twitch", "nightowl_42", "half a year already!", "nightowl_42 subscribed for 6 months!", "resub", "6"),
               ("youtube", "Sam Ortiz", "Keep it up!", "Super Chat $5.00", "superchat", "$5.00"),
               ("twitch", "raid_leader", "", "37 raiders from raid_leader have joined!", "raid", "37"),
-              ("kick", "turbo_kat", "", "turbo_kat gifted 5 subs", "gift", "5"),
+              ("kick", "turbo_kat", "", "turbo_kat gifted 5 subs", "gift", "5 subs"),
               ("twitch", "bitbucket", "Cheer500 great stream", "bitbucket cheered 500 bits", "cheer", "500 bits")],
 }
 
@@ -1082,11 +1094,13 @@ def executor_event():
 
 
 def twitch_event():
+    if DEMO:
+        return {"type": "twitch_auth", "state": "on", "login": "you"}
     return {"type": "twitch_auth", **(TW.state() if TW else {"state": "off"})}
 
 
 def quick_path():
-    return os.path.join(HOME, "quick.json")
+    return os.path.join(HOME, "quick-demo.json" if DEMO else "quick.json")
 
 
 def quick_replies():
@@ -1119,6 +1133,13 @@ NO_EXECUTOR = "the CrossChat window with the extension is not open on the stream
 async def run_send(job):
     text, reply_to, to = job["text"], job.get("reply") or {}, job["to"]
     answer = {}
+    if DEMO:                                     # everything "works", nothing leaves this PC
+        await asyncio.sleep(0.6)
+        for p in to:
+            publish(p, "you", text, "#e3a57b", ["broadcaster"], mid="demo-you-%d" % time.time_ns())
+            await asyncio.sleep(0.15)
+        send({"type": "sent", "job_id": job["id"], "answer": {p: {"ok": True} for p in to}})
+        return
     if "twitch" in to and TW and TW.on() and TWITCH:
         if job["dry"]:
             answer["twitch"] = {"ok": False, "why": "test mode, nothing is posted"}
@@ -1142,6 +1163,15 @@ async def run_send(job):
 
 async def run_mod(job):
     p, action = job["p"], job["action"]
+    if DEMO:
+        await asyncio.sleep(0.5)
+        target = next((m for m in messages if m.get("mid") == job.get("message_id") or m.get("uid") == job.get("user_id")), None)
+        if action == "delete" and target:
+            send({"type": "delete", "id": target["id"]})
+        elif action in ("timeout", "ban") and target:
+            send({"type": "purge", "p": p, "name": target["name"].lower()})
+        send({"type": "sent", "job_id": job["id"], "answer": {"ok": True}})
+        return
     if p == "twitch":
         if not (TW and TW.on()):
             answer = {"ok": False, "why": "Connect Twitch in Settings to moderate Twitch chat."}
@@ -1294,6 +1324,52 @@ def pair_device(code, headers):
 
 REMOTE_GET = ("/", "/events", "/whoami", "/version")
 REMOTE_POST = ("/send", "/mod", "/feature", "/star", "/quick", "/test")
+
+
+# ---- the demo stream (--demo): made-up people and lines, nothing real ------------------------------------
+DEMO_PEOPLE = {
+    "twitch": [("pixel_pirate", "#ff7f50", []), ("nightowl_42", "#1e90ff", ["moderator"]), ("kiwi_codes", "#9acd32", ["subscriber"]),
+               ("AriaPlays", "#ff69b4", ["vip"]), ("bitbucket", "#daa520", []), ("quietstorm", "#00ced1", ["subscriber"])],
+    "youtube": [("Maya Chen", "", ["member"]), ("Sam Ortiz", "", []), ("Rafael Gomes", "", []), ("Priya N", "", ["member"])],
+    "kick": [("turbo_kat", "#53fc18", []), ("glitchfox", "#f5a623", [])],
+    "x": [("Dev Daily", "", []), ("Lena Park", "", []), ("byte bandit", "", [])],
+}
+DEMO_LINES = ["hello from Lisbon 👋", "what are we building today?", "this overlay looks so clean", "W stream", "first time catching this live!",
+              "how long have you been streaming today?", "can you explain that last part again?", "lol that bug 😂", "is this open source?",
+              "gg that was close", "which font is that?", "the audio sounds great", "drop the settings pls 🙏", "chat is moving fast today",
+              "love the theme", "does it work with Kick too?", "back from lunch, what did I miss?", "LET'S GO", "huge fan of the new layout",
+              "how do replies reach every platform?"]
+DEMO_PREFIX = {"twitch": "tw", "youtube": "yt", "kick": "kk", "x": "x"}
+
+
+async def demo_stream():
+    """A believable live stream on all four platforms, so CrossChat can be tried (and filmed) without going live."""
+    rng = random.Random(7)
+    counts = {"twitch": 128, "youtube": 342, "kick": 41, "x": 87}
+    status.update({p: "on" for p in counts})
+    viewers.update(counts)
+    send(status_event())
+    send(viewer_event())
+    n = 0
+    while True:
+        await asyncio.sleep(rng.uniform(1.4, 3.4))
+        n += 1
+        state["x_seen"] = time.time()             # as if X's livestream page were reporting in
+        set_status("x", "on")
+        if n % 9 == 0:
+            platform, name, text, system, alert, amount = rng.choice(SAMPLES["alert"])
+            publish(platform, name, text, kind="event", alert=alert, amount=amount, system=system, mid="demo-%d" % time.time_ns())
+        else:
+            platform = rng.choices(list(DEMO_PEOPLE), weights=[4, 3, 1, 2])[0]
+            name, color, badges = rng.choice(DEMO_PEOPLE[platform])
+            raw, handle = "demo%d" % time.time_ns(), re.sub(r"\W", "", name.lower())
+            publish(platform, name, rng.choice(DEMO_LINES), color, badges, mid=DEMO_PREFIX[platform] + "-" + raw, raw=raw,
+                    uid="demo-" + handle, handle=handle if platform == "x" else "")
+        if n % 4 == 0:
+            for p in counts:
+                counts[p] = max(1, counts[p] + rng.randint(-3, 7))
+            viewers.update(counts)
+            send(viewer_event())
 
 
 # ---- the pages and their live feed ------------------------------------------------------------------
@@ -1543,6 +1619,8 @@ async def serve_post(reader, writer, headers, path, remote=False):
         if future and not future.done():
             future.set_result(body.get("answer") if isinstance(body.get("answer"), dict) else {})
         result = {"ok": bool(future)}
+    elif path == "/pair/start" and DEMO:
+        result = {"ok": False, "why": "Pairing is switched off in the demo."}
     elif path == "/pair/start" and not remote:
         code, expires = DEV.start_pairing()
         await remote_on()
@@ -1583,7 +1661,7 @@ async def serve_post(reader, writer, headers, path, remote=False):
 
 
 def start_log():
-    path = arg("--log", os.path.join(HOME, "crosschat.log"))
+    path = arg("--log", os.path.join(HOME, "crosschat-demo.log" if DEMO else "crosschat.log"))
     try:
         handler = logging.handlers.RotatingFileHandler(path, maxBytes=512 * 1024, backupCount=1, encoding="utf-8")
     except OSError:
@@ -1609,19 +1687,20 @@ async def main():
         log.info("port %d is taken: another CrossChat hub is already running", PORT)
         return
     companion_setup()
-    await remote_on()
+    if not DEMO:                                 # the demo stays on this PC
+        await remote_on()
     log.info("CrossChat %s on http://127.0.0.1:%d (Twitch %r, YouTube %r, Kick %r, X %s)", VERSION, PORT, TWITCH, YOUTUBE, KICK,
              "on" if X else "off")
     tasks = []
     for name, wanted, job in (("twitch", TWITCH, lambda: twitch(TWITCH)), ("youtube", YOUTUBE, lambda: youtube(YOUTUBE)),
                               ("kick", KICK, lambda: kick(KICK, KICK_ROOM))):
-        if wanted:
+        if wanted and not DEMO:                  # the demo never mixes in real chat
             status[name] = "off"
             tasks.append(asyncio.create_task(job()))
     if X:
         status["x"] = "off"
         tasks.append(asyncio.create_task(x_watch()))
-    tasks.append(asyncio.create_task(audience()))
+    tasks.append(asyncio.create_task(demo_stream() if DEMO else audience()))
     async with server:
         if TEST:
             await stream_started()

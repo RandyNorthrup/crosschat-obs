@@ -4,6 +4,17 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-31
+
+### Added
+
+- **Demo mode**: Start menu → CrossChat → **Try the demo**, or `hub.py --demo`.
+  - A made-up live stream on every platform, with questions, alerts and moving viewer counts.
+  - Replies, moderation, stars and featured messages all "work", and nothing is posted anywhere.
+  - It runs on its own port (4477) and never mixes with your real chat.
+- **Videos** in the README and `assets/video/`: an overview, the companion on a phone, the Theme Studio, and the widgets recorded in OBS 33.0.1.
+- Companion guide: a section on using it from **another PC**, including its own app window in Chrome or Edge.
+
 ## [1.2.0] - 2026-10-31
 
 ### Added
@@ -94,7 +105,8 @@ First public release.
 - Overlays are served by the hub over `http://127.0.0.1`. OBS 33 blocks local-file overlays from reaching the hub.
 - Fonts are Windows' own: Segoe UI Variable and Cascadia Mono.
 
-[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/RandyNorthrup/crosschat-obs/releases/tag/v1.0.0

@@ -228,6 +228,27 @@ def test_moderation_rules(home):
     run(serving(test))
 
 
+def test_demo_mode_answers_everything_on_this_pc(home):
+    home({"twitch": "realchannel"}, "--demo")
+    assert hub.DEMO and hub.TEST and hub.twitch_event()["state"] == "on"
+
+    async def test(port):
+        watcher = asyncio.Queue()
+        hub.clients.add(watcher)
+        hub.publish("youtube", "Sam", "spam spam", raw="m1", uid="u1", mid="yt-m1")
+        await post(port, "/send", {"to": ["twitch", "youtube", "x"], "text": "thanks all"})
+        await post(port, "/mod", {"p": "youtube", "action": "delete", "message_id": "m1"})
+        await asyncio.sleep(1.5)
+        events = drain(watcher)
+        echoes = [e for e in events if e["type"] == "msg" and e["name"] == "you"]
+        assert sorted(e["p"] for e in echoes) == ["twitch", "x", "youtube"]
+        assert {"type": "delete", "id": "yt-m1"} in events
+        assert all(a["answer"] == {"twitch": {"ok": True}, "youtube": {"ok": True}, "x": {"ok": True}} or a["answer"] == {"ok": True}
+                   for a in events if a["type"] == "sent")
+        assert json.loads((await post(port, "/pair/start", {}))[2])["ok"] is False
+    run(serving(test))
+
+
 def test_quick_replies_stars_and_questions(home):
     folder = home()
 

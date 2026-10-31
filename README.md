@@ -15,16 +15,10 @@
 
 **CrossChat** is a free companion for OBS Studio when you stream to several platforms at once. It reads **Twitch, YouTube, Kick and X** chat into one window, lets you **answer everyone with one message** (or one person on their own platform), **moderates** Twitch and YouTube, puts **themeable chat, featured messages, viewer counts and alerts** on your stream, and **starts and ends your X livestream together with OBS**. Pair your **phone or another PC** to read, answer and moderate chat from there. Everything runs on your own PC and home network.
 
-<table>
-  <tr>
-    <td width="68%"><img src="assets/screenshots/obs-output.png" alt="What viewers see: viewer counter, an alert, a featured message and the chat feed over a game scene, rendered by OBS 33.0.1"></td>
-    <td width="32%"><img src="assets/screenshots/chat-dark.png" alt="The CrossChat window: viewers per platform, chat from Twitch, YouTube, Kick and X, and a reply box"></td>
-  </tr>
-  <tr>
-    <td align="center"><sub>What viewers see. Rendered by OBS 33.0.1 with all four widgets.</sub></td>
-    <td align="center"><sub>What you see: the CrossChat window.</sub></td>
-  </tr>
-</table>
+<p align="center">
+  <img src="assets/video/overview.webp" alt="CrossChat in action: a question from YouTube is put on stream, then one reply goes out to Twitch, YouTube and X at once" width="100%"><br>
+  <sub>Left: what viewers see. Right: your CrossChat window. Made-up chat from the built-in demo. <a href="assets/video/overview.mp4"><b>▶ Watch the full 48-second tour (MP4)</b></a></sub>
+</p>
 
 ## Features
 
@@ -47,7 +41,7 @@
 - Test mode (`?dry`) walks through the whole path without posting anything.
 
 **Companion on your phone or another PC**
-- Pair with a QR code. The full chat app then runs on any phone, tablet or PC on your home network, with no install and no logins on that device.
+- Pair with a QR code (phone) or a link and a 6-digit code (another PC's browser). The full chat app then runs on any phone, tablet or PC on your home network, with no install and no logins on that device. A second PC can give it its own app window.
 - Read, reply, use quick replies, moderate, star, put messages on stream, and send test alerts.
 - Only paired devices get in, and you can remove one at any time. See **[docs/COMPANION.md](docs/COMPANION.md)**.
 
@@ -71,15 +65,41 @@
 - CrossChat reads its OBS WebSocket settings from OBS itself, and portable OBS works too.
 - No account, server, telemetry or update checks.
 
+## See it in action
+
+| | |
+|---|---|
+| **The tour** (48 s): a question put on stream, one reply to every platform, a message deleted, Answer later and Questions, an alert on stream. | [▶ overview.mp4](assets/video/overview.mp4) |
+| **Phone companion** (29 s, vertical): a question tapped onto the stream, a quick reply, a timeout, the Questions view. | [▶ companion-vertical.mp4](assets/video/companion-vertical.mp4) |
+| **Theme Studio** (35 s): six of the built-in looks in a row, then the accent colour, the text size and the layout changed live. | [▶ theme-studio.mp4](assets/video/theme-studio.mp4) |
+| **Recorded in OBS 33.0.1** (25 s): the four widgets running in a real OBS scene. | [▶ obs-recording.mp4](assets/video/obs-recording.mp4) |
+
+<p align="center"><img src="assets/video/theme-studio.webp" alt="The Theme Studio cycling through the built-in themes on a stream-sized preview" width="100%"></p>
+
 ## Screenshots
 
-| Light or dark, follows Windows | Replying to one person, with a message featured on stream |
-|---|---|
-| <img src="assets/screenshots/chat-light.png" alt="The CrossChat window in light mode" width="380"> | <img src="assets/screenshots/chat-reply.png" alt="Replying to a YouTube viewer while their message is featured on stream" width="380"> |
+**The CrossChat window**
 
-| Companion on a phone | Moderation and quick replies | Pairing a device |
+| Live chat | Reply to one person, message on stream | Moderate |
 |:-:|:-:|:-:|
-| <img src="assets/screenshots/companion-phone.png" alt="The CrossChat companion on a phone" width="250"> | <img src="assets/screenshots/companion-phone-mod.png" alt="A message's actions on a phone: delete, timeouts, ban, unban and quick replies" width="250"> | <img src="assets/screenshots/companion-pair.png" alt="Pairing a device: QR code, 6-digit code and paired devices" width="290"> |
+| <img src="assets/screenshots/chat-dark.png" alt="The CrossChat window: viewers per platform and chat from Twitch, YouTube, Kick and X" width="260"> | <img src="assets/screenshots/chat-reply.png" alt="Replying to a YouTube viewer while their question is featured on stream" width="260"> | <img src="assets/screenshots/chat-mod.png" alt="A message's actions: reply, show on stream, answer later, delete, timeouts, ban, quick replies" width="260"> |
+| **Questions** | **Quick replies** | **Settings** |
+| <img src="assets/screenshots/chat-questions.png" alt="The Questions view: only messages that look like questions" width="260"> | <img src="assets/screenshots/chat-quick.png" alt="Editing quick replies" width="260"> | <img src="assets/screenshots/chat-settings.png" alt="Settings: light or dark, Twitch connected, pair a device, test events" width="260"> |
+
+**The companion on a phone or another PC**
+
+| On a phone | Pairing | On another PC |
+|:-:|:-:|:-:|
+| <img src="assets/screenshots/companion-phone.png" alt="The CrossChat companion on a phone" width="200"> | <img src="assets/screenshots/companion-pair.png" alt="Pairing a device: QR code, 6-digit code and paired devices" width="230"> | <img src="assets/screenshots/companion-desktop.png" alt="The CrossChat companion in a browser window on a second PC" width="380"> |
+
+**On stream**
+
+| Alerts | |
+|:-:|:-:|
+| <img src="assets/screenshots/alert-sub.png" alt="Alert: a Twitch subscription" width="400"> | <img src="assets/screenshots/alert-raid.png" alt="Alert: a Twitch raid with 37 viewers" width="400"> |
+| <img src="assets/screenshots/alert-superchat.png" alt="Alert: a YouTube Super Chat" width="400"> | <img src="assets/screenshots/alert-cheer.png" alt="Alert: a Twitch cheer of 500 bits" width="400"> |
+| **Featured message** | **Viewer counter** |
+| <img src="assets/screenshots/featured.png" alt="A viewer's question shown big on stream" width="400"> | <img src="assets/screenshots/viewers.png" alt="Everyone watching, in total and per platform" width="400"> |
 
 **Theme Studio:** change any part of the look and watch all four widgets update over a stream-sized preview.
 
@@ -146,6 +166,12 @@ CrossChat doesn't send your video anywhere. OBS does that. To stream to several 
 
 To check everything without going live, press **Send test to OBS** in the Theme Studio, or start OBS streaming to a test server on your own PC. CrossChat sees that a stream to `rtmp://127.0.0.1` is a test and doesn't start anything public.
 
+## Try it without going live
+
+Start menu → CrossChat → **Try the demo**, or `python hub\hub.py --demo`. It opens the chat app on a made-up live stream with fictional chatters on Twitch, YouTube, Kick and X, including questions, subs, raids, Super Chats and moving viewer counts.
+
+Reply, moderate, star and feature messages as much as you like: in the demo everything "works", and nothing is posted anywhere. The demo runs on its own port (4477), so it never mixes with your real chat.
+
 ## Using it
 
 | To | Do this |
@@ -157,7 +183,8 @@ To check everything without going live, press **Send test to OBS** in the Theme 
 | Restyle the widgets | ✎ in the chat window, or Start menu → CrossChat → **Theme Studio** |
 | Go live on X now | Start menu → **Go live on X**, the OBS script's button, or the hotkey |
 | Moderate | Open a message → **Moderate** (Twitch needs **Connect Twitch** in Settings once) |
-| Use your phone or another PC | Settings (⚙) → **Pair a device**, then scan the QR code or type the 6-digit code on that device |
+| Use your phone | Settings (⚙) → **Pair a device**, then scan the QR code |
+| Use another PC | Settings (⚙) → **Pair a device**, then open the address it shows in that PC's browser (enter the 6-digit code if asked) |
 
 **Hotkeys** (OBS → *Settings → Hotkeys*, search "CrossChat"):
 - Open chat window

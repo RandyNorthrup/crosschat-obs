@@ -30,6 +30,19 @@ Nothing is installed on the other device: it's a web page, and you can add it to
 
 Each paired device is listed under **Settings → Paired devices** on the streaming PC, with the day it was paired and when it was last seen. **Remove** takes its access away at once; pair it again to bring it back.
 
+## From another PC
+
+A second PC works the same way as a phone, in any modern browser. It's handy for a moderator's PC, a laptop beside you, or the PC you game on while another one streams.
+
+1. On the streaming PC: **Settings → Pair a device**. Note the address, for example `http://192.168.1.20:4467/pair?code=123456`.
+2. On the other PC, open that address in Chrome, Edge or Firefox. If you typed only the address without `?code=…`, enter the 6-digit code when asked. The page then becomes the full chat app, and the browser remembers the pairing.
+3. Later, just open `http://<streaming PC address>:4467/` again. Bookmark it.
+4. For a window of its own with a taskbar icon:
+   - **Chrome**: **⋮ → Cast, save and share → Create shortcut… →** tick **Open as window**.
+   - **Edge**: **⋯ → Apps → Install this site as an app**.
+
+<p align="center"><img src="../assets/screenshots/companion-desktop.png" alt="The CrossChat companion in a browser window on a second PC" width="720"></p>
+
 ## What works when
 
 The companion talks to the CrossChat hub on the streaming PC, so that PC must be on, with OBS (and so the hub) running.

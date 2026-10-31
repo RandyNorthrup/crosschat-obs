@@ -12,8 +12,8 @@ if (-not $Quiet) {
     if ($sure -notmatch '^[yY]') { Write-Host 'Nothing was changed.'; exit 0 }
 }
 
-Get-CimInstance Win32_Process -Filter "Name like 'python%'" | Where-Object { $_.CommandLine -and $_.CommandLine -like "*$App\hub\*" } |
-    ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+Get-CimInstance Win32_Process -Filter "Name like 'python%'" | Where-Object { $_.CommandLine -and $_.CommandLine -like "*$App\*" -and $_.CommandLine -like '*hub*.py*' } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 
 $keep = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'CrossChat backup'
 $mine = @('config.json', 'themes') | ForEach-Object { Join-Path $App $_ } | Where-Object { Test-Path $_ }

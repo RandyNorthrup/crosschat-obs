@@ -64,7 +64,7 @@
       types: { sub: true, resub: true, gift: true, raid: true, cheer: true, member: true, superchat: true, follow: true, other: true },
       labels: {
         sub: '{name} just subscribed!',
-        resub: '{name} resubscribed! {amount}',
+        resub: '{name} resubscribed for {amount} months!',
         gift: '{name} gifted {amount}!',
         raid: '{name} is raiding with {amount} viewers!',
         cheer: '{name} cheered {amount}!',

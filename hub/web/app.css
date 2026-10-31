@@ -258,3 +258,9 @@ dialog[open] { display: flex; flex-direction: column; animation: pop .16s ease-o
 }
 /* YouTube's own chat, signed in and out of sight: the CrossChat extension types replies into it */
 #yt { position: absolute; left: -3000px; top: 0; width: 420px; height: 600px; border: 0; }
+
+/* A narrow window on a desktop (the chat window docked at the screen edge) wraps the platform pills instead of
+   scrolling them sideways; touch screens keep the swipeable row. */
+@media (max-width: 600px) and (pointer: fine) {
+  #platforms { flex-wrap: wrap; overflow-x: visible; margin-left: 0; margin-right: 0; padding: 0; }
+}

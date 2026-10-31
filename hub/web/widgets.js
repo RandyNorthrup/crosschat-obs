@@ -73,6 +73,16 @@
     });
   }
 
+  // A sub, raid, cheer or Super Chat as one line in the chat feed: the theme's alert sentence ("{name} cheered {amount}!"),
+  // or the platform's own sentence, then whatever the viewer wrote.
+  function eventLine(m) {
+    const template = m.alert && theme.alerts.labels[m.alert];
+    const values = { name: m.name || '', amount: m.amount || '', text: m.text || '', platform: I.NAMES[m.p] || '' };
+    let line = template ? template.replace(/\{(name|amount|text|platform)\}/g, (_, k) => values[k]).replace(/\s+/g, ' ').trim() : (m.system || '');
+    if (m.text && !(template && template.includes('{text}')) && m.text !== line) line = (line ? line + ' · ' : '') + m.text;
+    return line || m.system || m.text || '';
+  }
+
   function message(m, cls) {
     const el = doc.createElement('div');
     el.className = cls; el.dataset.platform = m.p; el.dataset.kind = m.kind || 'chat'; el.dataset.id = m.id;
@@ -87,7 +97,9 @@
     }
     const time = doc.createElement('span'); time.className = 'cc-time';
     time.textContent = new Date(m.t || Date.now()).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    const text = doc.createElement('span'); text.className = 'cc-text'; words(text, m);
+    const text = doc.createElement('span'); text.className = 'cc-text';
+    if (m.kind === 'event' && cls !== 'cc-featured') text.textContent = eventLine(m);
+    else words(text, m);
     if (cls === 'cc-featured') {                   // featured: a small header line (platform, name), the text big below it
       head.prepend(platformMark(m.p));
       head.appendChild(time);
