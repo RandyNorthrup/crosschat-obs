@@ -1,0 +1,42 @@
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Python packages
+        run: python -m pip install -r hub/requirements.txt pytest ruff
+      - name: Lint (ruff)
+        run: ruff check hub scripts tests
+      - name: Python tests
+        run: python -m pytest -q
+      - name: JavaScript tests
+        run: node --test "tests/js/*.test.mjs"
+      - name: JavaScript syntax
+        shell: bash
+        run: for f in extension/*.js hub/web/*.js; do node --check "$f"; done
+      - name: JSON files parse
+        shell: bash
+        run: for f in extension/manifest.json config.example.json hub/presets/*.json; do python -m json.tool "$f" > /dev/null; done
+      - name: Release package builds
+        shell: pwsh
+        run: ./scripts/package.ps1

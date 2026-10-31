@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "label": "Compact",
+  "font": { "family": "\"Segoe UI Variable Text\", \"Segoe UI\", system-ui, sans-serif", "size": 16, "weight": 500, "nameWeight": 700 },
+  "colors": { "text": "#e8edf2", "name": "user", "background": "#10151c", "backgroundOpacity": 0.8, "accent": "#4cc2ff", "shadow": 0.2 },
+  "message": { "layout": "compact", "radius": 6, "padding": 10, "gap": 4, "accentBar": true, "accentWidth": 3, "platform": "icon", "emoteSize": 22 },
+  "chat": { "max": 14, "animationIn": "fade", "animationOut": "fade" },
+  "featured": { "layout": "banner", "scale": 1.4 },
+  "viewers": { "layout": "row" }
+}

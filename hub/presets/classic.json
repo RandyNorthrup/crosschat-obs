@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "label": "Classic",
+  "font": { "family": "\"Segoe UI Variable Text\", \"Segoe UI\", system-ui, sans-serif", "size": 20, "weight": 500, "nameWeight": 700 },
+  "colors": { "text": "#f3eee6", "name": "user", "background": "#0d141c", "backgroundOpacity": 0.84, "accent": "#b87045", "shadow": 0.35 },
+  "message": { "layout": "card", "radius": 12, "padding": 12, "gap": 8, "accentBar": true, "accentWidth": 3, "platform": "icon" },
+  "chat": { "animationIn": "slide", "animationOut": "fade" }
+}

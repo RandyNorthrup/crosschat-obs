@@ -1,0 +1,25 @@
+{
+  "twitch": "",
+  "youtube": "",
+  "kick": "",
+  "port": 4466,
+  "browser": "auto",
+  "window": "auto",
+  "open_window_on_stream_start": true,
+  "close_window_seconds_after_stream": 120,
+  "overlay": {"platforms": "all", "theme": "classic"},
+  "obs": {"host": "127.0.0.1", "port": 0, "password": ""},
+  "x": {
+    "enabled": false,
+    "auto_go_live": true,
+    "delay_seconds": 12,
+    "title": "Live now",
+    "title_file": "",
+    "title_prefix": "",
+    "post": "",
+    "source": "OBS",
+    "end_with_obs": true,
+    "end_seconds_after_obs": 15,
+    "window": "auto"
+  }
+}

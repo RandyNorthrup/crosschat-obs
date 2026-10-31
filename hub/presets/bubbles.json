@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "label": "Bubbles",
+  "font": { "family": "\"Segoe UI Variable Text\", \"Segoe UI\", system-ui, sans-serif", "google": "Nunito", "size": 20, "weight": 600, "nameWeight": 800, "lineHeight": 1.3 },
+  "colors": { "text": "#1d1b26", "name": "platform", "background": "#ffffff", "backgroundOpacity": 0.96, "accent": "#ff4f87", "shadow": 0.3, "x": "#14171a" },
+  "message": { "layout": "bubble", "radius": 22, "padding": 13, "gap": 10, "accentBar": false, "platform": "icon" },
+  "chat": { "animationIn": "pop", "animationOut": "fade" },
+  "featured": { "animation": "pop" },
+  "viewers": { "layout": "row" },
+  "alerts": { "animation": "pop" }
+}

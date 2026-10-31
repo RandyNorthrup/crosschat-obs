@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "label": "Glass",
+  "font": { "family": "\"Segoe UI Variable Text\", \"Segoe UI\", system-ui, sans-serif", "size": 20, "weight": 500, "nameWeight": 700 },
+  "colors": { "text": "#ffffff", "name": "user", "background": "#1a2333", "backgroundOpacity": 0.42, "accent": "#7dd3fc", "shadow": 0.3 },
+  "message": { "layout": "card", "radius": 16, "padding": 13, "gap": 8, "accentBar": false, "platform": "icon" },
+  "chat": { "animationIn": "pop", "animationOut": "fade" },
+  "featured": { "animation": "slide" },
+  "css": ".cc-msg, .cc-featured, .cc-vp, .cc-total, .cc-alert {\n  background-image: linear-gradient(135deg, rgba(255,255,255,.18), rgba(255,255,255,.03) 60%);\n  border: 1px solid rgba(255,255,255,.22);\n  backdrop-filter: blur(14px) saturate(1.4);\n}\n.cc-name { text-shadow: 0 1px 2px rgba(0,0,0,.35); }\n"
+}

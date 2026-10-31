@@ -1,0 +1,12 @@
+# your own settings, themes and log (when running from a checkout)
+/config.json
+/themes/
+*.log
+*.tmp
+
+__pycache__/
+.venv/
+.ruff_cache/
+.pytest_cache/
+node_modules/
+dist/

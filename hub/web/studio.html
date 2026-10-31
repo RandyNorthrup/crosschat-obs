@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>CrossChat · Theme Studio</title>
+<link rel="icon" href="/web/crosschat.ico">
+<script>
+  // The look picked last time ("auto" follows Windows). Same setting as the chat window.
+  (() => {
+    let mode = null;
+    try { mode = localStorage.getItem('theme'); } catch (e) { /* storage blocked: follow Windows */ }
+    if (mode === 'light' || mode === 'dark') document.documentElement.dataset.theme = mode;
+  })();
+</script>
+<style>
+  /* Theme Studio: make and change the themes the on-stream widgets use. Served by hub.py at /studio. */
+  :root { --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; --display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+          --mono: "Cascadia Mono", Consolas, monospace;
+          --bg: #0e131a; --panel: #151c25; --raised: #1c2531; --line: #283444; --text: #e8edf3; --muted: #94a2b2; --accent: #d08a5a; --accent-ink: #1a0f08;
+          --focus: #7cc4ff; --danger: #ff7a6e; --ok: #63d69a; --shadow: 0 10px 30px rgba(0,0,0,.35); }
+  :root[data-theme="light"] { --bg: #f4f1ec; --panel: #ffffff; --raised: #f7f4ef; --line: #ddd4c7; --text: #1d2733; --muted: #5f6b78; --accent: #a35d33; --accent-ink: #ffffff;
+          --focus: #0b63c5; --danger: #b3261e; --ok: #1f7a4a; --shadow: 0 10px 30px rgba(60,40,20,.12); }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme]) { --bg: #f4f1ec; --panel: #ffffff; --raised: #f7f4ef; --line: #ddd4c7; --text: #1d2733; --muted: #5f6b78; --accent: #a35d33; --accent-ink: #ffffff;
+          --focus: #0b63c5; --danger: #b3261e; --ok: #1f7a4a; --shadow: 0 10px 30px rgba(60,40,20,.12); }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 400 14px/1.45 var(--sans); }
+  body { display: grid; grid-template-rows: auto 1fr auto; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* top bar */
+  header.bar { display: flex; align-items: center; gap: 14px; padding: 10px 18px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  .brand b { font: 800 19px var(--display); letter-spacing: .06em; color: var(--accent); }
+  .brand span { font: 600 15px var(--display); color: var(--muted); }
+  #status { margin-left: auto; min-height: 1.4em; color: var(--muted); font-size: 13px; text-align: right; }
+  #status.ok { color: var(--ok); } #status.bad { color: var(--danger); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line);
+         background: var(--raised); cursor: pointer; white-space: nowrap; }
+  .btn:hover:not(:disabled) { border-color: var(--accent); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .btn.danger:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
+  .btn.icon { width: 34px; height: 34px; padding: 0; font: 16px "Segoe UI Symbol", var(--sans); }
+  .btn.small { padding: 4px 9px; font-size: 12.5px; }
+
+  /* three columns: themes, settings, preview */
+  .studio { display: grid; grid-template-columns: 250px minmax(340px, 410px) 1fr; min-height: 0; }
+  #library, #controls { border-right: 1px solid var(--line); overflow: auto; min-height: 0; }
+  #library { padding: 14px; background: var(--panel); display: flex; flex-direction: column; gap: 12px; }
+  h2 { margin: 0; font: 700 12px var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  #themes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  #themes button { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; padding: 8px 10px; border-radius: 8px;
+                   border: 1px solid transparent; background: none; cursor: pointer; }
+  #themes button:hover { background: var(--raised); }
+  #themes button[aria-current="true"] { background: var(--raised); border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+  #themes .label { font-weight: 600; }
+  #themes .meta { font: 400 11.5px var(--mono); color: var(--muted); }
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+  #controls { padding: 6px 0 24px; }
+  details { border-bottom: 1px solid var(--line); }
+  summary { padding: 12px 18px; cursor: pointer; font: 700 14px var(--display); list-style: none; display: flex; align-items: center; gap: 8px; }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: "▸"; color: var(--muted); transition: transform .15s; }
+  details[open] > summary::before { transform: rotate(90deg); }
+  .fields { padding: 0 18px 14px; display: grid; gap: 12px; }
+  .field { display: grid; gap: 5px; }
+  .field > label, .field > .legend { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+  .field.inline { grid-template-columns: 1fr auto; align-items: center; }
+  .help { margin: 0; font-size: 12px; color: var(--muted); }
+  .pair { display: grid; grid-template-columns: 1fr 74px; gap: 8px; align-items: center; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  input[type="number"], input[type="text"], select, textarea { width: 100%; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--raised); }
+  textarea { font: 12.5px/1.5 var(--mono); min-height: 160px; resize: vertical; }
+  .colour { display: grid; grid-template-columns: 44px 1fr; gap: 8px; align-items: center; }
+  input[type="color"] { width: 44px; height: 34px; padding: 2px; border-radius: 8px; border: 1px solid var(--line); background: var(--raised); cursor: pointer; }
+  .switch { position: relative; width: 42px; height: 24px; flex: none; }
+  .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+  .switch i { position: absolute; inset: 0; border-radius: 12px; background: var(--line); transition: background .15s; pointer-events: none; }
+  .switch i::after { content: ""; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--text); transition: transform .15s; }
+  .switch input:checked + i { background: var(--accent); }
+  .switch input:checked + i::after { transform: translateX(18px); background: var(--accent-ink); }
+  .switch input:focus-visible + i { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .checks { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+  .checks label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); }
+  .checks input { accent-color: var(--accent); width: 16px; height: 16px; }
+  fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+  .field[aria-disabled="true"] { opacity: .45; }
+
+  /* preview */
+  #preview { display: flex; flex-direction: column; min-height: 0; overflow: auto; padding: 14px 18px 18px; gap: 12px; }
+  .tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+  .tools .field { min-width: 170px; }
+  #stage-wrap { position: relative; width: 100%; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); background: #000; }
+  /* color-scheme light, the same as the overlay page: otherwise a dark Studio gives the preview frames an opaque backdrop */
+  #stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; background-size: cover; background-position: center; color-scheme: light; }
+  #stage iframe { position: absolute; border: 0; background: transparent; }
+  #stage[data-back="game"] { background-image: radial-gradient(900px 520px at 15% 8%, #7a4527 0%, transparent 60%), radial-gradient(800px 640px at 95% 85%, #0f6170 0%, transparent 55%), linear-gradient(160deg, #142233, #0a0d14); }
+  #stage[data-back="desk"] { background-image: radial-gradient(1000px 600px at 80% 20%, #ffffff 0%, transparent 60%), linear-gradient(160deg, #dfe7f1, #c9d4e3); }
+  #stage[data-back="checker"] { background-color: #ffffff; background-image: conic-gradient(#d8d8d8 25%, #ffffff 0 50%, #d8d8d8 0 75%, #ffffff 0); background-size: 48px 48px; }
+  #stage[data-back="green"] { background: #00b140; }
+  #stage .zone { position: absolute; outline: 1px dashed rgba(255,255,255,.28); outline-offset: -1px; pointer-events: none; }
+  #stage .zone span { position: absolute; left: 6px; top: 4px; font: 600 15px var(--sans); color: rgba(255,255,255,.55); }
+  #stage[data-back="desk"] .zone, #stage[data-back="checker"] .zone { outline-color: rgba(0,0,0,.25); }
+  #stage[data-back="desk"] .zone span, #stage[data-back="checker"] .zone span { color: rgba(0,0,0,.45); }
+  #widgets { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+  .card { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 10px 12px; display: grid; gap: 6px; }
+  .card h3 { margin: 0; font: 700 14px var(--display); }
+  .card .size { font: 12px var(--mono); color: var(--muted); }
+  .card .row { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  footer.savebar { display: flex; align-items: center; gap: 10px; padding: 10px 18px; border-top: 1px solid var(--line); background: var(--panel); }
+  #dirty { color: var(--muted); font-size: 13px; }
+  #dirty.on { color: var(--accent); font-weight: 600; }
+  footer .spacer { flex: 1; }
+
+  dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--text); padding: 20px; width: min(440px, 92vw); box-shadow: var(--shadow); }
+  dialog::backdrop { background: rgba(0,0,0,.5); }
+  dialog h2 { font-size: 16px; text-transform: none; letter-spacing: 0; color: var(--text); margin-bottom: 12px; }
+  dialog form { display: grid; gap: 12px; }
+  dialog .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+  .error { color: var(--danger); font-size: 12.5px; min-height: 1.2em; margin: 0; }
+
+  @media (max-width: 1280px) {
+    .studio { grid-template-columns: minmax(330px, 380px) 1fr; grid-template-rows: auto 1fr; }
+    #library { grid-column: 1 / -1; border-right: 0; border-bottom: 1px solid var(--line); flex-direction: row; flex-wrap: wrap; align-items: center; overflow: visible; }
+    #library h2 { width: 100%; }
+    #themes { flex-direction: row; flex-wrap: wrap; flex: 1 1 400px; }
+    #themes button { width: auto; }
+    .actions { grid-template-columns: repeat(6, auto); }
+  }
+  @media (max-width: 860px) {
+    .studio { grid-template-columns: 1fr; }
+    #controls { border-right: 0; max-height: none; }
+    .actions { grid-template-columns: repeat(3, auto); }
+  }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="brand"><b>CROSSCHAT</b><span>Theme Studio</span></div>
+  <div id="status" role="status" aria-live="polite"></div>
+  <button class="btn icon" id="mode" type="button"></button>
+</header>
+
+<div class="studio">
+  <nav id="library" aria-label="Themes">
+    <h2 id="themes-title">Themes</h2>
+    <ul id="themes" aria-labelledby="themes-title"></ul>
+    <div class="actions">
+      <button class="btn small" id="new" type="button">New</button>
+      <button class="btn small" id="duplicate" type="button">Duplicate</button>
+      <button class="btn small" id="import" type="button">Import…</button>
+      <button class="btn small" id="export" type="button">Export</button>
+      <button class="btn small" id="make-default" type="button">Set as default</button>
+      <button class="btn small danger" id="delete" type="button">Delete</button>
+    </div>
+    <input id="import-file" type="file" accept=".json,application/json" hidden>
+  </nav>
+
+  <form id="controls" aria-label="Theme settings" onsubmit="return false"></form>
+
+  <section id="preview" aria-label="Preview">
+    <div class="tools">
+      <div class="field"><label for="view">Show</label>
+        <select id="view">
+          <option value="stream">Whole stream (1920 × 1080)</option>
+          <option value="chat">Chat feed</option>
+          <option value="featured">Featured message</option>
+          <option value="viewers">Viewer counter</option>
+          <option value="alerts">Alerts</option>
+        </select></div>
+      <div class="field"><label for="back">Behind the widgets</label>
+        <select id="back">
+          <option value="game">Dark game scene</option>
+          <option value="desk">Light desktop</option>
+          <option value="checker">Transparency checkerboard</option>
+          <option value="green">Green screen</option>
+          <option value="image">Your own picture…</option>
+        </select></div>
+      <input id="back-file" type="file" accept="image/*" hidden>
+      <p class="help">The preview shows made-up chat. Your picture stays on this PC.</p>
+    </div>
+    <div id="stage-wrap"><div id="stage" data-back="game" aria-hidden="true"></div></div>
+    <h2>Add to OBS</h2>
+    <div id="widgets"></div>
+  </section>
+</div>
+
+<footer class="savebar">
+  <span id="dirty" aria-live="polite">No changes</span>
+  <span class="spacer"></span>
+  <button class="btn" id="revert" type="button">Revert</button>
+  <button class="btn" id="save-as" type="button">Save as…</button>
+  <button class="btn primary" id="save" type="button">Save</button>
+</footer>
+
+<dialog id="save-dialog" aria-labelledby="save-title">
+  <form method="dialog" id="save-form">
+    <h2 id="save-title">Save theme</h2>
+    <div class="field"><label for="save-label">Display name</label><input id="save-label" type="text" maxlength="60" required></div>
+    <div class="field"><label for="save-name">File name (for OBS addresses)</label>
+      <input id="save-name" type="text" maxlength="40" required pattern="[a-z0-9][a-z0-9-]{0,39}" aria-describedby="save-help save-error">
+      <p class="help" id="save-help">Lowercase letters, numbers and dashes. Used as <code>?theme=</code> in the OBS address.</p></div>
+    <p class="error" id="save-error" role="alert"></p>
+    <div class="buttons"><button class="btn" value="cancel" formnovalidate type="submit">Cancel</button><button class="btn primary" id="save-ok" value="ok" type="submit">Save</button></div>
+  </form>
+</dialog>
+
+<dialog id="ask-dialog" aria-labelledby="ask-title">
+  <form method="dialog">
+    <h2 id="ask-title">Are you sure?</h2>
+    <p id="ask-text"></p>
+    <div class="buttons"><button class="btn" value="cancel" type="submit">Cancel</button><button class="btn primary" id="ask-ok" value="ok" type="submit">OK</button></div>
+  </form>
+</dialog>
+
+<script src="/web/theme.js"></script>
+<script src="/web/studio.js"></script>
+</body>
+</html>

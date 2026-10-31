@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "label": "Neon",
+  "font": { "family": "\"Bahnschrift\", \"Segoe UI\", system-ui, sans-serif", "size": 21, "weight": 400, "nameWeight": 700, "lineHeight": 1.3 },
+  "colors": { "text": "#f2f6ff", "name": "platform", "background": "#07060f", "backgroundOpacity": 0.86, "accent": "#ff2bd6", "shadow": 0,
+              "twitch": "#b07bff", "youtube": "#ff3b5c", "kick": "#39ff14", "x": "#9ad8ff" },
+  "message": { "layout": "card", "radius": 10, "padding": 12, "gap": 10, "accentBar": false, "platform": "icon" },
+  "chat": { "animationIn": "slide", "animationOut": "slide" },
+  "css": ".cc-msg, .cc-featured, .cc-alert, .cc-vp, .cc-total {\n  box-shadow: 0 0 0 1.5px var(--cc-p), 0 0 16px color-mix(in srgb, var(--cc-p) 55%, transparent), inset 0 0 18px color-mix(in srgb, var(--cc-p) 16%, transparent);\n}\n.cc-name { text-shadow: 0 0 10px var(--cc-name); }\n.cc-icon { filter: drop-shadow(0 0 6px var(--cc-p)); }\n"
+}

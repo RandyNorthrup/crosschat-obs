@@ -1,0 +1,18 @@
+[project]
+name = "crosschat"
+version = "1.0.0"
+description = "Every stream chat in one window, themeable on-stream chat widgets, and X Live started with OBS."
+requires-python = ">=3.10"
+license = "MIT"
+
+[tool.ruff]
+line-length = 160
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B"]
+ignore = ["E731"]          # the hub names small one-line lookups with lambda on purpose
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <title>CrossChat</title>
+  <defs>
+    <linearGradient id="bubble" gradientUnits="userSpaceOnUse" x1="10" y1="10" x2="118" y2="120">
+      <stop offset="0" stop-color="#e8ab7f"/>
+      <stop offset="1" stop-color="#a65a2f"/>
+    </linearGradient>
+  </defs>
+  <!-- a chat bubble with a cross in it: a thick hollow stroke and a thin one -->
+  <path d="M32 10H96A22 22 0 0 1 118 32V76A22 22 0 0 1 96 98H60L34 120V98H32A22 22 0 0 1 10 76V32A22 22 0 0 1 32 10Z" fill="url(#bubble)"/>
+  <path d="M85 28H94L45 82H36Z" fill="#0d141c"/>
+  <path d="M35 28H55L95 82H75Z" fill="#0d141c"/>
+  <path d="M42 32H49.5L86 78H78.5Z" fill="url(#bubble)"/>
+</svg>
