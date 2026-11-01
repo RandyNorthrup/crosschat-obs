@@ -24,6 +24,8 @@ def config(template, target):
     for key in ("twitch", "youtube", "kick", "tiktok"):
         data[key] = answer(key.upper())
     data["facebook"] = answer("FACEBOOK") == "1"
+    if answer("EMOTES") == "0":                 # the one outside service on by default; the installer asks
+        data["emotes"] = {"bttv": False, "ffz": False, "7tv": False}
     data["x"]["enabled"] = answer("X") == "1"
     data["x"]["auto_go_live"] = answer("X_AUTO") != "0"
     data["x"]["source"] = answer("X_SOURCE") or data["x"]["source"]

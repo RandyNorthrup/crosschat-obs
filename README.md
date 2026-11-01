@@ -404,6 +404,16 @@ pwsh scripts/package.ps1                                 # builds dist\CrossChat
 
 `scripts/obs_e2e.py` sets up a throwaway portable OBS with the script and the four widgets. It streams to an RTMP receiver on your PC (ffmpeg) and checks 19 things, from the script starting the hub to the hub leaving when OBS closes. It never touches your own OBS. Version 1.0.0 passed all 19 on OBS 33.0.1.
 
+## Code signing policy
+
+CrossChat is applying for free code signing from [SignPath Foundation](https://signpath.org) so that Windows recognises its installer: free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org). Until that is in place, every download can be verified with its GitHub build provenance attestation (see [SECURITY.md](SECURITY.md#checking-a-download)).
+
+- **Committers and reviewers:** [Randy Northrup](https://github.com/RandyNorthrup)
+- **Approvers:** [Randy Northrup](https://github.com/RandyNorthrup)
+- Every release is built by GitHub Actions from this repository's source. Nobody signs anything built elsewhere.
+
+**Privacy policy:** CrossChat will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. It talks only to the chat platforms you set up and, unless you turn them off in the installer or `config.json`, to 7TV, BetterTTV and FrankerFaceZ for emote pictures. The full list of connections and what each one sends is in [SECURITY.md](SECURITY.md#what-leaves-your-pc).
+
 ## Credits
 
 - Platform icons: [Simple Icons](https://simpleicons.org) (CC0). The platform names and logos belong to their owners.

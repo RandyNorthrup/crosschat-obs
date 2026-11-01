@@ -54,7 +54,10 @@ jobs:
           $text = Get-Content CHANGELOG.md -Raw
           $match = [regex]::Match($text, "(?ms)^## \[$([regex]::Escape($version))\][^\n]*\n(.*?)(?=^## \[|\z)")
           if (-not $match.Success) { throw "CHANGELOG.md has no section for $version" }
-          Set-Content notes.md $match.Groups[1].Value.Trim()
+          $footer = "`n`n---`n**Code signing policy:** see the [README](https://github.com/RandyNorthrup/crosschat-obs#code-signing-policy). " +
+            "Free code signing provided by SignPath.io, certificate by SignPath Foundation (application in progress). " +
+            "Check this download with ``gh attestation verify <zip> --repo RandyNorthrup/crosschat-obs``."
+          Set-Content notes.md ($match.Groups[1].Value.Trim() + $footer)
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}

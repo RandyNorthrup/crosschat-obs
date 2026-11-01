@@ -4,6 +4,11 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+- The installer shows what CrossChat connects to, and asks whether to use 7TV, BetterTTV and FrankerFaceZ emotes (the one outside service CrossChat uses by default).
+- A code signing policy in the README, for signing releases through SignPath Foundation.
+
 ## [1.6.0] - 2026-10-31
 
 ### Added
