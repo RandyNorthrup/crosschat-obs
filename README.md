@@ -427,7 +427,7 @@ CrossChat has no server and no account. Everything runs on your PC and talks str
 - **Chat history** stays in `%LOCALAPPDATA%\CrossChat\logs` and is removed after 90 days. Spreadsheet exports can't run formulas a viewer typed.
 - **Text-to-speech** uses Windows' own voices unless you pick one marked *online*.
 - CrossChat reads OBS's WebSocket password from OBS's own settings file. It doesn't copy it anywhere.
-- No telemetry, no analytics, no update checks.
+- No telemetry and no analytics. Update checks only if you switch them on (Settings → About): then CrossChat asks GitHub once a day and sends nothing about you.
 - Every release has a signed build provenance attestation: `gh attestation verify <zip> --repo RandyNorthrup/crosschat-obs`. The installer installs the exact Python packages CrossChat was tested with, checked against their checksums.
 
 More detail, and how to report a problem privately: [SECURITY.md](SECURITY.md).
