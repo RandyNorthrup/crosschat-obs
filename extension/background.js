@@ -24,7 +24,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
     return true;
   }
   if (message.type === 'tt-check' && from.startsWith('https://www.tiktok.com/')) {     // which account is the streamer's
-    hub('/targets').then((t) => respond({ tiktok: t.tiktok || '', live: !!t.live }), () => respond(null));
+    hub('/targets').then((t) => respond({ tiktok: t.tiktok || '', live: !!t.live, joins: t.tiktok_joins === true }), () => respond(null));
     return true;
   }
   if (message.type === 'tt-feed' && from.startsWith('https://www.tiktok.com/')) {

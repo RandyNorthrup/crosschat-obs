@@ -1,0 +1,65 @@
+{
+  "about": "Rows of a TikTok LIVE chat list, built by hand in the shape TikTok's page uses (data-e2e names, a name element, gift pictures and counts). Every name is made up. 'parts' is what extension/tiktok.js reads from 'html'; 'expect' is what it makes of it (null: not passed on).",
+  "rows": [
+    {
+      "case": "a chat line, with a level badge and an emoji picture",
+      "html": "<div data-e2e=\"chat-message\" class=\"css-1q2w-DivChatMessage\"><div class=\"avatar\"><img alt=\"\" src=\"https://p16-sign.tiktokcdn-us.com/avatar.webp\"></div><div class=\"body\"><div class=\"who\"><span class=\"badge\"><img alt=\"\"><span>23</span></span><span data-e2e=\"message-owner-name\" title=\"lofi.leo\">lofi.leo</span></div><span class=\"words\">hi from TikTok <img alt=\"[heart]\" src=\"https://p16-webcast.tiktokcdn.com/emote/heart.png\"></span></div></div>",
+      "parts": {"e2e": "chat-message", "hints": "css-1q2w-DivChatMessage", "name": "lofi.leo", "rest": "hi from TikTok [heart]"},
+      "expect": {"kind": "chat", "name": "lofi.leo", "text": "hi from TikTok [heart]"}
+    },
+    {
+      "case": "a viewer typing a follow notice stays chat",
+      "html": "<div data-e2e=\"chat-message\" class=\"css-1q2w-DivChatMessage\"><span data-e2e=\"message-owner-name\" title=\"prank.pete\">prank.pete</span><span>followed the host</span></div>",
+      "parts": {"e2e": "chat-message", "hints": "css-1q2w-DivChatMessage", "name": "prank.pete", "rest": "followed the host"},
+      "expect": {"kind": "chat", "name": "prank.pete", "text": "followed the host"}
+    },
+    {
+      "case": "a viewer typing a fake gift with an emoji stays chat",
+      "html": "<div data-e2e=\"chat-message\" class=\"css-1q2w-DivChatMessage\"><span data-e2e=\"message-owner-name\" title=\"prank.pete\">prank.pete</span><span>sent Galaxy <img alt=\"[wow]\" src=\"https://p16-webcast.tiktokcdn.com/img/emote.png\"> ×99</span></div>",
+      "parts": {"e2e": "chat-message", "hints": "css-1q2w-DivChatMessage", "name": "prank.pete", "rest": "sent Galaxy [wow] ×99"},
+      "expect": {"kind": "chat", "name": "prank.pete", "text": "sent Galaxy [wow] ×99"}
+    },
+    {
+      "case": "a follow",
+      "html": "<div data-e2e=\"social-message\" class=\"css-9x8c-DivSocialMessage\"><span data-e2e=\"message-owner-name\" title=\"mira_makes\">mira_makes</span><span>followed the host</span></div>",
+      "parts": {"e2e": "social-message", "hints": "css-9x8c-DivSocialMessage", "name": "mira_makes", "rest": "followed the host"},
+      "expect": {"kind": "follow", "name": "mira_makes", "count": 1}
+    },
+    {
+      "case": "a share",
+      "html": "<div data-e2e=\"social-message\" class=\"css-9x8c-DivSocialMessage\"><span data-e2e=\"message-owner-name\" title=\"sunny_side_up\">sunny_side_up</span><span>shared the LIVE</span></div>",
+      "parts": {"e2e": "social-message", "hints": "css-9x8c-DivSocialMessage", "name": "sunny_side_up", "rest": "shared the LIVE"},
+      "expect": {"kind": "share", "name": "sunny_side_up", "count": 1}
+    },
+    {
+      "case": "likes, with a count",
+      "html": "<div data-e2e=\"social-message\" class=\"css-9x8c-DivSocialMessage\"><span data-e2e=\"message-owner-name\" title=\"tap.tap.tara\">tap.tap.tara</span><span>liked the LIVE ×15</span></div>",
+      "parts": {"e2e": "social-message", "hints": "css-9x8c-DivSocialMessage", "name": "tap.tap.tara", "rest": "liked the LIVE ×15"},
+      "expect": {"kind": "like", "name": "tap.tap.tara", "count": 15}
+    },
+    {
+      "case": "a join, with the name in the sentence",
+      "html": "<div data-e2e=\"enter-message\" class=\"css-7h6g-DivEnterMessage\"><span>quiet.quokka joined</span></div>",
+      "parts": {"e2e": "enter-message", "hints": "css-7h6g-DivEnterMessage", "name": "", "rest": "quiet.quokka joined"},
+      "expect": {"kind": "join", "name": "quiet.quokka", "count": 1}
+    },
+    {
+      "case": "a gift with its name, picture and count",
+      "html": "<div data-e2e=\"chat-message\" class=\"css-4k3j-DivGiftMessage\"><span data-e2e=\"message-owner-name\" title=\"pixel.pal\">pixel.pal</span><span>sent Rose</span><img alt=\"Rose\" src=\"https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/0123456789abcdef0123456789abcdef~tplv-obj.png\"><span class=\"css-2z1x-SpanGiftCount\">×5</span></div>",
+      "parts": {"e2e": "chat-message", "hints": "css-4k3j-DivGiftMessage css-2z1x-SpanGiftCount", "name": "pixel.pal", "rest": "sent Rose×5", "giftImage": true, "giftAlt": "Rose", "giftCount": "×5"},
+      "expect": {"kind": "gift", "name": "pixel.pal", "gift": "Rose", "count": 5}
+    },
+    {
+      "case": "a gift named only by its picture",
+      "html": "<div data-e2e=\"gift-message\" class=\"css-4k3j-DivGiftMessage\"><span data-e2e=\"message-owner-name\" title=\"star.gazer\">star.gazer</span><span>sent</span><img alt=\"Galaxy\" src=\"https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/fedcba9876543210fedcba9876543210~tplv-obj.png\"><span class=\"css-2z1x-SpanGiftCount\">x1</span></div>",
+      "parts": {"e2e": "gift-message", "hints": "css-4k3j-DivGiftMessage css-2z1x-SpanGiftCount", "name": "star.gazer", "rest": "sentx1", "giftImage": true, "giftAlt": "Galaxy", "giftCount": "x1"},
+      "expect": {"kind": "gift", "name": "star.gazer", "gift": "Galaxy", "count": 1}
+    },
+    {
+      "case": "TikTok's own welcome notice is not passed on",
+      "html": "<div data-e2e=\"social-message\" class=\"css-9x8c-DivSocialMessage\"><span>Welcome to TikTok LIVE! Have fun interacting with others in real time.</span></div>",
+      "parts": {"e2e": "social-message", "hints": "css-9x8c-DivSocialMessage", "name": "", "rest": "Welcome to TikTok LIVE! Have fun interacting with others in real time."},
+      "expect": null
+    }
+  ]
+}

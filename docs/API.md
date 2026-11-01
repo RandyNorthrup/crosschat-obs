@@ -64,8 +64,8 @@ Your own overlay pages get the chat as viewers see it: `msg`, `delete`, `purge`,
 | `question` | `true` when the line looks like a question |
 | `first` | `"ever"` for the viewer's first message in the channel (Twitch says so), `"stream"` for their first this stream |
 | `hidden` | Why your filters hide it: `bot`, `user`, `command` or `word`. Hidden messages still arrive, so a page can show them to you; don't show them on stream |
-| `alert` | For `kind: "event"`: `sub`, `resub`, `gift`, `raid`, `cheer`, `superchat`, `member` or `other`. YouTube Super Stickers and Rumble Rants come as `superchat`; the widgets tell them apart (a sticker's `system` starts with `Super Sticker`, a Rant has `p: "rumble"`). Treat any other value as `other` |
-| `amount` | For alerts: months, number of gifts, viewers, bits or the Super Chat or Rant amount, as text (`"5 subs"`, `"$5.00"`). Can be `""` |
+| `alert` | For `kind: "event"`: `sub`, `resub`, `gift`, `raid`, `cheer`, `superchat`, `member`, `follow`, `share`, `like`, `join` or `other`. YouTube Super Stickers and Rumble Rants come as `superchat`; the widgets tell them apart (a sticker's `system` starts with `Super Sticker`, a Rant has `p: "rumble"`). Treat any other value as `other` |
+| `amount` | For alerts: months, number of gifts, viewers, bits or the Super Chat or Rant amount, as text (`"5 subs"`, `"$5.00"`); for a TikTok gift, its name and count (`"Rose ×5"`); for TikTok likes, how many (`"20"`). Can be `""` |
 | `system` | For alerts: the platform's own line, such as `nightowl_42 subscribed for 6 months!` |
 | `mid` | The platform's own message id, used for moderation |
 | `uid` | The platform's user id, when it gives one |
@@ -238,6 +238,6 @@ Also this PC only:
 - `POST /companion/tailscale` (`{"on": true|false}`) switches the companion on the PC's Tailscale address and saves `remote.tailscale` in `config.json`. The `companion` event (to the window on this PC) says `tailscale` (the switch), `address` (the Tailscale address found, or `""`), `listening` and `why`.
 - `POST /updates` (`{"check": true|false}`) switches the update notice and saves `updates.check`. The `update` event (to the window on this PC) says `check`, and the newer `version` with its release page `url` when there is one (both `""` otherwise).
 
-`GET /tiktok/feed`, `GET /facebook/feed` and `GET /instagram/feed` are how the extension passes on your TikTok LIVE chat, Facebook Live comments and Instagram Live comments. It accepts lines only for your own TikTok name, and only from the extension or a program on this PC.
+`GET /tiktok/feed`, `GET /facebook/feed` and `GET /instagram/feed` are how the extension passes on your TikTok LIVE chat (with its gifts, follows, shares, likes and joins), Facebook Live comments and Instagram Live comments. It accepts lines only for your own TikTok name, and only from the extension or a program on this PC.
 
 `GET /show` opens the chat window. `GET /x/go` goes live on X (`?mode=private` or `?mode=dry` for a test). Both refuse other websites.

@@ -19,7 +19,7 @@ CrossChat has no server of its own. It makes no analytics or crash-report connec
 | Kick (`kick.com`, Pusher) | Your channel name, signed out, to read chat | A Kick channel is set |
 | Kick API (`id.kick.com`, `api.kick.com`) | Your Kick token, your replies, your moderation actions | You pressed **Connect Kick** |
 | X, YouTube and TikTok, in your browser | The reply you typed, typed into the site's own chat box by the extension | You reply or moderate there |
-| TikTok (`www.tiktok.com`), in your browser | Nothing beyond what your browser already does: CrossChat reads chat from your own TikTok LIVE page there | A TikTok name is set and you're live |
+| TikTok (`www.tiktok.com`), in your browser | Nothing beyond what your browser already does: CrossChat reads chat, gifts, follows, shares, likes (and joins, if you turn them on) from your own TikTok LIVE page there | A TikTok name is set and you're live |
 | Facebook Live Producer, in your browser | Nothing beyond what your browser already does: CrossChat reads comments from Live Producer there | `"facebook": true` and you're live |
 | Instagram's Live producer (`www.instagram.com`), in your browser | Nothing beyond what your browser already does: CrossChat reads comments from your own live there, and types your replies | `"instagram": true` and you're live |
 | Rumble API (`rumble.com`) | Your own Live Stream API URL, to read your chat, Rants, subs and viewers | You connected Rumble and you're live |

@@ -54,7 +54,7 @@ test('Rants and Super Stickers have their own switches and sentences', () => {
   assert.ok(T.ALERTS.includes('rant') && T.ALERTS.includes('sticker'));
   T.ALERTS.forEach((kind) => {
     assert.equal(typeof T.DEFAULTS.alerts.labels[kind], 'string', kind);
-    assert.equal(T.DEFAULTS.alerts.types[kind], true, kind);
+    assert.equal(T.DEFAULTS.alerts.types[kind], !['like', 'join'].includes(kind), kind);   // TikTok likes and joins start off
   });
   const quiet = T.merge({ alerts: { types: { rant: false }, labels: { rant: '{name} ranted {amount} on {platform}' } } });
   assert.equal(quiet.alerts.types.rant, false);

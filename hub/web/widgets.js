@@ -131,6 +131,7 @@
   function chatShows(m) {
     if (m.kind === 'note' || m.p === 'system') return false;
     if (m.kind === 'event' && !theme.chat.events) return false;
+    if (m.kind === 'event' && T.QUIET_ALERTS.includes(m.alert) && !theme.alerts.types[m.alert]) return false;   // likes, joins
     return T.shows(shown, m.p);
   }
 
@@ -398,6 +399,8 @@
     { alert: 'gift', p: 'kick', name: 'turbo_kat', amount: '3 subs' },
     { alert: 'superchat', p: 'youtube', name: 'Priya N', amount: '$2.00', system: 'Super Sticker $2.00' },
     { alert: 'follow', p: 'kick', name: 'quietstorm' },
+    { alert: 'gift', p: 'tiktok', name: 'sunny.daze', amount: 'Rose ×5' },
+    { alert: 'share', p: 'tiktok', name: 'lofi.leo' },
   ].map((a, i) => ({ type: 'msg', kind: 'event', id: 'demo-alert-' + i, t: Date.now(), text: '', ...a }));
 
   function emotesFor(text) {                       // Twitch's "id:from-to" list for the demo lines, counted in code points

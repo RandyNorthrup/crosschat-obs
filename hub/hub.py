@@ -937,6 +937,13 @@ def x_result(ok, mode, step):
 # the extension passes on the chat lines shown there and types replies into TikTok's own chat box. On any other
 # TikTok page (someone else's LIVE, say) it reads nothing.
 tiktok_told = collections.deque(maxlen=5000)  # TikTok chat lines already shown (its page has no ids; see tiktok.js)
+tiktok_likes = {}                            # viewer -> likes not shown yet: one alert per viewer per burst of likes
+tiktok_once = {}                             # (kind, viewer) -> when last shown: a follow once a stream, a share once a minute
+TIKTOK_EVENTS = ("gift", "follow", "share", "like", "join")
+TIKTOK_AGAIN = {"follow": float("inf"), "share": 60, "join": 600}       # seconds before the same viewer's shows again
+TIKTOK_SAYS = {"follow": "%s followed", "share": "%s shared the LIVE", "join": "%s joined"}
+LIKE_QUIET, LIKE_LONGEST = 15, 120           # a viewer's likes show once they stop for this long, or after this long at most
+LIKE_ONE_BY_ONE = 3                          # more viewers' likes due at once than this: one line for all of them
 
 
 def tiktok_page():
@@ -958,14 +965,59 @@ async def tiktok_open():
 
 def tiktok_off():
     if status.get("tiktok") in ("on", "waiting"):
+        tiktok_flush_likes(time.time(), everything=True)
         viewers.pop("tiktok", None)
         set_status("tiktok", "off")
         send(viewer_event())
 
 
+def tiktok_event(kind, name, line, mid):
+    """A gift, follow, share, like or join that the streamer's TikTok LIVE page showed, as an alert. TikTok's page
+    gives a gift's name and how many were sent, not what they cost, so no money value is made up for them."""
+    now = time.time()
+    count = line.get("count")
+    count = count if isinstance(count, int) and 0 < count < 100000 else 1
+    if kind == "gift":
+        gift = " ".join(str(line.get("gift", "")).split())[:40] or "a gift"
+        amount = gift if count == 1 else "%s ×%d" % (gift, count)
+        publish("tiktok", name, "", kind="event", alert="gift", amount=amount, system="%s sent %s" % (name, amount), mid=mid)
+    elif kind == "like":
+        tally = tiktok_likes.setdefault(name.lower(), {"name": name, "likes": 0, "first": now, "last": now})
+        tally["likes"] += count
+        tally["last"] = now
+        if len(tiktok_likes) > 2000:             # a huge LIVE: show the oldest tallies now rather than keep them all
+            tiktok_flush_likes(now, oldest=len(tiktok_likes) - 2000)
+    elif kind != "join" or FILTERS.get("joins"):
+        key = (kind, name.lower())
+        if now - tiktok_once.get(key, float("-inf")) < TIKTOK_AGAIN[kind]:
+            return
+        tiktok_once[key] = now
+        if len(tiktok_once) > 20000:
+            tiktok_once.pop(next(iter(tiktok_once)))
+        publish("tiktok", name, "", kind="event", alert=kind, mid=mid, system=TIKTOK_SAYS[kind] % name)
+
+
+def tiktok_flush_likes(now, everything=False, oldest=0):
+    """Show each viewer's likes as one alert once they've stopped liking for a bit (or liked for a long while). When
+    many are due at once (a busy LIVE), they show as one line ("12 viewers liked the LIVE ×340") instead."""
+    due = []
+    for key, tally in sorted(tiktok_likes.items(), key=lambda kv: kv[1]["first"]):
+        if everything or oldest > 0 or now - tally["last"] >= LIKE_QUIET or now - tally["first"] >= LIKE_LONGEST:
+            del tiktok_likes[key]
+            oldest -= 1
+            due.append(tally)
+    if len(due) > LIKE_ONE_BY_ONE:
+        due = [{"name": "%d viewers" % len(due), "likes": sum(t["likes"] for t in due), "first": now}]
+    for tally in due:
+        n, who = tally["likes"], tally["name"]
+        publish("tiktok", who, "", kind="event", alert="like", amount=str(n), system="%s liked the LIVE ×%d" % (who, n),
+                mid="tt-like-%s" % hashlib.sha256(("%s\n%f" % (who.lower(), tally["first"])).encode()).hexdigest()[:16])
+
+
 def tiktok_feed(first):
-    """The extension passes on what the streamer's own TikTok LIVE page shows: new chat lines and the viewer count.
-    Answers whether that page is the streamer's (anything from another page is ignored)."""
+    """The extension passes on what the streamer's own TikTok LIVE page shows: new chat lines, gifts, follows, shares,
+    likes and joins, and the viewer count. Answers whether that page is the streamer's (anything from another page is
+    ignored)."""
     if not TIKTOK or first("page").lower().lstrip("@") != TIKTOK:
         return False
     if first("over"):
@@ -985,9 +1037,16 @@ def tiktok_feed(first):
             continue
         mid = "tt-" + re.sub(r"\W", "", str(line.get("id", "")))[:80]
         name, text = " ".join(str(line.get("name", "")).split())[:60], " ".join(str(line.get("text", "")).split())[:300]
-        if name and text and mid not in tiktok_told:
+        kind = line.get("kind") or "chat"
+        if not name or mid == "tt-" or mid in tiktok_told:
+            continue
+        if kind == "chat" and text:
             tiktok_told.append(mid)
             publish("tiktok", name, text, badges=["broadcaster"] if line.get("host") is True else [], mid=mid)
+        elif kind in TIKTOK_EVENTS and line.get("host") is not True:
+            tiktok_told.append(mid)
+            tiktok_event(kind, name, line, mid)
+    tiktok_flush_likes(time.time())
     return True
 
 
@@ -1232,6 +1291,8 @@ async def stream_started(local=False):
     messages.clear()
     x_told.clear()
     tiktok_told.clear()
+    tiktok_likes.clear()
+    tiktok_once.clear()
     facebook_told.clear()
     instagram_told.clear()
     seen.clear()
@@ -1520,7 +1581,8 @@ SAMPLES = {
               ("youtube", "Sam Ortiz", "Keep it up!", "Super Chat $5.00", "superchat", "$5.00"),
               ("twitch", "raid_leader", "", "37 raiders from raid_leader have joined!", "raid", "37"),
               ("kick", "turbo_kat", "", "turbo_kat gifted 5 subs", "gift", "5 subs"),
-              ("twitch", "bitbucket", "Cheer500 great stream", "bitbucket cheered 500 bits", "cheer", "500 bits")],
+              ("twitch", "bitbucket", "Cheer500 great stream", "bitbucket cheered 500 bits", "cheer", "500 bits"),
+              ("tiktok", "sunny.daze", "", "sunny.daze sent Rose ×5", "gift", "Rose ×5")],
 }
 
 
@@ -1566,7 +1628,7 @@ LOG = None                                   # this stream's chat history (set i
 EMOTES = {}                                  # third-party emote name -> picture URL
 BOTS = {"nightbot", "streamelements", "streamlabs", "moobot", "fossabot", "wizebot", "botrix", "sery_bot", "kofistreambot",
         "soundalerts", "own3d", "blerp"}            # well-known chat bots, hidden from the widgets when "bots" is on
-FILTER_DEFAULTS = {"words": [], "users": [], "hide_commands": True, "bots": True}
+FILTER_DEFAULTS = {"words": [], "users": [], "hide_commands": True, "bots": True, "joins": False}   # joins: show TikTok's
 FILTERS = dict(FILTER_DEFAULTS)
 TTS_DEFAULTS = {"enabled": False, "read": "questions", "command": "!tts", "names": True, "max_chars": 200, "skip_links": True,
                 "platforms": "all", "voice": "", "rate": 1.0, "volume": 1.0}
@@ -1697,6 +1759,7 @@ def clean_filters(body):
         out[key] = list(dict.fromkeys(" ".join(i.split()) for i in items if i.strip()))
     out["hide_commands"] = bool(body.get("hide_commands", out["hide_commands"]))
     out["bots"] = bool(body.get("bots", out["bots"]))
+    out["joins"] = body.get("joins", out["joins"]) is True
     return out
 
 
@@ -1737,6 +1800,8 @@ def speech(m, force=False):
         return ""
     if not force and t["platforms"] != "all" and m.get("p") not in t["platforms"]:
         return ""
+    if not force and m.get("alert") in ("like", "join"):
+        return ""                                # too many to read out
     if set(m.get("badges") or ()) & {"broadcaster", "owner"}:
         return ""                                # never read the streamer's own lines back
     text = m.get("text") or ""
@@ -2541,7 +2606,8 @@ async def serve(reader, writer, remote=False):
             await reply(writer, "200 OK", "application/json", json.dumps({"version": VERSION}).encode(), OPEN)
         elif url.path == "/targets":               # where a typed reply goes
             body = {"twitch": TWITCH, "youtube_video": state["youtube_video"], "tiktok": TIKTOK, "facebook": FACEBOOK,
-                    "instagram": INSTAGRAM, "rumble_chat": state.get("rumble_chat") or "", "live": streaming.is_set()}
+                    "instagram": INSTAGRAM, "rumble_chat": state.get("rumble_chat") or "", "live": streaming.is_set(),
+                    "tiktok_joins": bool(FILTERS.get("joins"))}
             await reply(writer, "200 OK", "application/json", json.dumps(body).encode())
         elif url.path == "/events":
             writer.write(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-store\r\n" + OPEN.encode()

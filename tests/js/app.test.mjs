@@ -120,7 +120,9 @@ test('the read-aloud queue says one line at a time, in order', () => {
 test('filter lists, connection health, chat logs', () => {
   assert.deepEqual(A.cleanList([' Spoiler ', 'spoiler', '', null, 'a'.repeat(80)]), ['Spoiler', 'a'.repeat(50)]);
   assert.equal(A.cleanList(Array.from({ length: 250 }, (_, i) => 'w' + i)).length, 200);
-  assert.deepEqual(A.filterSettings({ words: ['x'], bots: 'yes' }), { words: ['x'], users: [], hide_commands: false, bots: false });
+  assert.deepEqual(A.filterSettings({ words: ['x'], bots: 'yes' }), { words: ['x'], users: [], hide_commands: false, bots: false, joins: false });
+  assert.equal(A.filterSettings({ joins: true }).joins, true);
+  assert.equal(A.filterSettings({ joins: 'on' }).joins, false);
   const now = 1793462400000;
   assert.equal(A.health({ since: now - 72 * 60000, last: now - 8000, reconnects: 2 }, now), 'connected 1 h 12 m · last message 8 s ago · 2 reconnects');
   assert.equal(A.health({ since: (now - 45000) / 1000, last: 0, reconnects: 1 }, now), 'connected 45 s · no messages yet · 1 reconnect');
