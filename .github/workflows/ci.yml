@@ -120,7 +120,7 @@ jobs:
           macos.close(handle)
           EOF
 
-  # Linux (beta): the same tests on Ubuntu, with a real desktop keyring (GNOME Keyring in a D-Bus session of its own),
+  # Linux: the same tests on Ubuntu, with a real desktop keyring (GNOME Keyring in a D-Bus session of its own),
   # the OBS script in LuaJIT (lupa), real browser windows on an Xvfb display, then a real install and uninstall from
   # the download.
   test-linux:
@@ -195,10 +195,10 @@ jobs:
           echo 'uninstalled: folder, app menu entries and the keyring key are gone'
           EOF
 
-  # Linux (beta) with a real OBS, on an Xvfb display: OBS from the OBS Project's PPA (it has Browser Source) and OBS from
+  # Linux with a real OBS, on an Xvfb display: OBS from the OBS Project's PPA (it has Browser Source) and OBS from
   # Flathub (the CrossChat script runs the hub outside its sandbox). scripts/obs_e2e.py: the script starts the hub, the
-  # widgets load in OBS's browser, a stream to an RTMP receiver here, OBS's WebSocket port free once OBS closes, and a
-  # second start.
+  # widgets and the docked chat window in OBS's browser, a stream to an RTMP receiver here, OBS's WebSocket port free
+  # once OBS closes, and a second start.
   obs-linux:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -278,6 +278,63 @@ jobs:
             tail -n 80 "$home/crosschat.log" || true
             for f in "$home"/home/Library/Application\ Support/obs-studio/logs/*.txt; do echo "== $f"; tail -n 150 "$f"; done
           done
+
+  # Real OBS on Windows: the same end-to-end check (scripts/obs_e2e.py) with the portable OBS from the OBS Project's
+  # release and ffmpeg from gyan.dev's release build, each download checked against the SHA-256 its maker publishes
+  # (OBS in its release notes, gyan.dev next to the download). CrossChat runs from this checkout with a Python
+  # environment of its own, as Install.cmd makes it.
+  obs-windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      OBS_VERSION: "33.0.1"
+      OBS_SHA256: 0d9436451c2d772b33428e3fdae9776f071895c335de17283176306fb72651d3
+      FFMPEG_VERSION: "9.0.2"
+      FFMPEG_SHA256: 60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Portable OBS and ffmpeg, checked against their published SHA-256
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Get-Checked([string]$url, [string]$sha256, [string]$file) {
+            curl.exe -fsSL --retry 3 -o $file $url
+            if ($LASTEXITCODE) { throw "download failed: $url" }
+            $got = (Get-FileHash -Algorithm SHA256 $file).Hash.ToLowerInvariant()
+            if ($got -ne $sha256) { throw "$url has SHA-256 $got, not the published $sha256" }
+            "SHA-256 as published: $url"
+          }
+          $obs = "$env:RUNNER_TEMP\obs"
+          Get-Checked "https://github.com/obsproject/obs-studio/releases/download/$env:OBS_VERSION/OBS-Studio-$env:OBS_VERSION-Windows-x64.zip" $env:OBS_SHA256 "$env:RUNNER_TEMP\obs.zip"
+          New-Item -ItemType Directory $obs | Out-Null
+          tar -xf "$env:RUNNER_TEMP\obs.zip" -C $obs
+          if (-not (Test-Path "$obs\bin\64bit\obs64.exe")) { throw "no bin\64bit\obs64.exe in the OBS zip" }
+          "OBS $((Get-Item "$obs\bin\64bit\obs64.exe").VersionInfo.ProductVersion), $([Environment]::OSVersion.VersionString)"
+          Get-Checked "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-$env:FFMPEG_VERSION-essentials_build.zip" $env:FFMPEG_SHA256 "$env:RUNNER_TEMP\ffmpeg.zip"
+          tar -xf "$env:RUNNER_TEMP\ffmpeg.zip" -C $env:RUNNER_TEMP
+          & "$env:RUNNER_TEMP\ffmpeg-$env:FFMPEG_VERSION-essentials_build\bin\ffmpeg.exe" -hide_banner -version | Select-Object -First 1
+      - name: CrossChat's own Python environment, as Install.cmd makes it
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          .venv\Scripts\python -m pip install --require-hashes -r hub/requirements.lock
+      - name: End to end with real OBS (scripts/obs_e2e.py)
+        timeout-minutes: 10
+        shell: pwsh
+        run: .venv\Scripts\python scripts\obs_e2e.py --obs "$env:RUNNER_TEMP\obs" --ffmpeg "$env:RUNNER_TEMP\ffmpeg-$env:FFMPEG_VERSION-essentials_build\bin\ffmpeg.exe"
+      - name: The hub's and OBS's logs, when it failed
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-ChildItem "$env:TEMP\crosschat-e2e-*\crosschat.log" -ErrorAction SilentlyContinue | ForEach-Object { "== $_"; Get-Content $_ -Tail 80 }
+          Get-ChildItem "$env:RUNNER_TEMP\obs\config\obs-studio\logs\*.txt" -ErrorAction SilentlyContinue | ForEach-Object { "== $_"; Get-Content $_ -Tail 150 }
 
   # CrossChat's windows placed, moved and closed by the extension, in a real browser: scripts/window_e2e.py starts Chrome
   # with a throwaway profile and this checkout's extension (loaded over DevTools), runs the hub with a stand-in for OBS,

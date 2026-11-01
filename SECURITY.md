@@ -42,6 +42,7 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 
 - A page from another website can't read anything from the hub, not even the chat, and can't make it do anything: open a window, go live on X, feature a message, send test events, read chat history.
 - The CrossChat window, the Theme Studio and the pairing page refuse to be put in another site's frame, where a hidden frame could take your clicks.
+- One exception lets the CrossChat window itself open: **Click here to retry** in OBS's dock. When the CrossChat dock in OBS loaded before CrossChat answered, OBS shows its own error page, which counts as another site. So the hub opens the chat window for a click on a link to it, as a whole page, in OBS's own browser (its User-Agent says `OBS/`, which no website can make a browser say). That only opens the window, as you'd open it yourself; nothing is read or done for the page that had the link.
 - Changes are accepted only as JSON from the hub's own pages. A page elsewhere can't send that without the browser checking first, and the hub refuses those checks.
 - If a second CrossChat window takes over posting replies or reading aloud and then closes, the job goes back to the window that had it.
 - Requests are limited: headers to 16 KB, bodies to 256 KB, theme files to 64 KB.
@@ -90,7 +91,7 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 
 - CrossChat signs in with Twitch's device code flow as a public app. There is no client secret to leak.
 - It asks for three permissions only: `user:write:chat`, `moderator:manage:chat_messages`, `moderator:manage:banned_users`.
-- The tokens are encrypted for your Windows account with DPAPI (`twitch.bin`), so a copy of the file is useless elsewhere. On a Mac, they're encrypted with AES-256 and sealed with HMAC-SHA256 under a random key CrossChat keeps in your login Keychain; the same goes for `kick.bin`, `rumble.bin` and `discord.bin`, and the uninstaller removes the key. On Linux, see **Linux (beta): sign-ins in the desktop keyring** below.
+- The tokens are encrypted for your Windows account with DPAPI (`twitch.bin`), so a copy of the file is useless elsewhere. On a Mac, they're encrypted with AES-256 and sealed with HMAC-SHA256 under a random key CrossChat keeps in your login Keychain; the same goes for `kick.bin`, `rumble.bin` and `discord.bin`, and the uninstaller removes the key. On Linux, see **Linux: sign-ins in the desktop keyring** below.
 - **Disconnect** deletes the file and revokes the token at Twitch. If Twitch doesn't confirm, CrossChat says so, and you can remove it at twitch.tv → Settings → Connections.
 - The sign-in page CrossChat opens is always on `https://www.twitch.tv/`.
 
@@ -156,7 +157,7 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 
 **OBS:** the hub reads OBS's WebSocket port and password from OBS's own settings file each time it connects. It never writes them anywhere and never logs them.
 
-**Linux (beta): sign-ins in the desktop keyring.**
+**Linux: sign-ins in the desktop keyring.**
 
 - `twitch.bin`, `kick.bin`, `rumble.bin` and `discord.bin` are encrypted as on a Mac: AES-256-CBC (from OpenSSL's libcrypto, which Python itself uses) and sealed with HMAC-SHA256, under a random 64-byte key. A changed file is refused before anything is decrypted.
 - The key lives in your desktop keyring (GNOME Keyring, KWallet or another Secret Service), as the item "CrossChat: key for saved sign-ins", through libsecret's `secret-tool`. It's handed to `secret-tool` on its standard input and read back from its output, never put on a command line, where other users of the computer could see it.

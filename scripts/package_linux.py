@@ -1,4 +1,4 @@
-"""Builds the Linux (beta) download: dist/CrossChat-<version>-linux.tar.gz and its .sha256 file.
+"""Builds the Linux download: dist/CrossChat-<version>-linux.tar.gz and its .sha256 file.
 
   python scripts/package_linux.py
 

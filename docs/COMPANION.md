@@ -116,11 +116,11 @@ The list is kept by the hub, so every device and the streaming PC share it.
 |---|---|---|---|
 | **Twitch** (Twitch connected) | ✓ | 10 minutes, 1 hour, or any length up to 14 days | ✓ (and unban) |
 | **Kick** (Kick connected) | ✓ | 10 minutes, 1 hour, or any length up to 7 days, in whole minutes | ✓ (and unban) |
-| **YouTube** (CrossChat window open on the streaming PC) | ✓ (remove) | 5 minutes (YouTube's fixed length) | Hide user on this channel |
+| **YouTube** (CrossChat window open on the streaming PC) | ✓ (remove) | 5 minutes | Hide user on this channel |
 | **X** | — | — | — |
 
 - A ban always asks first.
-- On YouTube, CrossChat uses YouTube's own chat menu in the CrossChat window on the streaming PC. The YouTube account signed in there must own the channel or be a moderator.
+- On YouTube, CrossChat uses YouTube's own chat menu, in YouTube's chat pop-out, which the browser running the CrossChat window on the streaming PC opens in a background tab (YouTube offers these actions only there). The YouTube account signed in there must own the channel or be a moderator.
 - **Connect Twitch** (needed to reply on Twitch, too):
   1. On the streaming PC: Settings → Connections → **Connect Twitch**.
   2. Go to **twitch.tv/activate** and enter the code shown, signed in as the streamer or a moderator.

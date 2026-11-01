@@ -27,9 +27,18 @@
     return on && live();
   }
 
-  // One comment: Facebook marks each as an article whose first link (the author's name) carries the comment's own id.
+  // The link with the commenter's name. Facebook marks each comment as an article whose links carry the comment's own
+  // id; a viewer's comment starts with their picture, a link too (hidden from screen readers, no text), so the first
+  // link with text is the name.
+  const nameLink = (article) => [...article.querySelectorAll('a[href*="comment_id="]')].find((a) => clean(a.textContent)) || null;
+
+  // The words of a comment, from the text around the links: without the "·" Facebook puts between the name and the
+  // comment, and without its own "Posting…" under a fresh comment.
+  const words = (raw) => clean(raw).replace(/^[·•]\s*/, '').replace(/\s*Posting(…|\.\.\.)$/i, '');
+
+  // One comment: its id (from the name link), the commenter's name and the words.
   function comment(article) {
-    const link = article.querySelector('a[href*="comment_id="]');
+    const link = nameLink(article);
     if (!link) return null;                   // still posting: it gets its id in a moment
     const id = new URL(link.href, location.href).searchParams.get('comment_id') || '';
     const name = clean(link.textContent);
@@ -42,7 +51,7 @@
       }
       if (!n.parentElement.closest('a, [role="button"], button')) text += n.nodeValue;
     }
-    text = clean(text).replace(/\s*Posting(…|\.\.\.)$/i, '');     // Facebook's own "Posting…" under a fresh comment
+    text = words(text);
     return id && name && text ? { id, name, text } : null;
   }
 
@@ -168,6 +177,11 @@
     if (!confirm) return { ok: false, why: "Facebook didn't ask to confirm the delete" };
     confirm.click();
     return (await until(() => !article.isConnected || !comment(article), 5000)) ? { ok: true } : { ok: false, why: 'Facebook did not delete it' };
+  }
+
+  if (typeof module === 'object' && module.exports) {      // Node (the tests): the parts above, nothing else
+    module.exports = { nameLink, words };
+    return;
   }
 
   chrome.runtime.onMessage.addListener((message, sender, respond) => {
