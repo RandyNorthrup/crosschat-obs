@@ -1,6 +1,7 @@
-"""Linux (beta): hub/linux.py, the hub's Linux paths and Tailscale on Linux. The rules run everywhere; what needs Linux
-says so. One test opens a real browser window under X (an Xvfb display, a throwaway browser profile): it runs only when
-CROSSCHAT_WINDOW_TESTS=1, so it never touches anyone's own browser."""
+"""Linux: hub/linux.py, the hub's Linux paths and Tailscale on Linux. The rules run everywhere; what needs Linux says
+so. One test opens a real browser window under X the system's way (an Xvfb display, a throwaway browser profile): it
+runs only when CROSSCHAT_WINDOW_TESTS=1, so it never touches anyone's own browser. (The extension's way, on X11 and
+Wayland: scripts/window_e2e.py.)"""
 import asyncio
 import os
 import shutil

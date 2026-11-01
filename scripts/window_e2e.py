@@ -511,10 +511,13 @@ async def scenario(args, browser, folder):
         await ordinary(hub.page_url, (620, 440, 500, 360))
 
         async def app_window(url, where):
+            """An --app window opened the way the hub opens one (on a Mac through Launch Services, `open -n -a`, which
+            took over 30 s the first time for the stand-in browser app on a fresh GitHub Mac: done here first)."""
             before = {w["window"] for w in await windows()}
-            subprocess.Popen([program, "--app=" + url, "--window-position=%d,%d" % where[:2], "--window-size=%d,%d" % where[2:]],
+            args = ["--app=" + url, "--window-position=%d,%d" % where[:2], "--window-size=%d,%d" % where[2:]]
+            subprocess.Popen(["open", "-n", "-a", app, "--args", *args] if MAC else [program, *args],
                              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-            return await until(lambda: _new(before, url), 30)
+            return await until(lambda: _new(before, url), 120 if MAC else 30)
 
         async def _new(before, url):
             return next((w for w in await windows() if w["window"] not in before and w["url"].split("#")[0].startswith(url)), None)

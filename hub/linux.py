@@ -1,4 +1,4 @@
-"""Linux (beta): the few jobs the hub does with Windows' own tools, done the Linux way.
+"""Linux: the few jobs the hub does with Windows' own tools, done the Linux way.
 
   windows / place / close   X11 (libX11, through ctypes), for when the CrossChat extension isn't there to do it (it does
                             it with the browser's own window API, see extension/windows.js): the browser's windows are
