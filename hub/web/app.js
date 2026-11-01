@@ -270,9 +270,16 @@
       && words.every((w) => [m.name, m.handle, m.system, m.text].join(' ').toLowerCase().includes(w)));
   }
 
+  // ---- the update notice, Discord ------------------------------------------------------------------------------------
+  // The only link the update notice may open: a CrossChat release page on GitHub ('' for anything else).
+  const releaseLink = (url) => (/^https:\/\/github\.com\/RandyNorthrup\/crosschat-obs\/releases\/tag\/v\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(url || '') ? url : '');
+  // A Discord webhook URL, the way Discord's "Copy Webhook URL" gives it (the hub checks it again, and with Discord).
+  const discordWebhook = (url) => /^https:\/\/(discord\.com|discordapp\.com|ptb\.discord\.com|canary\.discord\.com)\/api\/webhooks\/\d{15,22}\/[\w-]{30,100}$/.test(clean(url));
+
   return { NAMES, LIMIT, PAGE_PLATFORMS, QUICK_MAX, QUICK_LENGTH, LIST_MAX, LIST_LENGTH, TTS_READ, TTS_PLATFORMS, name, takesReplies, openPlatforms, targetsFor,
            tooLong, clean, route, canReply, modMenu, duration, describe, cleanQuick, inView, mention, secondsLeft, readable, pieces, timeoutSeconds,
-           ttsSettings, onlineVoice, voiceMaker, voiceGroups, pickVoice, speech, cleanList, filterSettings, span, health, validLog, bytes, logFilter };
+           ttsSettings, onlineVoice, voiceMaker, voiceGroups, pickVoice, speech, cleanList, filterSettings, span, health, validLog, bytes, logFilter,
+           releaseLink, discordWebhook };
 });
 
 // ---- the page ---------------------------------------------------------------------------------------------------------
@@ -290,6 +297,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
   const ctx = { remote: false, device: null, version: '', lanUrl: null, executor: false, executorKnown: false, twitch: 'off',
                 bridge: !!document.documentElement.dataset.crosschat, states: {}, unpaired: false };
   let counts = {}, starred = new Set(), quick = [], devices = [], twitchAuth = { state: 'off' }, kickAuth = { state: 'off' }, rumbleAuth = { state: 'off' }, pairTimer = null;
+  let discordAuth = { state: 'off' }, companion = { tailscale: false }, update = { check: false };
   let tts = A.ttsSettings({}), filters = A.filterSettings({}), health = {}, emotes = new Map();
   let replyTo = null, featuredId = null, view = 'all', pinned = true, ding = store('ding') === '1', audio, sending = false, feed = null;
   const msgs = new Map();                         // id -> message, for the action sheet and featuring
@@ -941,6 +949,68 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
   };
   $('rumble-disconnect').onclick = async () => { if (await ask({ title: 'Disconnect Rumble?', text: 'CrossChat then deletes the Rumble API URL from this PC and stops reading Rumble chat.', ok: 'Disconnect' })) api('/rumble/disconnect', {}); };
 
+  // Discord: posts to one channel of the streamer's server through a webhook (kept encrypted by the hub, never shown
+  // again): a going-live notice, the messages shown on stream and, if picked, all chat.
+  function drawDiscord() {
+    const s = discordAuth.state, on = s === 'on';
+    $('discord-dot').className = 'dot' + (on ? ' ok' : '');
+    $('discord-state').textContent = on ? 'Connected' + (discordAuth.name ? ': posts as ' + discordAuth.name : '')
+      : s === 'error' ? 'Not connected: ' + (discordAuth.why || 'Discord said no') : 'Not connected';
+    $('discord-form').hidden = ctx.remote || on;
+    $('discord-choices').hidden = ctx.remote || !on;
+    $('discord-test').hidden = $('discord-disconnect').hidden = ctx.remote || !on;
+    document.querySelectorAll('[data-discord]').forEach((box) => { box.checked = discordAuth[box.dataset.discord] === true; });
+    $('discord-hint').textContent = ctx.remote ? 'Connecting Discord is done on the streaming PC (Settings there).'
+      : on ? 'Posted only while you’re live, and only what viewers see on stream: never hidden messages. Chat can’t ping anyone, and links in it can’t be clicked there.'
+      : 'Post to a channel of your Discord server while you’re live. In Discord: Server Settings → Integrations → Webhooks → New Webhook → Copy Webhook URL, then paste it here.';
+  }
+  $('discord-connect').onclick = async () => {
+    const url = A.clean($('discord-url').value);
+    if (!url) return;
+    if (!A.discordWebhook(url)) { note('Discord: that isn’t a webhook URL. In Discord, use Copy Webhook URL.', 'bad'); return; }
+    const a = await api('/discord/connect', { url, live: true, featured: true, chat: false });
+    $('discord-url').value = '';
+    if (!a.ok) note('Discord: ' + (a.why || 'could not connect'), 'bad');
+  };
+  document.querySelectorAll('[data-discord]').forEach((box) => {
+    box.onchange = () => api('/discord/options', { [box.dataset.discord]: box.checked });
+  });
+  $('discord-test').onclick = async () => {
+    const a = await api('/discord/test', {});
+    note(a.ok ? 'Discord: test post sent. Check the channel.' : 'Discord: ' + (a.why || 'the test post failed'), a.ok ? '' : 'bad');
+  };
+  $('discord-disconnect').onclick = async () => { if (await ask({ title: 'Disconnect Discord?', text: 'CrossChat then deletes the webhook URL from this PC and posts nothing more. To stop the webhook everywhere, delete it in Discord too.', ok: 'Disconnect' })) api('/discord/disconnect', {}); };
+
+  // The companion away from home: Tailscale on this PC and the phone, then the pairing QR code uses this PC's Tailscale address.
+  function drawTailscale() {
+    $('tailscale-switch').checked = companion.tailscale === true;
+    $('tailscale-hint').textContent = !companion.tailscale
+      ? 'For the companion away from home, install Tailscale (tailscale.com, free for personal use) on this PC and the phone, sign in to the same account on both, and switch this on.'
+      : companion.why ? companion.why
+      : companion.address ? 'Tailscale is on (this PC is ' + companion.address + '). Pair the phone (again) with Tailscale on there too: the code then works at home and away.'
+      : 'Looking for Tailscale on this PC…';
+  }
+  $('tailscale-switch').onchange = async () => {
+    const a = await api('/companion/tailscale', { on: $('tailscale-switch').checked });
+    if (!a.ok) { note('Tailscale: ' + (a.why || 'could not change it'), 'bad'); drawTailscale(); }
+  };
+
+  // The update notice (off unless switched on): a line with a link to the newer release's page on GitHub.
+  const hiddenUpdate = () => { try { return localStorage.getItem('update-hidden') || ''; } catch (e) { return ''; } };
+  function drawUpdate() {
+    $('update-check').checked = update.check === true;
+    const link = A.releaseLink(update.url);
+    $('update').hidden = ctx.remote || !update.check || !link || !update.version || hiddenUpdate() === update.version;
+    if ($('update').hidden) return;
+    $('update').querySelector('span').textContent = 'CrossChat ' + update.version + ' is out (this is ' + (ctx.version || 'older') + ').';
+    $('update-link').href = link;
+  }
+  $('update-check').onchange = async () => {
+    const a = await api('/updates', { check: $('update-check').checked });
+    if (!a.ok) { note('Update notice: ' + (a.why || 'could not change it'), 'bad'); drawUpdate(); }
+  };
+  $('update-hide').onclick = () => { try { localStorage.setItem('update-hidden', update.version || ''); } catch (e) { /* storage blocked: hidden until reload */ } $('update').hidden = true; };
+
   // How each chat connection is doing: how long it has been up, when the last message came, how often it reconnected.
   function drawHealth() {
     const ul = $('health'); ul.textContent = '';
@@ -1265,8 +1335,10 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
   $('history-open').onclick = () => { $('settings').close(); openHistory(); };
 
   function drawSettings() {
-    showTheme(); showDing(); drawTwitch(); drawKick(); drawRumble(); drawDevices(); drawHealth(); drawTts(); drawFilters();
+    showTheme(); showDing(); drawTwitch(); drawKick(); drawRumble(); drawDiscord(); drawDevices(); drawTailscale(); drawHealth(); drawTts(); drawFilters();
+    drawUpdate();
     $('devices-section').hidden = ctx.remote;
+    $('update-row').hidden = ctx.remote;
     $('filters-section').hidden = ctx.remote;
     $('history-section').hidden = ctx.remote;
     $('studio-row').hidden = ctx.remote;
@@ -1326,6 +1398,9 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
       case 'executor': ctx.executor = !!m.present; ctx.executorKnown = true; drawNotice(); drawPlatforms(); refreshActs(); break;
       case 'twitch_auth': twitchAuth = m; drawTwitch(); drawNotice(); refreshActs(); break;
       case 'rumble_auth': rumbleAuth = m; drawRumble(); break;
+      case 'discord_auth': discordAuth = m; drawDiscord(); break;
+      case 'companion': companion = m; drawTailscale(); break;
+      case 'update': update = m; drawUpdate(); break;
       case 'kick_auth':
         kickAuth = m;
         if (m.state === 'pending' && kickWanted && !ctx.remote) openKick(m.url);
@@ -1416,6 +1491,11 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     if (path === '/kick/disconnect') { handle({ type: 'kick_auth', state: 'off' }); return ok(); }
     if (path === '/rumble/connect') { handle({ type: 'rumble_auth', state: 'on' }); return ok(); }
     if (path === '/rumble/disconnect') { handle({ type: 'rumble_auth', state: 'off' }); return ok(); }
+    if (path === '/discord/connect') { handle({ type: 'discord_auth', state: 'on', name: 'stream-chat', live: true, featured: true, chat: false }); return ok(); }
+    if (path === '/discord/options') { handle(Object.assign({}, discordAuth, body, { type: 'discord_auth' })); return ok(); }
+    if (path === '/discord/disconnect') { handle({ type: 'discord_auth', state: 'off' }); return ok(); }
+    if (path === '/companion/tailscale') { handle({ type: 'companion', tailscale: !!body.on, address: body.on ? '100.101.102.103' : '', listening: false, why: '' }); return ok(); }
+    if (path === '/updates') { handle({ type: 'update', check: !!body.check, version: '', url: '' }); return ok(); }
     if (path === '/tts') { setTimeout(() => handle({ type: 'tts', settings: body.settings }), 50); return ok(); }
     if (path === '/filters') { setTimeout(() => handle({ type: 'filters', settings: body.settings }), 50); return ok(); }
     if (path === '/tts/skip') { handle({ type: 'say_stop' }); return ok(); }

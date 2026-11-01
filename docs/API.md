@@ -183,6 +183,12 @@ These answer only the hub's own pages on this PC:
 
 `POST /rumble/connect` (`{"url"}`) and `/rumble/disconnect` set or remove the Rumble Live Stream API URL, this PC only.
 
+Also this PC only:
+
+- `POST /discord/connect` (`{"url", "live", "featured", "chat"}`) checks a Discord webhook with Discord and keeps it encrypted; `/discord/options` (any of `live`, `featured`, `chat` as booleans) changes what is posted; `/discord/test` posts a test line; `/discord/disconnect` forgets the webhook. The `discord_auth` event says `state` (`on`, `off`, `error`), `why`, the webhook's `name` and the three choices, never the URL.
+- `POST /companion/tailscale` (`{"on": true|false}`) switches the companion on the PC's Tailscale address and saves `remote.tailscale` in `config.json`. The `companion` event (to the window on this PC) says `tailscale` (the switch), `address` (the Tailscale address found, or `""`), `listening` and `why`.
+- `POST /updates` (`{"check": true|false}`) switches the update notice and saves `updates.check`. The `update` event (to the window on this PC) says `check`, and the newer `version` with its release page `url` when there is one (both `""` otherwise).
+
 `GET /tiktok/feed` and `GET /facebook/feed` are how the extension passes on your TikTok LIVE chat and Facebook Live comments. It accepts lines only for your own TikTok name, and only from the extension or a program on this PC.
 
 `GET /show` opens the chat window. `GET /x/go` goes live on X (`?mode=private` or `?mode=dry` for a test). Both refuse other websites.

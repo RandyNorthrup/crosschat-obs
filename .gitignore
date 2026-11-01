@@ -5,6 +5,9 @@
 /devices.json
 /twitch.bin
 /kick.bin
+/rumble.bin
+/discord.bin
+/update-check.json
 /filters.json
 /tts.json
 /*-demo.json

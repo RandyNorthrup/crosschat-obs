@@ -49,6 +49,11 @@
 - Pair with a QR code (phone) or a link and a 6-digit code (another PC's browser). The full chat app then runs on any phone, tablet or PC on your home network, with no install and no logins on that device. A second PC can give it its own app window.
 - Read, reply, use quick replies, moderate, star, put messages on stream, and send test alerts.
 - Only paired devices get in, and you can remove one at any time. See **[docs/COMPANION.md](docs/COMPANION.md)**.
+- **Away from home too**, with [Tailscale](#the-companion-away-from-home-tailscale): one switch in Settings, pairing still required.
+
+**Discord**
+- Post to a channel of your Discord server while you're live: a going-live notice with your channel links, the messages you show on stream, or all chat. You pick.
+- Through a webhook you make in Discord: no bot, no sign-in. Chat can't ping anyone there, and hidden messages never go.
 
 **Four on-stream widgets** (OBS Browser Sources)
 - **Chat feed**: the merged chat, or only the platforms you choose.
@@ -68,7 +73,7 @@
 **Follows OBS, stays local**
 - The OBS script starts CrossChat with OBS and stops it when OBS closes.
 - CrossChat reads its OBS WebSocket settings from OBS itself, and portable OBS works too.
-- No account, server, telemetry or update checks.
+- No account, server or telemetry. Update checks only if you switch them on: then CrossChat asks GitHub once a day and shows a link to the new release (it never downloads anything itself).
 
 ## See it in action
 
@@ -258,6 +263,27 @@ The extension first asks CrossChat which TikTok account is yours. On every other
 
 Moderate Facebook and Rumble chat on the platforms themselves.
 
+## Discord
+
+CrossChat can post to one channel of your Discord server while you're live. It only posts: nothing is read from Discord.
+
+1. In Discord: **Server Settings → Integrations → Webhooks → New Webhook**. Pick the channel, then **Copy Webhook URL**.
+2. In CrossChat: Settings → Connections → Discord, paste it and press **Connect Discord**. CrossChat checks it with Discord and keeps it encrypted on this PC; it's never shown again.
+3. Pick what goes there: **a going-live notice** (with links to your channels), **messages you show on stream**, and **all chat** (off at first). **Send a test post** checks the channel.
+
+Only what viewers already see on stream is posted, never messages your filters hid. Chat can't ping anyone there (`@everyone` included), and links in chat show as text that can't be clicked. Posts are spaced at least 2 seconds apart, chat lines are grouped into one post, and CrossChat waits whenever Discord asks it to. Nothing is posted during a test stream to this PC.
+
+## The companion away from home (Tailscale)
+
+The companion is for your home network. To use it from anywhere, for example on your phone while streaming IRL or from a friend's place, use [Tailscale](https://tailscale.com): a private, encrypted network between your own devices, free for personal use.
+
+1. Install Tailscale on the streaming PC and sign in.
+2. Install the Tailscale app on your phone and sign in to the **same account**. Leave it on.
+3. In CrossChat: Settings → Paired devices → switch on **Away from home too, with Tailscale**. It shows your PC's Tailscale address, or says what's missing.
+4. Press **Pair a device** and scan the QR code. With Tailscale on, the code uses the PC's Tailscale address, so it works at home and away. A phone you paired before needs pairing once more.
+
+Pairing is still required, and the companion listens only on the address Windows has on Tailscale's own adapter. When Tailscale stops, the companion stops listening there; it comes back with Tailscale.
+
 ## Settings
 
 Your settings are in `%LOCALAPPDATA%\CrossChat\config.json` (start from [`config.example.json`](config.example.json)). Restart OBS after changing them.
@@ -278,7 +304,9 @@ Your settings are in `%LOCALAPPDATA%\CrossChat\config.json` (start from [`config
 | `overlay.theme` | `"classic"` | The theme sources use without `?theme=` (the Theme Studio's **Set as default** overrides it). |
 | `obs.host`, `obs.port`, `obs.password` | from OBS | Only if OBS's WebSocket isn't on this PC or you want to override what OBS has saved. |
 | `remote.enabled`, `remote.port` | `true`, `4467` | The companion for paired devices. It only starts listening once you pair a device, and never on a network Windows calls Public. |
-| `remote.bind` | `"auto"` | Where the companion listens. `"auto"` is your PC's home-network address. Set a Tailscale IP to use it over Tailscale. |
+| `remote.tailscale` | `false` | Also listen on your PC's Tailscale address, for the companion away from home (see [above](#the-companion-away-from-home-tailscale)). The switch in Settings → Paired devices sets it. |
+| `remote.bind` | `"auto"` | Where the companion listens on the home network. `"auto"` is your PC's home-network address. |
+| `updates.check` | `false` | `true`: ask GitHub once a day whether a newer CrossChat is out, and show a link to it. Nothing about you is sent. The switch in Settings → About sets it. |
 | `twitch_client_id` | CrossChat's | Use your own Twitch app instead (a Public client from dev.twitch.tv). |
 | `kick_client_id`, `kick_client_secret` | CrossChat's | Use your own Kick app instead (redirect URL `http://localhost:4466/kick/callback`). |
 | `emotes` | all on | `{"bttv": true, "ffz": true, "7tv": true}`: third-party emotes in the chat and widgets. |
@@ -345,7 +373,7 @@ CrossChat has no server and no account. Everything runs on your PC; it talks onl
 - **Twitch and Kick replies and moderation** use their official APIs once you connect them in Settings.
   - The tokens are encrypted for your Windows account (DPAPI). Disconnecting deletes them and revokes them at Twitch or Kick.
 - **The extension reads no logins.** It has no Chrome permissions; it only types your YouTube and X replies into those sites' own chat boxes.
-- **The companion port (4467)** only opens after you pair a device, and only on a network Windows calls Private.
+- **The companion port (4467)** only opens after you pair a device, and only on a network Windows calls Private, or on your own Tailscale address if you switch that on.
   - It answers paired devices only: an HttpOnly cookie per device, of which only a hash is stored.
   - Pairing codes are 6 digits, last 5 minutes and allow 5 tries.
   - Use it on your home network only.
@@ -379,7 +407,7 @@ More detail, and how to report a problem privately: [SECURITY.md](SECURITY.md).
 - **YouTube** chat is read the same way YouTube's own chat pop-out reads it.
 - **YouTube moderation** clicks through YouTube's own chat menu in the CrossChat window, so the signed-in account must own the channel or moderate it. It hasn't been checked against a live YouTube stream yet.
 - **Twitch moderation and replies** use Twitch's documented API. Sign-in and token handling were verified against Twitch. The individual ban, delete and post calls are covered by tests, not by real moderation on a live channel.
-- **The companion** uses plain `http` on your home network, like a router's own page. Don't forward its port. For away-from-home use, see Tailscale in [docs/COMPANION.md](docs/COMPANION.md).
+- **The companion** uses plain `http` on your home network, like a router's own page. Don't forward its port. For away-from-home use, switch on [Tailscale](#the-companion-away-from-home-tailscale).
 - **Twitch's simulcasting guidelines** have restricted showing other platforms' chat on a Twitch stream. Check the current rules. `"overlay": {"platforms": ["twitch"]}` (or `?platforms=twitch` on one source) shows Twitch chat only.
 
 ## Uninstall
@@ -412,7 +440,7 @@ CrossChat is applying for free code signing from [SignPath Foundation](https://s
 - **Approvers:** [Randy Northrup](https://github.com/RandyNorthrup)
 - Every release is built by GitHub Actions from this repository's source. Nobody signs anything built elsewhere.
 
-**Privacy policy:** CrossChat will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. It talks only to the chat platforms you set up and, unless you turn them off in the installer or `config.json`, to 7TV, BetterTTV and FrankerFaceZ for emote pictures. The full list of connections and what each one sends is in [SECURITY.md](SECURITY.md#what-leaves-your-pc).
+**Privacy policy:** CrossChat will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. It talks only to the chat platforms you set up and, unless you turn them off in the installer or `config.json`, to 7TV, BetterTTV and FrankerFaceZ for emote pictures. Only if you switch them on: Discord, through the webhook you connect, and GitHub, once a day, for the update notice. The full list of connections and what each one sends is in [SECURITY.md](SECURITY.md#what-leaves-your-pc).
 
 ## Credits
 
