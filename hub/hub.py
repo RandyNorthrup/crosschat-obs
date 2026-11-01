@@ -2540,6 +2540,15 @@ def from_elsewhere(headers, home=None):
             or headers.get("origin", "") not in ("", home or "http://127.0.0.1:%d" % PORT))
 
 
+def obs_retry(method, headers, path):
+    """The streamer clicking OBS's "Click here to retry" in the CrossChat dock. OBS loads a dock once, as it starts; when
+    the hub wasn't answering yet, the dock shows OBS's own error page, which has an origin of its own (a data: page), so
+    the click comes as another site's. Only a click (Sec-Fetch-User) that opens the chat window itself, as a whole page,
+    inside OBS's own browser (its User-Agent, which no website can set, says OBS/) counts."""
+    return (method == "GET" and path == "/" and headers.get("sec-fetch-mode") == "navigate" and headers.get("sec-fetch-dest") == "document"
+            and headers.get("sec-fetch-user") == "?1" and " OBS/" in headers.get("user-agent", ""))
+
+
 def refused(method, headers, path):
     """Why a request is turned away, or '' when it is fine.
 
@@ -2565,7 +2574,7 @@ def refused(method, headers, path):
     # Pages and files may be loaded from anywhere (a browser doesn't let another site read them); the live data only by
     # your overlay pages.
     readable = method == "GET" and (path.startswith(("/overlay/", "/web/", "/custom/")) or (
-        from_overlay_page(headers) and (path in READ_ONLY or path.startswith("/themes/"))))
+        from_overlay_page(headers) and (path in READ_ONLY or path.startswith("/themes/")))) or obs_retry(method, headers, path)
     if outsider and not readable and not (method == "GET" and origin.startswith("chrome-extension://")):
         return "not from another website"
     if method == "POST" and (outsider or headers.get("content-type", "").split(";")[0].strip() != "application/json"):

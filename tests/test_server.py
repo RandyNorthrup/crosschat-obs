@@ -93,6 +93,28 @@ def test_only_this_pc_and_its_own_pages_may_act(home):
     run(serving(test))
 
 
+def test_obs_retry_in_the_dock_opens_the_chat_window(home):
+    """OBS's "Click here to retry" in a dock that opened before the hub answered: OBS's error page is another origin
+    (a data: page), so the click arrives as another site's. These are the headers OBS 33.0.1's dock sent for it."""
+    home()
+    obs = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.7871.252 OBS/33.0.1 Safari/537.36"
+    chrome = obs.replace(" OBS/33.0.1", "")
+    retry = {"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document", "Sec-Fetch-User": "?1", "User-Agent": obs}
+
+    async def test():
+        status, body = await http("GET", "/", retry)
+        assert status == 200 and b"<html" in body.lower()
+        assert (await http("GET", "/", {**retry, "User-Agent": chrome}))[0] == 403          # another site, in a browser
+        assert (await http("GET", "/", {**retry, "Sec-Fetch-User": None}))[0] == 403        # not a click: a page sending itself
+        assert (await http("GET", "/", {**retry, "Sec-Fetch-Dest": "iframe", "Sec-Fetch-Mode": "navigate"}))[0] == 403   # in a frame
+        assert (await http("GET", "/", {**retry, "Sec-Fetch-Mode": "cors"}))[0] == 403      # read by a script
+        assert (await http("GET", "/show", retry))[0] == 403                                # only the window itself: nothing that acts
+        assert (await http("GET", "/x/go?mode=dry", retry))[0] == 403
+        assert (await http("GET", "/themes", retry))[0] == 403
+        assert (await http("GET", "/", {**retry, "Host": "evil.example"}))[0] == 403         # still only under this PC's address
+    run(serving(test))
+
+
 def test_theme_api(home):
     folder = home()
 
