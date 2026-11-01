@@ -117,6 +117,19 @@ test('a window the desktop sizes again just after it opened is placed again, a f
   assert.equal(W.PLACE_TRIES, 3);
 });
 
+test('two placings of one window at once happen one after the other, and the later one is where it ends up', async () => {
+  // as on a Mac: Open chat pressed while the chat window's first placing was still being checked
+  const b = everyday();
+  const tick = () => new Promise((r) => setTimeout(r, 1));
+  const MOVED = [100, 140, 460, 600];
+  const first = W.job({ action: 'place', role: 'chat', box: BOX }, { id: 50, windowId: 5 }, b, tick);
+  const second = W.job({ action: 'place', role: 'chat', box: MOVED }, { id: 50, windowId: 5 }, b, tick);
+  assert.deepEqual(await Promise.all([first, second]), [{ ok: true, window: 5 }, { ok: true, window: 5 }]);
+  assert.deepEqual(b.did, [['update', 5, PLACED], ['update', 5, { left: 100, top: 140, width: 460, height: 600 }]]);
+  const now = b.wins.find((w) => w.id === 5);
+  assert.deepEqual([now.left, now.top, now.width, now.height], MOVED);
+});
+
 test('closing the chat closes every chat window CrossChat opened, and only those, after answering', async () => {
   const b = browser([
     { id: 2, type: 'normal', tabs: [tab(20, CHAT)] },

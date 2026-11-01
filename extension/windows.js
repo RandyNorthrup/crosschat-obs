@@ -99,7 +99,20 @@
   // can also keep a window maximized one way, which the browser doesn't see (KWin through XWayland, with a window that
   // opened as tall as the screen, keeps its top and height): before the last try the window is maximized and made
   // normal again, which ends that.
-  async function put(windows, win, where, sleep) {
+  // Placings of one window happen one at a time, in the order asked, so the latest one asked for is where it ends up
+  // (two at once each saw the other's size as not taken, and placed the window back).
+  const placing = new Map();                   // window id -> the placing under way
+  function put(windows, win, where, sleep) {
+    const next = (placing.get(win.id) || Promise.resolve()).then(() => putNow(windows, win.id, where, sleep));
+    const settled = next.catch(() => null);
+    placing.set(win.id, settled);
+    settled.then(() => { if (placing.get(win.id) === settled) placing.delete(win.id); });
+    return next;
+  }
+
+  async function putNow(windows, id, where, sleep) {
+    const win = await one(windows, id);
+    if (!win) return;
     if (win.state !== 'normal') await windows.update(win.id, { state: 'normal' });   // (a minimized or maximized one takes no bounds)
     for (let attempt = 1; ; attempt++) {
       await windows.update(win.id, where);
