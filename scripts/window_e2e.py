@@ -489,14 +489,22 @@ async def scenario(args, browser, folder):
                 return kwin_desktop(os.environ.get("CROSSCHAT_E2E_KWIN", ""))
             return x11_desktop()
 
-        if MAC:                               # Launch Services' first launch of the stand-in browser app: over 120 s once on
-            started = time.time()             # a fresh GitHub Mac, a moment after that. Done here, before anything is timed
-            try:                              # (with --version the browser prints its version and ends: no window)
-                await asyncio.to_thread(subprocess.run, ["open", "-W", "-n", "-a", app, "--args", "--version"], timeout=300,
-                                        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                info("the stand-in browser app's first launch through Launch Services took %.1f s" % (time.time() - started))
-            except subprocess.TimeoutExpired:
-                check(False, "the stand-in browser app starts through Launch Services", "not within 300 s")
+        if MAC:
+            # Launch Services' first launches of the stand-in browser app on a fresh GitHub Mac took about 2 minutes each
+            # (118 s, then over 120 s, then under 4 s). Done here until one is quick, before anything is timed. With
+            # --version the browser prints its version and ends: no window.
+            for _ in range(4):
+                started = time.time()
+                try:
+                    await asyncio.to_thread(subprocess.run, ["open", "-W", "-n", "-a", app, "--args", "--version"], timeout=300,
+                                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                except subprocess.TimeoutExpired:
+                    check(False, "the stand-in browser app starts through Launch Services", "not within 300 s")
+                    break
+                took = time.time() - started
+                info("the stand-in browser app started through Launch Services in %.1f s" % took)
+                if took < 5:
+                    break
         await hub.start(folder, app)
 
         async def hub_up():
