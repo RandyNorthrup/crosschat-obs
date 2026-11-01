@@ -49,7 +49,7 @@ jobs:
           python -m pytest -q
           node --test "tests/js/*.test.mjs"
 
-  # The Linux download (beta) is tested on Linux, read-only too, with a desktop keyring of its own.
+  # The Linux download is tested on Linux, read-only too, with a desktop keyring of its own.
   test-linux:
     runs-on: ubuntu-latest
     steps:

@@ -23,6 +23,7 @@ a streamer. --keep leaves OBS and the hub running at the end (for screenshots). 
 and requests and websockets (hub/requirements.txt); on Linux without a desktop, Xvfb.
 """
 import argparse
+import base64
 import glob
 import json
 import os
@@ -32,6 +33,7 @@ import re
 import shutil
 import signal
 import socket
+import struct
 import subprocess
 import sys
 import tempfile
@@ -63,14 +65,94 @@ def write(path, text):
         f.write(text)
 
 
+# OBS's window layout is Qt's QMainWindow::saveState(), kept in OBS's settings as [BasicWindow] DockState: Qt's marker
+# and layout version, then the dock areas (left 0, right 1, bottom 3), each a row (1) or column (2) of docks by object
+# name, with whether each is shown and docked. Without one, OBS's first start sets its window out with Docks → Reset UI,
+# which leaves every Custom Browser Dock floating and hidden: on Windows and macOS the dock's page still loads out of
+# sight, on Linux mostly not at all.
+DOCK = "CrossChat_extraBrowser"              # how OBS names the Custom Browser Dock titled CrossChat
+SHOWN, FLOATING = 1, 2
+
+
+def dock_state(name):
+    """A layout with OBS's own docks where its first start puts them (Scenes and Sources on the left, Audio Mixer, Scene
+    Transitions and Controls below) and the dock `name` shown in the right-hand area, as a streamer has it once the
+    Custom Browser Dock is added and docked."""
+    def docks(direction, *items):            # (object name, length) side by side (1) or one above the other (2)
+        out, at = b"\xfc" + bytes([direction]) + struct.pack(">i", len(items)), 0
+        for dock, length in items:
+            text = dock.encode("utf-16-be")
+            out += b"\xfb" + struct.pack(">I", len(text)) + text + bytes([SHOWN]) + struct.pack(">4i", at, length, 0, 0)
+            at += length + 4
+        return out
+    areas = ((0, 280, 900, docks(2, ("scenesDock", 448), ("sourcesDock", 448))), (1, 460, 900, docks(2, (name, 900))),
+             (3, 540, 216, docks(1, ("mixerDock", 300), ("transitionsDock", 130), ("controlsDock", 200))))
+    layout = struct.pack(">2i", 0xff, 0) + b"\xfd" + struct.pack(">i", len(areas))
+    for area, width, height, row in areas:
+        layout += struct.pack(">3i", area, width, height) + row
+    layout += struct.pack(">2i", 540, 680) + struct.pack(">4i", 1, 2, 1, 2)       # the middle's size; the corners' areas
+    return base64.b64encode(layout).decode()
+
+
+def layout_docks(state):
+    """{dock name: its flags (SHOWN, FLOATING)} in OBS's saved window layout `state` (DockState, base64)."""
+    blob, found, at = base64.b64decode(state), {}, [8]
+
+    def take(form):
+        values = struct.unpack_from(">" + form, blob, at[0])
+        at[0] += struct.calcsize(">" + form)
+        return values
+
+    def row():
+        if take("B")[0] == 0xfa:             # docks as tabs: which one is in front
+            take("i")
+        for _ in range(take("Bi")[1]):
+            if take("B")[0] == 0xfc:         # a row within the row
+                take("4i")
+                row()
+                continue
+            size = take("I")[0]
+            name = blob[at[0]:at[0] + size].decode("utf-16-be") if size != 0xffffffff else ""
+            at[0] += size if size != 0xffffffff else 0
+            found[name] = take("B")[0]
+            take("4i")                       # where it is (floating: its window; docked: place, length, smallest size)
+
+    if take("B")[0] == 0xfd:
+        for _ in range(take("i")[0]):
+            take("3i")
+            row()
+    return found
+
+
+def saved_dock(config, since, name=DOCK):
+    """The flags of dock `name` in the window layout OBS saved when it closed (OBS 31 and newer keep it in user.ini,
+    older ones in global.ini; only a file OBS wrote after `since` counts), or a reason it can't be told."""
+    for ini in ("user.ini", "global.ini"):
+        try:
+            if os.path.getmtime(os.path.join(config, ini)) <= since:
+                continue
+            with open(os.path.join(config, ini), encoding="utf-8-sig") as f:
+                state = re.search(r"^DockState=(.+)$", f.read(), re.M)
+        except OSError:
+            continue
+        if state:
+            try:
+                docks = layout_docks(state.group(1).strip())
+            except (ValueError, struct.error, UnicodeDecodeError) as error:
+                return "OBS's saved layout couldn't be read (%s)" % error
+            return docks.get(name, "not in OBS's saved layout: %s" % sorted(docks))
+    return "OBS saved no window layout"
+
+
 def obs_settings(config, version, backdrop=None, script=SCRIPT):
     """A fresh OBS profile and scene collection: a background (colour, or the picture `backdrop`), the four CrossChat
-    widgets, the script (`script`)."""
+    widgets, the script (`script`), and the chat window docked in OBS."""
     major, minor, patch = (int(p) for p in version.split(".")[:3])
     ini = ("[General]\nFirstRun=true\nLastVersion=%d\nEnableAutoUpdates=false\n\n[Basic]\nProfile=CrossChat\nProfileDir=CrossChat\n"
            "SceneCollection=CrossChat\nSceneCollectionFile=CrossChat\n" % ((major << 24) | (minor << 16) | patch))
     # the CrossChat window docked inside OBS (Docks → Custom Browser Docks), as the README tells streamers to set it up
-    ini += "\n[BasicWindow]\nExtraBrowserDocks=%s\n" % json.dumps([{"title": "CrossChat", "url": BASE + "/", "uuid": str(uuid.uuid4())}])
+    ini += "\n[BasicWindow]\nExtraBrowserDocks=%s\nDockState=%s\n" % (
+        json.dumps([{"title": "CrossChat", "url": BASE + "/", "uuid": str(uuid.uuid4())}]), dock_state(DOCK))
     write(os.path.join(config, "global.ini"), ini)
     write(os.path.join(config, "user.ini"), ini)
     write(os.path.join(config, "plugin_config", "obs-websocket", "config.json"), json.dumps(
@@ -173,11 +255,41 @@ def in_page(page, expression):
 
 
 def dock_page():
-    """The CrossChat window docked in OBS (Docks → Custom Browser Docks), once it shows the chat."""
+    """The CrossChat window docked in OBS (Docks → Custom Browser Docks), once it shows the chat. (A page can load in a
+    dock OBS keeps hidden, and on Linux still say it's visible: whether the dock is on screen is told by OBS's own
+    saved window layout, see saved_dock.)"""
     for page in obs_pages():
         if page.get("type") == "page" and page.get("url", "").rstrip("/") == BASE and in_page(page, "document.title") == "CrossChat · chat":
             return page
     return None
+
+
+def click(page, element):
+    """A mouse click, as a person makes it (the page sees a real click), in the middle of the `element` (JavaScript that
+    finds it) of one of OBS's browser pages. False when there's no such element."""
+    middle = in_page(page, "(() => { const e = %s; if (!e) return null; e.scrollIntoView({block: 'center'});"
+                           " const r = e.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()" % element)
+    if not middle:
+        return False
+    try:
+        with connect(page["webSocketDebuggerUrl"], open_timeout=5, max_size=None) as ws:
+            for n, kind in enumerate(("mousePressed", "mouseReleased"), 1):
+                ws.send(json.dumps({"id": n, "method": "Input.dispatchMouseEvent", "params": {
+                    "type": kind, "x": middle[0], "y": middle[1], "button": "left", "clickCount": 1}}))
+                while json.loads(ws.recv(timeout=10)).get("id") != n:
+                    pass
+    except Exception:                        # (the page went away)
+        return False
+    return True
+
+
+def dock_retry():
+    """OBS loads a dock once, as it starts. When CrossChat wasn't answering yet, the dock shows OBS's "Couldn't load
+    that page!" with a "Click here to retry" link, and the README tells streamers to press it: press it. True if it was."""
+    for page in obs_pages():
+        if page.get("url", "").startswith("data:") and in_page(page, "(document.getElementById('retry-link') || {}).href") == BASE + "/":
+            return click(page, "document.getElementById('retry-link')")
+    return False
 
 
 def nobody_listens(port):
@@ -448,6 +560,7 @@ def main():
         else:
             windows_close(running)
 
+    started_at = time.time()
     obs = start_obs()
     try:
         about = wait_for(hub_up, 60, 0.5)
@@ -468,11 +581,12 @@ def main():
             shown = wait_for(lambda: {p["url"].split("/overlay/")[1].split("?")[0] for p in obs_pages() if "/overlay/" in p.get("url", "")}
                              >= {"chat", "featured", "viewers", "alerts"}, 30, 0.5)
             check(bool(shown), "OBS's browser sources show the four widgets", [p.get("url") for p in obs_pages()])
-            if linux:                        # (seen with OBS 33.0.1 from Flathub: its window is there, unmapped, and no page loads)
-                print("SKIP  the chat window docked in OBS: on Linux the dock this test writes into OBS's settings stays hidden")
-            else:
-                dock = wait_for(dock_page, 30, 0.5)
-                check(bool(dock), "the chat window is docked in OBS (Custom Browser Dock)", [p.get("url") for p in obs_pages()])
+            dock = wait_for(dock_page, 20, 0.5)
+            if not dock and dock_retry():
+                print("NOTE  the dock opened before CrossChat answered (OBS: \"Couldn't load that page!\"); pressed its "
+                      "\"Click here to retry\", as the README says")
+                dock = wait_for(dock_page, 20, 0.5)
+            check(bool(dock), "the chat window is docked in OBS (Custom Browser Dock)", [p.get("url")[:80] for p in obs_pages()])
         else:
             print("SKIP  OBS's browser sources and the docked chat window: this OBS has no Browser Source")
         themes = requests.get(BASE + "/themes", timeout=5).json()
@@ -516,6 +630,10 @@ def main():
         # (the hub mustn't hold on to anything of OBS's: a restarted OBS needs its WebSocket port back at once)
         check(bool(wait_for(lambda: nobody_listens(WS_PORT), 3, 0.25)), "OBS's WebSocket port is free once OBS has closed")
         check(bool(wait_for(lambda: not hub_up(), 30, 0.5)), "hub leaves when OBS closes")
+        if browser:                                                  # Qt's own record of the dock, as OBS closed
+            kept = saved_dock(config, started_at)
+            check(kept == SHOWN, "OBS had the chat window docked and on screen (its saved window layout)",
+                  kept if isinstance(kept, str) else ("hidden" if not kept & SHOWN else "") + (" floating" if kept & FLOATING else ""))
         said = obs_log(config)
         time.sleep(3)                                                # OBS started again a moment later
         obs = start_obs()

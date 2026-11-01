@@ -1,5 +1,5 @@
 #!/bin/bash
-# CrossChat installer for macOS and Linux (beta). On a Mac, run Install.command (it starts this), or:
+# CrossChat installer for macOS and Linux. On a Mac, run Install.command (it starts this), or:
 # bash scripts/install.sh. On Linux, open a terminal in the unpacked folder and run: bash scripts/install.sh
 # Safe to run again: it updates CrossChat and keeps your settings and themes.
 #
@@ -21,7 +21,7 @@ if [ "$LINUX" = 1 ]; then
     APP="$DATA/CrossChat"
     SHORTCUTS="$DATA/applications"          # the desktop's app menu: crosschat-*.desktop
     FLATPAK_OBS="$HOME/.var/app/com.obsproject.Studio/config/obs-studio"
-    SYSTEM='Linux (beta)'
+    SYSTEM='Linux'
     MACHINE='computer'
 else
     APP="$HOME/Library/Application Support/CrossChat"
@@ -155,6 +155,15 @@ if [ "$LINUX" = 1 ]; then
         note 'which is not installed. Everything else works without it; CrossChat just keeps no sign-ins. To add it:'
         say '  Ubuntu, Debian: sudo apt install libsecret-tools    Fedora: sudo dnf install libsecret    Arch: sudo pacman -S libsecret'
     fi
+    step 'Read-aloud'
+    if command -v speech-dispatcher >/dev/null 2>&1; then
+        say "Chat is read aloud with this computer's own voices (speech-dispatcher)."
+    else
+        note "Reading chat aloud uses this computer's own voices, through speech-dispatcher, which is not installed."
+        note 'Everything else works without it. To add it:'
+        say '  Ubuntu, Debian: sudo apt install speech-dispatcher speech-dispatcher-espeak-ng'
+    fi
+    say 'Google Chrome offers those voices only when it is started with --enable-speech-dispatcher.'
 fi
 
 # ---- privacy ----------------------------------------------------------------------------------------------
@@ -335,8 +344,7 @@ if [ "$LINUX" = 1 ]; then
     say '       http://127.0.0.1:4466/overlay/alerts     800 x 300'
     say '  Restyle them with "CrossChat: Theme Studio" in your app menu.'
     say ''
-    say '  CrossChat on Linux is a beta: tell us what works and what doesn'"'"'t at'
-    say '  https://github.com/RandyNorthrup/crosschat-obs/issues'
+    say '  Tell us what works and what doesn'"'"'t on your Linux at https://github.com/RandyNorthrup/crosschat-obs/issues'
     if [ "$obs_running" = 1 ]; then
         note '  OBS is open: after adding the script, it starts by itself. Already added? Press "Start the hub again" in Tools > Scripts.'
     fi
