@@ -22,6 +22,48 @@ def test_kick_events_become_alerts():
     assert hub.kick_alert(r"App\Events\SubscriptionEvent", {"username": "s"})[1:] == ("s subscribed", "sub", "")
 
 
+class _Reply:
+    def __init__(self, body):
+        self.body = body
+
+    def json(self):
+        if isinstance(self.body, Exception):
+            raise self.body
+        return self.body
+
+
+def test_kick_feed_asks_kick_for_its_current_pusher_key(monkeypatch):
+    asked = []
+
+    def post(url, **kw):
+        asked.append((url, kw["json"]))
+        return _Reply({"data": {"mode": "websocket", "connections": [
+            {"provider": "pusher", "credentials": {"app_key": "0123456789abcdef0123", "cluster": "eu"}}]}})
+    monkeypatch.setattr(hub.requests, "post", post)
+    assert hub.kick_feed(42) == "wss://ws-eu.pusher.com/app/0123456789abcdef0123?protocol=7&client=js&version=8.4.0&flash=false"
+    url, body = asked[0]
+    assert url == "https://web.kick.com/api/v1/realtime/channels/42/chat/connection"
+    assert body["capabilities"] == {"accepted_providers": [{"provider": "pusher"}]}       # only the feed CrossChat reads
+    assert body["client"]["type"] == "web" and len(body["client"]["id"]) == 36            # a random id, nothing about you
+
+
+def test_kick_feed_keeps_the_last_known_key_when_kick_says_nothing_usable(monkeypatch):
+    known = "wss://ws-%s.pusher.com/app/%s?protocol=7&client=js&version=8.4.0&flash=false" % (hub.KICK_PUSHER[1], hub.KICK_PUSHER[0])
+    for body in ({"data": {"connections": [{"provider": "centrifugo", "credentials": {"url": "wss://elsewhere"}}]}},
+                 {"data": {"connections": [{"provider": "pusher", "credentials": {"app_key": "not a key!", "cluster": "us2"}}]}},
+                 {"data": {"connections": [{"provider": "pusher", "credentials": {"app_key": "0123456789abcdef0123",
+                                                                                  "cluster": "us2.evil.example/x"}}]}},
+                 {"message": "Not Found"}, ValueError("not json")):
+        monkeypatch.setattr(hub.requests, "post", lambda url, body=body, **kw: _Reply(body))
+        assert hub.kick_feed(42) == known
+
+    def offline(url, **kw):
+        raise hub.requests.ConnectionError("offline")
+    monkeypatch.setattr(hub.requests, "post", offline)
+    assert hub.kick_feed(42) == known
+    assert hub.kick_feed(0) == known                    # no channel number: nothing is asked
+
+
 def runs(text):
     return {"runs": [{"text": text}]}
 

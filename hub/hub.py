@@ -35,6 +35,7 @@ import sys
 import threading
 import time
 import urllib.parse
+import uuid
 
 import requests
 from websockets.asyncio.client import connect
@@ -613,21 +614,48 @@ def kick_alert(event, d):
     return name, "%s subscribed" % name, "sub", ""
 
 
+KICK_PUSHER = ("34bf7a0ff419a2a775b9", "us2")     # Kick's public chat app on Pusher: its key and cluster, as last seen
+
+
+def kick_feed(channel_id):
+    """The address of Kick's public chat feed. Kick changes its Pusher key now and then, and its own web chat asks for
+    the current one; CrossChat asks the same way (signed out, with a random client id), else uses the last one seen."""
+    key, cluster = KICK_PUSHER
+    if channel_id:
+        try:
+            reply = requests.post("https://web.kick.com/api/v1/realtime/channels/%d/chat/connection" % int(channel_id),
+                                  headers=UA, timeout=12, json={"client": {"id": str(uuid.uuid4()), "type": "web"},
+                                                                "capabilities": {"accepted_providers": [{"provider": "pusher"}]}})
+            for link in (reply.json().get("data") or {}).get("connections") or []:
+                given = link.get("credentials") or {}
+                if (link.get("provider") == "pusher" and re.fullmatch(r"[0-9a-f]{16,40}", str(given.get("app_key", "")))
+                        and re.fullmatch(r"[a-z0-9-]{2,20}", str(given.get("cluster", "")))):
+                    key, cluster = given["app_key"], given["cluster"]
+                    break
+        except (requests.RequestException, ValueError, AttributeError, TypeError):
+            pass
+    return "wss://ws-%s.pusher.com/app/%s?protocol=7&client=js&version=8.4.0&flash=false" % (cluster, key)
+
+
 async def kick(slug, room):
-    while not room:                               # the chat room number comes from the channel's public record
+    channel_id = 0
+    while True:                                   # the channel and chat room numbers come from the channel's public record
         try:
             found = await asyncio.to_thread(requests.get, "https://kick.com/api/v2/channels/" + slug, headers=UA, timeout=12)
-            room = (found.json().get("chatroom") or {}).get("id", 0) if found.status_code == 200 else 0
-        except (requests.RequestException, ValueError):
-            room = 0
-        if not room:
-            set_status("kick", "retry")
-            await asyncio.sleep(60)
-    url = CFG.get("kick_feed", "wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0&flash=false")
+            record = found.json() if found.status_code == 200 else {}
+            room = room or int((record.get("chatroom") or {}).get("id", 0) or 0)
+            channel_id = int(record.get("id") or 0)
+        except (requests.RequestException, ValueError, AttributeError, TypeError):
+            pass
+        if room:
+            break
+        set_status("kick", "retry")
+        await asyncio.sleep(60)
     wait = 2
     while True:
         try:
             set_status("kick", "waiting")
+            url = CFG.get("kick_feed") or await asyncio.to_thread(kick_feed, channel_id)    # asked again on every reconnect
             async with connect(url, open_timeout=20, ping_interval=None) as ws:
                 await ws.send(json.dumps({"event": "pusher:subscribe", "data": {"auth": "", "channel": "chatrooms.%d.v2" % room}}))
                 while True:
@@ -660,8 +688,8 @@ async def kick(slug, room):
                             publish("kick", name, "", kind="event", alert=alert, amount=amount, system=system)
                     except (ValueError, KeyError, IndexError, TypeError, AttributeError) as error:
                         skipped("kick", error)
-        except Exception as error:        # any drop: wait and reconnect
-            log.info("kick chat dropped (%s); connecting again", type(error).__name__)
+        except Exception as error:        # any drop: wait and reconnect (Kick's reason, such as a key it no longer uses, logged)
+            log.info("kick chat dropped (%s: %s); connecting again", type(error).__name__, str(error)[:160])
         set_status("kick", "retry")
         await asyncio.sleep(wait)
         wait = min(wait * 2, 60)
