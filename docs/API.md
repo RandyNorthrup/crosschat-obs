@@ -64,8 +64,8 @@ Your own overlay pages get the chat as viewers see it: `msg`, `delete`, `purge`,
 | `question` | `true` when the line looks like a question |
 | `first` | `"ever"` for the viewer's first message in the channel (Twitch says so), `"stream"` for their first this stream |
 | `hidden` | Why your filters hide it: `bot`, `user`, `command` or `word`. Hidden messages still arrive, so a page can show them to you; don't show them on stream |
-| `alert` | For `kind: "event"`: `sub`, `resub`, `gift`, `raid`, `cheer`, `superchat`, `member` or `other` |
-| `amount` | For alerts: months, number of gifts, viewers, bits or the Super Chat amount, as text (`"5 subs"`, `"$5.00"`) |
+| `alert` | For `kind: "event"`: `sub`, `resub`, `gift`, `raid`, `cheer`, `superchat`, `member`, `follow`, `share`, `like`, `join` or `other` |
+| `amount` | For alerts: months, number of gifts, viewers, bits or the Super Chat amount, as text (`"5 subs"`, `"$5.00"`); for a TikTok gift, its name and count (`"Rose ×5"`); for TikTok likes, how many (`"20"`) |
 | `system` | For alerts: the platform's own line, such as `nightowl_42 subscribed for 6 months!` |
 | `mid` | The platform's own message id, used for moderation |
 | `uid` | The platform's user id, when it gives one |
@@ -183,6 +183,6 @@ These answer only the hub's own pages on this PC:
 
 `POST /rumble/connect` (`{"url"}`) and `/rumble/disconnect` set or remove the Rumble Live Stream API URL, this PC only.
 
-`GET /tiktok/feed` and `GET /facebook/feed` are how the extension passes on your TikTok LIVE chat and Facebook Live comments. It accepts lines only for your own TikTok name, and only from the extension or a program on this PC.
+`GET /tiktok/feed` and `GET /facebook/feed` are how the extension passes on your TikTok LIVE chat (with its gifts, follows, shares, likes and joins) and Facebook Live comments. It accepts lines only for your own TikTok name, and only from the extension or a program on this PC.
 
 `GET /show` opens the chat window. `GET /x/go` goes live on X (`?mode=private` or `?mode=dry` for a test). Both refuse other websites.

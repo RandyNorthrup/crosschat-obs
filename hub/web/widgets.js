@@ -137,6 +137,7 @@
   function chatShows(m) {
     if (m.kind === 'note' || m.p === 'system') return false;
     if (m.kind === 'event' && !theme.chat.events) return false;
+    if (m.kind === 'event' && T.QUIET_ALERTS.includes(m.alert) && !theme.alerts.types[m.alert]) return false;   // likes, joins
     return T.shows(shown, m.p);
   }
 
@@ -404,6 +405,8 @@
     { alert: 'cheer', p: 'twitch', name: 'pixel_pirate', amount: '500 bits', text: "Let's go!" },
     { alert: 'gift', p: 'twitch', name: 'nightowl_42', amount: '5 subs' },
     { alert: 'follow', p: 'kick', name: 'quietstorm' },
+    { alert: 'gift', p: 'tiktok', name: 'sunny.daze', amount: 'Rose ×5' },
+    { alert: 'share', p: 'tiktok', name: 'lofi.leo' },
   ].map((a, i) => ({ type: 'msg', kind: 'event', id: 'demo-alert-' + i, t: Date.now(), text: '', ...a }));
 
   function emotesFor(text) {                       // Twitch's "id:from-to" list for the demo lines, counted in code points

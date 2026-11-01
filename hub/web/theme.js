@@ -8,7 +8,9 @@
 })(typeof self !== 'undefined' ? self : globalThis, function () {
   const SCHEMA = 1;
   const PLATFORMS = ['twitch', 'youtube', 'kick', 'x', 'tiktok', 'facebook', 'rumble'];
-  const ALERTS = ['sub', 'resub', 'gift', 'raid', 'cheer', 'member', 'superchat', 'follow', 'other'];
+  const ALERTS = ['sub', 'resub', 'gift', 'raid', 'cheer', 'member', 'superchat', 'follow', 'share', 'like', 'join', 'other'];
+  // Too many on a busy stream to pop up or fill the on-stream chat unless the theme turns them on.
+  const QUIET_ALERTS = ['like', 'join'];
   const SANS = '"Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif';
 
   // Every key a theme may have, with its default. A theme file only needs the keys it changes.
@@ -66,7 +68,8 @@
       sound: true,
       volume: 0.35,
       showText: true,
-      types: { sub: true, resub: true, gift: true, raid: true, cheer: true, member: true, superchat: true, follow: true, other: true },
+      types: { sub: true, resub: true, gift: true, raid: true, cheer: true, member: true, superchat: true, follow: true, share: true,
+               like: false, join: false, other: true },
       labels: {
         sub: '{name} just subscribed!',
         resub: '{name} resubscribed for {amount} months!',
@@ -76,6 +79,9 @@
         member: '{name} became a member!',
         superchat: '{name} sent a Super Chat: {amount}',
         follow: '{name} followed!',
+        share: '{name} shared the LIVE!',
+        like: '{name} liked the LIVE ×{amount}',
+        join: '{name} joined',
         other: '{text}',
       },
     },
@@ -362,7 +368,7 @@
   }
 
   return {
-    SCHEMA, PLATFORMS, ALERTS, DEFAULTS, RANGES, ENUMS, TEXTS,
+    SCHEMA, PLATFORMS, ALERTS, QUIET_ALERTS, DEFAULTS, RANGES, ENUMS, TEXTS,
     merge, problems, diff, validName, slug, color, platforms, wanted, shows, emotePieces, fill, fillParts,
     luminance, contrast, readable, ink, nameColor, lightSurface, cssVars, switches, apply, clone,
   };

@@ -247,6 +247,13 @@ TikTok has no public chat API. The tools that read TikTok chat anyway mostly sen
 2. Stay signed in to TikTok in Chrome or Edge, the browser with the CrossChat extension.
 3. When OBS starts streaming, CrossChat opens **your own TikTok LIVE page** in a small window under the chat window. Keep it open while you stream.
 4. The extension passes on the chat lines shown there and types your replies into TikTok's own chat box, as you. Replies are up to 150 characters.
+5. Gifts, follows, shares and likes shown on that page become CrossChat alerts:
+   - **Gifts** show the gift's name and how many, such as "Rose ×5". A combo counts as one alert with its final count. TikTok's page doesn't show what a gift costs, so CrossChat doesn't make up a money value.
+   - **Follows** show once a stream per viewer, and **shares** at most once a minute per viewer.
+   - **Likes** are added up per viewer and shown once they stop liking. When many viewers' likes come in at once, they show as one line, such as "12 viewers liked the LIVE ×340". Likes stay off the on-stream alerts and read-aloud unless you turn them on in Theme Studio.
+   - **Joins** are off. To see who joins, turn on Settings → Filters → **Show who joins your TikTok LIVE**.
+
+   Only rows TikTok itself marks as gifts, follows and the like count. A viewer who types "followed the host" or "×99" in chat can't fake an alert.
 
 The extension first asks CrossChat which TikTok account is yours. On every other TikTok page, someone else's LIVE included, it reads nothing. Moderate TikTok chat in TikTok itself.
 

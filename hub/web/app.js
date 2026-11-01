@@ -229,7 +229,7 @@
   }
   const filterSettings = (raw) => {
     const s = raw && typeof raw === 'object' ? raw : {};
-    return { words: cleanList(s.words), users: cleanList(s.users), hide_commands: s.hide_commands === true, bots: s.bots === true };
+    return { words: cleanList(s.words), users: cleanList(s.users), hide_commands: s.hide_commands === true, bots: s.bots === true, joins: s.joins === true };
   };
 
   // "45 s", "12 m", "1 h 12 m", "2 d 3 h".
@@ -1149,6 +1149,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     });
     $('filter-commands').checked = filters.hide_commands;
     $('filter-bots').checked = filters.bots;
+    $('filter-joins').checked = filters.joins;
     $('filter-count').textContent = filters.words.length + filters.users.length ? (filters.words.length + filters.users.length) + ' in use' : '';
   }
   async function saveFilters(next) {
@@ -1171,6 +1172,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
   $('filter-user').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addFilter('users', 'filter-user'); } };
   $('filter-commands').onchange = () => saveFilters({ ...filters, hide_commands: $('filter-commands').checked });
   $('filter-bots').onchange = () => saveFilters({ ...filters, bots: $('filter-bots').checked });
+  $('filter-joins').onchange = () => saveFilters({ ...filters, joins: $('filter-joins').checked });
 
   async function filterUser(m, on) {
     const names = [m.name, m.handle].filter(Boolean).map((n) => n.toLowerCase());
