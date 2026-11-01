@@ -132,9 +132,9 @@ jobs:
           python-version: "3.14"
       - name: OBS Studio and ffmpeg (Homebrew)
         env:
-          HOMEBREW_NO_AUTO_UPDATE: "1"
           HOMEBREW_NO_INSTALL_CLEANUP: "1"
         run: |
+          brew update --quiet           # the runner image's copy of Homebrew's list can name an older OBS
           brew install --cask obs
           brew install ffmpeg
           xattr -dr com.apple.quarantine /Applications/OBS.app || true   # (no "downloaded from the internet" question)
