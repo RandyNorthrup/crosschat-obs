@@ -16,7 +16,7 @@ CrossChat has no server of its own. It makes no analytics or crash-report connec
 | Twitch (`gql.twitch.tv`, fallback `decapi.me`) | Your channel name, to get the viewer count | A Twitch channel is set and you're live |
 | Twitch API (`id.twitch.tv`, `api.twitch.tv`) | Your Twitch token, your replies, your moderation actions | You pressed **Connect Twitch** |
 | YouTube (`www.youtube.com`) | Your channel or video id, signed out, to read chat | A YouTube channel is set |
-| Kick (`kick.com`, Pusher) | Your channel name, signed out, to read chat | A Kick channel is set |
+| Kick (`kick.com`, `web.kick.com`, Pusher) | Your channel name and its public channel number, signed out, to read chat; to `web.kick.com` also a random id made for that request, to get the address of Kick's chat feed | A Kick channel is set |
 | Kick API (`id.kick.com`, `api.kick.com`) | Your Kick token, your replies, your moderation actions | You pressed **Connect Kick** |
 | X, YouTube and TikTok, in your browser | The reply you typed, typed into the site's own chat box by the extension | You reply or moderate there |
 | TikTok (`www.tiktok.com`), in your browser | Nothing beyond what your browser already does: CrossChat reads chat, gifts, follows, shares, likes (and joins, if you turn them on) from your own TikTok LIVE page there | A TikTok name is set and you're live |
