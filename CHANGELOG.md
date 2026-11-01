@@ -4,6 +4,18 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Fixed
+
+- **Kick chat stopped arriving.** Kick changed the key of its public chat feed, and Kick's server refused the one CrossChat had built in ("App key ... not in this cluster"), so Kick chat kept reconnecting and showed nothing. CrossChat now asks Kick for the current key the way Kick's own web chat does (signed out, with a random id), and falls back to the new one. When Kick's feed refuses a connection, the log says why.
+- **YouTube moderation clicked the wrong button.** YouTube now shows a top fan's "#1" rank inside the chat line, before the message's own menu, and CrossChat clicked that rank (opening the Top fans list) instead of the menu, so remove, timeout and hide user all failed with "YouTube did not offer that here". The extension now opens only the message's "Chat actions" menu. Reload the extension in `chrome://extensions` after updating.
+
+### Changed
+
+- README's Known limits say what moderation was checked live on 31 October 2026, with a second account in the chat:
+  - Twitch delete, timeout, ban and unban work, from the CrossChat window in Chrome; timeout and unban also from the CrossChat dock inside OBS.
+  - YouTube remove, 5-minute timeout and hide user were tried in an unlisted live and all failed in 1.7.1 (the YouTube fix above). The fix is checked against YouTube's current chat markup but hasn't been re-run on a live.
+  - Kick, Rumble and Facebook moderation of a viewer still haven't been seen working: the test accounts couldn't be made or used.
+
 ## [1.7.1] - 2026-10-31
 
 ### Added
