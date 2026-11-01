@@ -54,7 +54,7 @@ from kick_api import Kick, KickError
 from rumble_api import Rumble, RumbleError
 from twitch_api import Twitch, TwitchError
 
-MAC = sys.platform == "darwin"               # macOS (beta): the few Windows-only jobs are done the Mac way, in macos.py
+MAC = sys.platform == "darwin"               # macOS: the few Windows-only jobs are done the Mac way, in macos.py
 if MAC:
     import macos
 else:

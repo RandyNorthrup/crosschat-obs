@@ -1,4 +1,4 @@
-"""The macOS (beta) helpers in hub/macos.py. The path handling and the rules run everywhere; the rest needs a Mac."""
+"""The macOS helpers in hub/macos.py. The path handling and the rules run everywhere; the rest needs a Mac."""
 import asyncio
 import os
 import sys

@@ -1,8 +1,10 @@
-"""macOS (beta): the few jobs the hub does with Windows' own tools, done the Mac way.
+"""macOS: the few jobs the hub does with Windows' own tools, done the Mac way.
 
-  windows / place / close   the browser's own AppleScript dictionary (Chrome, Edge and Chromium all have one). macOS
-                            asks once whether CrossChat may control the browser; if that's refused, windows still open
-                            where they should, CrossChat just can't move or close them afterwards
+  windows / place / close   the browser's own AppleScript dictionary (Chrome, Edge and Chromium all have one). When
+                            OBS starts the hub, macOS refuses this without asking anyone: OBS 33 is signed without the
+                            com.apple.security.automation.apple-events entitlement, and macOS holds programs OBS starts
+                            to OBS's entitlements. Windows still open where they should (the browser places them); the
+                            hub just can't move or close them afterwards
   work_area                 the main screen without the menu bar and the Dock (AppKit, through osascript)
   message_box               a plain alert (osascript)
   running                   whether a process (OBS) is still there
@@ -65,7 +67,7 @@ def _script(source, *argv, timeout=10):
 
 def _browser(app, *argv):
     """A window job for the browser at `app`. Apple Events to a browser take a moment at most; one that hangs means
-    macOS is still asking the person (or was told no), so CrossChat stops asking for a minute instead of waiting."""
+    macOS refused it (or is still asking the person), so CrossChat stops asking for a minute instead of waiting."""
     if time.time() < _refused["until"]:
         return None
     found = _script(WINDOWS, app, *argv, timeout=3)

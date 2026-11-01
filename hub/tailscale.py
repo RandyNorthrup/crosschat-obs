@@ -38,7 +38,7 @@ def pick(lines):
 def address(run=subprocess.run):
     """This PC's Tailscale address, or '' when Tailscale isn't installed, isn't running or isn't signed in. Blocking:
     the hub runs it in a worker thread."""
-    if sys.platform != "win32":                  # (the Mac beta: not yet; the companion there uses "remote.bind")
+    if sys.platform != "win32":                  # (not on a Mac yet: the companion there uses "remote.bind")
         return ""
     try:
         out = run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ASK], capture_output=True, text=True, timeout=15,

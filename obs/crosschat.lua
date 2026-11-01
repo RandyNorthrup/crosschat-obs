@@ -5,7 +5,7 @@
 local obs = obslua
 local ffi = require("ffi")
 local bit = require("bit")
-local WINDOWS = ffi.os == "Windows"   -- anything else is a Mac (beta): there the hub is started with posix_spawn
+local WINDOWS = ffi.os == "Windows"   -- anything else is a Mac: there the hub is started with posix_spawn
 
 if WINDOWS then pcall(ffi.cdef, [[
   int MultiByteToWideChar(unsigned int page, unsigned long flags, const char* text, int size, wchar_t* out, int room);
@@ -85,7 +85,7 @@ local function app_folder()
   return ((script_path() .. ".."):gsub("/", "\\"))
 end
 
--- macOS (beta): programs are started with posix_spawn (no shell, so nothing to quote) and collected with waitpid,
+-- macOS: programs are started with posix_spawn (no shell, so nothing to quote) and collected with waitpid,
 -- so the watchdog below sees the hub's exit code just as it does on Windows.
 local helpers = {}            -- other programs started from here, collected once they finish (or they'd linger as zombies)
 
