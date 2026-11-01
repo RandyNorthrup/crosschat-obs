@@ -20,6 +20,8 @@ CrossChat has no server of its own. It makes no analytics, crash-report or updat
 | Kick API (`id.kick.com`, `api.kick.com`) | Your Kick token, your replies, your moderation actions | You pressed **Connect Kick** |
 | X, YouTube and TikTok, in your browser | The reply you typed, typed into the site's own chat box by the extension | You reply or moderate there |
 | TikTok (`www.tiktok.com`), in your browser | Nothing beyond what your browser already does: CrossChat reads chat from your own TikTok LIVE page there | A TikTok name is set and you're live |
+| Facebook Live Producer, in your browser | Nothing beyond what your browser already does: CrossChat reads comments from Live Producer there | `"facebook": true` and you're live |
+| Rumble API (`rumble.com`) | Your own Live Stream API URL, to read your chat, Rants, subs and viewers | You connected Rumble and you're live |
 | 7TV, BetterTTV, FrankerFaceZ | Your Twitch channel's public numeric id | Emotes are on (the default), once an hour |
 | Google Fonts | A font request from your browser or OBS | Only if a theme uses a Google font |
 | Microsoft or Google speech | The chat line being read aloud | Only if you pick a voice marked **online** for text-to-speech |
@@ -83,6 +85,12 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 - **Disconnect** deletes the file and revokes the token at Twitch. If Twitch doesn't confirm, CrossChat says so, and you can remove it at twitch.tv → Settings → Connections.
 - The sign-in page CrossChat opens is always on `https://www.twitch.tv/`.
 
+**Rumble:**
+
+- CrossChat reads Rumble through its official Live Stream API: a private URL you paste in Settings. It works like a password, so it's kept encrypted for your Windows account (`rumble.bin`), never logged, never put in an error message and never handed to a page or device.
+- Rumble's answer also holds your stream key; CrossChat uses only the chat, Rants, subs and viewer count from it.
+- **Disconnect** deletes the file. To cancel the URL itself, reset it at rumble.com/account/livestream-api.
+
 **Kick:**
 
 - CrossChat signs in with Kick's OAuth 2.1 code flow with PKCE. Kick sends your browser back to `http://localhost:4466/kick/callback` on your own PC, and nowhere else.
@@ -98,7 +106,9 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
   - `127.0.0.1:4466`, the CrossChat window;
   - `studio.x.com`, for X Live;
   - `www.youtube.com/live_chat`, YouTube's chat box;
-  - `www.tiktok.com`, for your own TikTok LIVE page. It first asks CrossChat which TikTok account is yours, and on every other TikTok page, someone else's LIVE included, it reads nothing and sends nothing.
+  - `www.tiktok.com`, for your own TikTok LIVE page. It first asks CrossChat which TikTok account is yours, and on every other TikTok page, someone else's LIVE included, it reads nothing and sends nothing;
+  - `www.facebook.com/live/producer`, Facebook's Live Producer, which only ever shows your own broadcasts. No other part of Facebook;
+  - `rumble.com/chat/popup/`, Rumble's chat window, only to type your replies in your own live's chat (CrossChat tells it which one). It never presses the paid Rant button.
 - TikTok has no public chat API. Unlike tools that send your TikTok session to an outside "signing" service, CrossChat reads chat only from your own LIVE page, in your own browser.
 - On YouTube and X it types your reply into the site's own chat box, as the account already signed in there. YouTube moderation goes through YouTube's own message menu.
 - Twitch and Kick replies don't use the extension at all: they go through those platforms' official APIs, from the hub.
@@ -125,7 +135,7 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 - `quick.json`, your quick replies;
 - `filters.json` and `tts.json`, your filter and text-to-speech settings;
 - `devices.json`, hashes of paired devices' keys;
-- `twitch.bin` and `kick.bin`, the tokens, encrypted for your Windows account;
+- `twitch.bin` and `kick.bin`, the tokens, and `rumble.bin`, your Rumble API URL, all encrypted for your Windows account;
 - `logs\`, chat history;
 - `crosschat.log`. The log has no passwords, keys, tokens or cookies.
 

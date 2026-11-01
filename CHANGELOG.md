@@ -4,6 +4,18 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-31
+
+### Added
+
+- **Facebook Live comments**, from Live Producer in your browser, with replies typed into its comment box.
+  - Set `"facebook": true`, or answer the installer's question. CrossChat opens Live Producer when OBS goes live.
+  - The extension may touch only `facebook.com/live/producer`, which only ever shows your own broadcasts.
+- **Rumble chat, Rants, subs and gifted subs** through Rumble's official Live Stream API, with replies.
+  - Paste your API URL in Settings → Connections → Rumble. It's kept encrypted for your Windows account and never shown again.
+  - When your Rumble live starts, Rumble's chat window opens for it, and replies are typed there as you. The extension never presses the paid Rant button.
+- Facebook and Rumble show everywhere: chat window, companion, widgets, Theme Studio, history, read-aloud and filters.
+
 ## [1.5.0] - 2026-10-31
 
 ### Added
@@ -182,7 +194,8 @@ First public release.
 - Overlays are served by the hub over `http://127.0.0.1`. OBS 33 blocks local-file overlays from reaching the hub.
 - Fonts are Windows' own: Segoe UI Variable and Cascadia Mono.
 
-[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.2.0...v1.3.0

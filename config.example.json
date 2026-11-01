@@ -3,6 +3,7 @@
   "youtube": "",
   "kick": "",
   "tiktok": "",
+  "facebook": false,
   "port": 4466,
   "browser": "auto",
   "window": "auto",

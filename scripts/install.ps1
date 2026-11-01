@@ -116,6 +116,7 @@ if (Test-Path $config) {
     $env:CROSSCHAT_YOUTUBE = Ask 'YouTube channel (@handle or link)'
     $env:CROSSCHAT_KICK = Ask 'Kick channel'
     $env:CROSSCHAT_TIKTOK = Ask 'TikTok @name (if you go LIVE on TikTok)'
+    $env:CROSSCHAT_FACEBOOK = if (Yes 'Do you go live on Facebook?' $false) { '1' } else { '0' }
     $env:CROSSCHAT_X = if (Yes 'Do you stream to X (it needs X Premium and Live Studio)?' $false) { '1' } else { '0' }
     if ($env:CROSSCHAT_X -eq '1') {
         $env:CROSSCHAT_X_AUTO = if (Yes 'Go live on X by itself whenever OBS starts streaming?') { '1' } else { '0' }

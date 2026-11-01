@@ -289,7 +289,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
   const F = globalThis.CrossChatFeed || { emoteMap: () => new Map(), withEmotes: (p) => p };
   const ctx = { remote: false, device: null, version: '', lanUrl: null, executor: false, executorKnown: false, twitch: 'off',
                 bridge: !!document.documentElement.dataset.crosschat, states: {}, unpaired: false };
-  let counts = {}, starred = new Set(), quick = [], devices = [], twitchAuth = { state: 'off' }, kickAuth = { state: 'off' }, pairTimer = null;
+  let counts = {}, starred = new Set(), quick = [], devices = [], twitchAuth = { state: 'off' }, kickAuth = { state: 'off' }, rumbleAuth = { state: 'off' }, pairTimer = null;
   let tts = A.ttsSettings({}), filters = A.filterSettings({}), health = {}, emotes = new Map();
   let replyTo = null, featuredId = null, view = 'all', pinned = true, ding = store('ding') === '1', audio, sending = false, feed = null;
   const msgs = new Map();                         // id -> message, for the action sheet and featuring
@@ -920,6 +920,27 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
   $('kick-disconnect').onclick = async () => { if (await ask({ title: 'Disconnect Kick?', text: 'CrossChat then reads Kick chat but can’t reply or moderate there until you connect again.', ok: 'Disconnect' })) api('/kick/disconnect', {}); };
   $('kick-open').onclick = () => { kickOpened = ''; openKick(kickAuth.url); };
 
+  // Rumble: chat, Rants, subs and viewers from Rumble's official Live Stream API (a private URL the streamer pastes, kept
+  // encrypted by the hub); replies are typed into Rumble's own chat window.
+  function drawRumble() {
+    const s = rumbleAuth.state;
+    $('rumble-dot').className = 'dot' + (s === 'on' ? ' ok' : '');
+    $('rumble-state').textContent = s === 'on' ? 'Connected' : s === 'error' ? 'Not connected: ' + (rumbleAuth.why || 'Rumble said no') : 'Not connected';
+    $('rumble-form').hidden = ctx.remote || s === 'on';
+    $('rumble-disconnect').hidden = ctx.remote || s !== 'on';
+    $('rumble-hint').textContent = ctx.remote ? 'Connecting Rumble is done on the streaming PC (Settings there).'
+      : s === 'on' ? 'CrossChat reads Rumble through its official API. When your Rumble live starts, Rumble’s chat window opens; replies are typed there as you (sign in to Rumble in this browser).'
+      : 'Paste your Live Stream API URL from rumble.com/account/livestream-api. CrossChat reads Rumble chat, Rants, subs and viewers through it, and keeps it encrypted on this PC.';
+  }
+  $('rumble-connect').onclick = async () => {
+    const url = $('rumble-url').value.trim();
+    if (!url) return;
+    const a = await api('/rumble/connect', { url });
+    $('rumble-url').value = '';
+    if (!a.ok) note('Rumble: ' + (a.why || 'could not connect'), 'bad');
+  };
+  $('rumble-disconnect').onclick = async () => { if (await ask({ title: 'Disconnect Rumble?', text: 'CrossChat then deletes the Rumble API URL from this PC and stops reading Rumble chat.', ok: 'Disconnect' })) api('/rumble/disconnect', {}); };
+
   // How each chat connection is doing: how long it has been up, when the last message came, how often it reconnected.
   function drawHealth() {
     const ul = $('health'); ul.textContent = '';
@@ -1244,7 +1265,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
   $('history-open').onclick = () => { $('settings').close(); openHistory(); };
 
   function drawSettings() {
-    showTheme(); showDing(); drawTwitch(); drawKick(); drawDevices(); drawHealth(); drawTts(); drawFilters();
+    showTheme(); showDing(); drawTwitch(); drawKick(); drawRumble(); drawDevices(); drawHealth(); drawTts(); drawFilters();
     $('devices-section').hidden = ctx.remote;
     $('filters-section').hidden = ctx.remote;
     $('history-section').hidden = ctx.remote;
@@ -1304,6 +1325,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
       case 'quick': quick = A.cleanQuick(m.replies); drawQuick(); break;
       case 'executor': ctx.executor = !!m.present; ctx.executorKnown = true; drawNotice(); drawPlatforms(); refreshActs(); break;
       case 'twitch_auth': twitchAuth = m; drawTwitch(); drawNotice(); refreshActs(); break;
+      case 'rumble_auth': rumbleAuth = m; drawRumble(); break;
       case 'kick_auth':
         kickAuth = m;
         if (m.state === 'pending' && kickWanted && !ctx.remote) openKick(m.url);
@@ -1392,6 +1414,8 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     if (path === '/devices/revoke') { handle({ type: 'devices', devices: devices.filter((d) => d.id !== body.id) }); return ok(); }
     if (path === '/kick/connect') { handle({ type: 'kick_auth', state: 'pending' }); setTimeout(() => handle({ type: 'kick_auth', state: 'on', login: 'you' }), 1500); return ok(); }
     if (path === '/kick/disconnect') { handle({ type: 'kick_auth', state: 'off' }); return ok(); }
+    if (path === '/rumble/connect') { handle({ type: 'rumble_auth', state: 'on' }); return ok(); }
+    if (path === '/rumble/disconnect') { handle({ type: 'rumble_auth', state: 'off' }); return ok(); }
     if (path === '/tts') { setTimeout(() => handle({ type: 'tts', settings: body.settings }), 50); return ok(); }
     if (path === '/filters') { setTimeout(() => handle({ type: 'filters', settings: body.settings }), 50); return ok(); }
     if (path === '/tts/skip') { handle({ type: 'say_stop' }); return ok(); }

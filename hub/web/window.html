@@ -137,7 +137,7 @@
     <section class="section" id="connections-section">
       <h3>Connections</h3>
       <ul class="health" id="health"></ul>
-      <p class="hint" id="page-platforms-hint">TikTok, Facebook and Rumble chat comes from your own live page in Chrome or Edge. CrossChat opens it when you go live, and replies are typed there for you. Moderate those chats on the platform itself.</p>
+      <p class="hint" id="page-platforms-hint">TikTok and Facebook chat comes from your own live page in Chrome or Edge, and Rumble replies go through Rumble’s chat window there. CrossChat opens them when you go live, and replies are typed there for you. Moderate those chats on the platform itself.</p>
       <div class="card" id="twitch-section">
         <h4>Twitch</h4>
         <div class="status"><i class="dot" id="twitch-dot"></i><span id="twitch-state">Not connected</span></div>
@@ -161,6 +161,17 @@
           <button class="btn primary" type="button" id="kick-open" hidden>Open Kick to approve</button>
           <button class="btn" type="button" id="kick-disconnect" hidden>Disconnect</button>
         </div>
+      </div>
+      <div class="card" id="rumble-section">
+        <h4>Rumble</h4>
+        <div class="status"><i class="dot" id="rumble-dot"></i><span id="rumble-state">Not connected</span></div>
+        <p class="hint" id="rumble-hint">Paste your Live Stream API URL from <b>rumble.com/account/livestream-api</b>. CrossChat reads Rumble chat, Rants, subs and viewers through it, and keeps it encrypted on this PC.</p>
+        <div class="buttons" id="rumble-form">
+          <input id="rumble-url" type="password" autocomplete="off" spellcheck="false" aria-label="Rumble Live Stream API URL"
+                 placeholder="https://rumble.com/-livestream-api/get-data?key=…" style="flex:1 1 220px;min-height:40px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:inherit;padding:6px 10px">
+          <button class="btn primary" type="button" id="rumble-connect">Connect Rumble</button>
+        </div>
+        <div class="buttons"><button class="btn" type="button" id="rumble-disconnect" hidden>Disconnect</button></div>
       </div>
     </section>
     <section class="section" id="devices-section">

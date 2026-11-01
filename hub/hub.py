@@ -19,6 +19,7 @@ import asyncio
 import collections
 import ctypes
 import base64
+import datetime
 import hashlib
 import json
 import logging
@@ -43,9 +44,10 @@ import emotes as emote_sources
 from chatlog import ChatLog
 from devices import Devices, device_name
 from kick_api import Kick, KickError
+from rumble_api import Rumble, RumbleError
 from twitch_api import Twitch, TwitchError
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 # CrossChat's public Twitch app (Client ID only: public apps have no secret). "twitch_client_id" in config.json overrides it.
 TWITCH_CLIENT_ID = "gg5cmjfvr1l09niyes19ccclashuth"  # gitleaks:allow (a public client ID, not a secret)
 # CrossChat's Kick app. Kick requires the app's secret even with PKCE, so it ships here and is not confidential: Kick
@@ -74,6 +76,9 @@ DEFAULTS = {
     "kick_chatroom": 0,
     "tiktok": "",                            # your TikTok @name: its LIVE page opens in your browser when you go live
     "tiktok_window": "auto",                 # where that page goes: "auto" (under the chat window) or {"x", "y", "width", "height"}
+    "facebook": False,                       # true: Facebook Live chat, from Live Producer in your browser (it opens when you go live)
+    "facebook_window": "auto",
+    "rumble_window": "auto",                 # where Rumble's chat pop-out goes (replies are typed there)
     "browser": "auto",                       # "auto" (Chrome, else Edge), "chrome", "edge" or the full path of a browser
     "window": "auto",                        # "auto" (right edge of the main screen) or {"x", "y", "width", "height"}
     "open_window_on_stream_start": True,
@@ -107,6 +112,7 @@ HOME = APP                                   # your folder: config.json, crossch
 TEST, PORT = False, DEFAULTS["port"]
 DEMO = False                                 # --demo: a made-up live stream, for trying CrossChat without going live
 TWITCH = YOUTUBE = KICK = TIKTOK = ""
+FACEBOOK = False
 KICK_ROOM = 0
 
 
@@ -141,7 +147,7 @@ def channel(value, platform):
 
 def configure(argv):
     """Settings: the defaults, then config.json (or --config PATH, or the file CROSSCHAT_CONFIG names), then the command line."""
-    global ARGV, CFG, X, HOME, TEST, DEMO, PORT, TWITCH, YOUTUBE, KICK, KICK_ROOM, TIKTOK
+    global ARGV, CFG, X, HOME, TEST, DEMO, PORT, TWITCH, YOUTUBE, KICK, KICK_ROOM, TIKTOK, FACEBOOK
     ARGV = list(argv)
     DEMO = "--demo" in ARGV
     path = os.path.abspath(arg("--config", os.environ.get("CROSSCHAT_CONFIG") or os.path.join(APP, "config.json")))
@@ -165,6 +171,7 @@ def configure(argv):
         slug, _, room = arg("--kick", "").partition(":")
         KICK, KICK_ROOM = channel(slug, "kick"), int(room or 0)
     TIKTOK = channel(CFG["tiktok"], "tiktok")
+    FACEBOOK = CFG.get("facebook") is True or str(CFG.get("facebook")).lower() in ("on", "yes", "1")
     for name, given, used in (("twitch", CFG["twitch"], TWITCH), ("youtube", CFG["youtube"], YOUTUBE), ("kick", CFG["kick"], KICK),
                               ("tiktok", CFG["tiktok"], TIKTOK)):
         if given and not used:
@@ -746,7 +753,7 @@ def box(setting, part):
         return setting["x"], setting["y"], setting["width"], setting["height"]
     left, top, right, bottom = work_area()
     width = min(460, max(320, (right - left) // 4))
-    pages = [name for name, on in (("x", X), ("tiktok", TIKTOK)) if on]
+    pages = [name for name, on in (("x", X), ("tiktok", TIKTOK), ("facebook", FACEBOOK), ("rumble", RB and RB.on())) if on]
     split = top + (bottom - top) * 3 // 5 if pages else bottom
     if part == "chat":
         return right - width, top, width, split - top
@@ -885,6 +892,10 @@ async def x_watch():
             tiktok_off()
             if streaming.is_set():
                 note("TikTok: its LIVE page stopped reporting (closed, or the LIVE ended). TikTok chat is paused.")
+        if FACEBOOK and status.get("facebook") == "on" and time.time() - state.get("facebook_seen", 0) > 20:
+            facebook_off()
+            if streaming.is_set():
+                note("Facebook: Live Producer stopped reporting (closed, or the live ended). Facebook comments are paused.")
 
 
 def x_result(ok, mode, step):
@@ -961,6 +972,175 @@ def tiktok_feed(first):
     return True
 
 
+# ---- Facebook Live: comments from Live Producer, through the extension ---------------------------------------
+# Live Producer is where a Facebook live is started and ended, and it only ever shows the signed-in streamer's own
+# broadcasts. When OBS goes live, CrossChat opens it; the extension passes on the comments shown there and types
+# replies into its comment box. Nothing else on Facebook is touched.
+facebook_told = collections.deque(maxlen=5000)
+
+
+def close_facebook_window():
+    hwnd = state.get("facebook_window")
+    if hwnd and user32.IsWindow(wintypes.HWND(hwnd)):
+        user32.PostMessageW(wintypes.HWND(hwnd), 0x0010, 0, 0)
+    state["facebook_window"] = None
+
+
+async def facebook_open():
+    close_facebook_window()
+    set_status("facebook", "waiting")
+    state["facebook_window"] = await open_app("https://www.facebook.com/live/producer", box(CFG.get("facebook_window"), "facebook"))
+
+
+def facebook_off():
+    if status.get("facebook") in ("on", "waiting"):
+        viewers.pop("facebook", None)
+        set_status("facebook", "off")
+        send(viewer_event())
+
+
+def facebook_feed(first):
+    """The extension passes on what Live Producer shows while a live is running: new comments and the viewer count."""
+    if not FACEBOOK:
+        return False
+    if first("over"):
+        facebook_off()
+        return True
+    state["facebook_seen"] = time.time()
+    set_status("facebook", "on")
+    if first("viewers").isdigit() and viewers.get("facebook") != int(first("viewers")):
+        viewers["facebook"] = int(first("viewers"))
+        send(viewer_event())
+    try:
+        lines = json.loads(first("lines") or "[]")
+    except ValueError:
+        lines = []
+    for line in lines[:50] if isinstance(lines, list) else []:
+        if not isinstance(line, dict):
+            continue
+        mid = "fb-" + re.sub(r"[^\w=-]", "", str(line.get("id", "")))[:120]
+        name, text = " ".join(str(line.get("name", "")).split())[:60], " ".join(str(line.get("text", "")).split())[:1000]
+        if name and text and mid != "fb-" and mid not in facebook_told:
+            facebook_told.append(mid)
+            publish("facebook", name, text, badges=["broadcaster"] if line.get("host") is True else [], mid=mid)
+    return True
+
+
+# ---- Rumble: its official Live Stream API (read only) ----------------------------------------------------
+def rumble_time(text):
+    """Rumble's ISO 8601 times as seconds since 1970, or 0."""
+    try:
+        return datetime.datetime.fromisoformat(str(text).replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return 0
+
+
+def rumble_chat_id(live):
+    """The number of the live's Rumble chat (its pop-out is rumble.com/chat/popup/<number>): the API gives the
+    livestream's id in base 36."""
+    raw = str(live.get("id") or "").lower()
+    return str(int(raw, 36)) if re.fullmatch(r"[0-9a-z]{1,13}", raw) else ""
+
+
+def close_rumble_window():
+    hwnd = state.get("rumble_window")
+    if hwnd and user32.IsWindow(wintypes.HWND(hwnd)):
+        user32.PostMessageW(wintypes.HWND(hwnd), 0x0010, 0, 0)
+    state["rumble_window"] = None
+
+
+async def rumble_open(chat):
+    """Rumble's own chat pop-out for this live, where the extension types replies (Rumble has no API for sending)."""
+    close_rumble_window()
+    state["rumble_window"] = await open_app("https://rumble.com/chat/popup/" + chat, box(CFG.get("rumble_window"), "rumble"))
+
+
+def rumble_read(data, told, last):
+    """One answer from Rumble: chat lines, Rants and subs since the stream started, and the viewer count."""
+    live = next((s for s in data.get("livestreams") or [] if isinstance(s, dict) and s.get("is_live")), None)
+    if not live:
+        if status.get("rumble") == "on":
+            viewers.pop("rumble", None)
+            set_status("rumble", "waiting")
+            send(viewer_event())
+        state["rumble_chat"] = ""
+        return
+    set_status("rumble", "on")
+    chat_id = rumble_chat_id(live)
+    if chat_id and chat_id != state.get("rumble_chat"):
+        state["rumble_chat"] = chat_id
+        if not state.get("local") and not TEST:
+            asyncio.create_task(rumble_open(chat_id))
+    if str(live.get("watching_now", "")).isdigit() and viewers.get("rumble") != int(live["watching_now"]):
+        viewers["rumble"] = int(live["watching_now"])
+        send(viewer_event())
+    since = state["since"] - 30
+    chat = live.get("chat") or {}
+
+    def new(kind, item, *key):
+        mid = "rm-%s-%s" % (kind, hashlib.sha1("\n".join(str(k) for k in key).encode()).hexdigest()[:16])
+        if mid in told or rumble_time(item.get("created_on") or item.get("subscribed_on")) < since:
+            return ""
+        told.append(mid)
+        return mid
+
+    for m in reversed(chat.get("recent_messages") or []):      # (newest first in Rumble's answer)
+        if isinstance(m, dict) and m.get("username") and m.get("text"):
+            mid = new("m", m, m["username"], m.get("created_on"), m["text"])
+            if mid:
+                badges = [b for b in m.get("badges") or [] if isinstance(b, str)][:6]
+                publish("rumble", str(m["username"])[:60], " ".join(str(m["text"]).split())[:500], badges=badges, mid=mid)
+    for r in reversed(chat.get("recent_rants") or []):
+        if isinstance(r, dict) and r.get("username"):
+            mid = new("r", r, r["username"], r.get("created_on"), r.get("text"))
+            if mid:
+                amount = "$%.2f" % (int(r.get("amount_cents") or 0) / 100)
+                publish("rumble", str(r["username"])[:60], " ".join(str(r.get("text") or "").split())[:500], kind="event", alert="superchat",
+                        amount=amount, system="%s sent a %s Rant" % (str(r["username"])[:60], amount), mid=mid)
+    for sub in reversed((data.get("subscribers") or {}).get("recent_subscribers") or []):
+        if isinstance(sub, dict) and sub.get("username"):
+            mid = new("s", sub, sub["username"], sub.get("subscribed_on"))
+            if mid:
+                publish("rumble", str(sub["username"])[:60], "", kind="event", alert="sub", system="%s subscribed" % str(sub["username"])[:60], mid=mid)
+    gifts = data.get("gifted_subs") or {}
+    count = gifts.get("num_gifted_subs")
+    if isinstance(count, int):
+        if last.get("gifts") is not None and count > last["gifts"]:
+            latest = gifts.get("latest_gifted_sub") or {}
+            who, n = str(latest.get("purchased_by") or "Someone")[:60], int(latest.get("total_gifts") or count - last["gifts"])
+            publish("rumble", who, "", kind="event", alert="gift", amount=gifts_text(n), system="%s gifted %s" % (who, gifts_text(n)),
+                    mid="rm-g-%d" % count)
+        last["gifts"] = count
+
+
+def gifts_text(n):
+    return "%d sub%s" % (n, "" if n == 1 else "s")
+
+
+async def rumble_watch():
+    """While OBS is live and Rumble is connected: ask Rumble every few seconds (its API answers with the latest 50)."""
+    told, last, wait, warned = collections.deque(maxlen=3000), {}, 5, ""
+    while True:
+        await streaming.wait()
+        if not (RB and RB.on()) or DEMO:
+            await asyncio.sleep(10)
+            continue
+        if status.get("rumble") in (None, "off"):
+            set_status("rumble", "waiting")
+            last.clear()
+        try:
+            rumble_read(await asyncio.to_thread(RB.fetch), told, last)
+            wait = 5
+        except RumbleError:
+            set_status("rumble", "retry")
+            if RB.why and RB.why != warned:
+                warned = RB.why
+                note("Rumble: " + RB.why)
+                send(rumble_event())
+            wait = 60 if RB.why else min(wait * 2, 60)
+        await asyncio.sleep(wait)
+
+
 # ---- stream start and stop -------------------------------------------------------------------------
 closing = None
 
@@ -978,6 +1158,7 @@ async def stream_started(local=False):
     messages.clear()
     x_told.clear()
     tiktok_told.clear()
+    facebook_told.clear()
     seen.clear()
     if LOG and not DEMO and (CFG.get("logs") or {}).get("enabled", True):
         log.info("chat history: logs/%s.jsonl", LOG.start())
@@ -989,6 +1170,8 @@ async def stream_started(local=False):
         await show_window()
     if TIKTOK and not local and not TEST:
         asyncio.create_task(tiktok_open())
+    if FACEBOOK and not local and not TEST:
+        asyncio.create_task(facebook_open())
     if X.get("auto_go_live") and not local and not TEST:
         async def soon():                       # give X a moment to see the video arriving
             await asyncio.sleep(X.get("delay_seconds", 12))
@@ -1024,6 +1207,10 @@ async def stream_stopped():
         close_x_window()
         close_tiktok_window()
         tiktok_off()
+        close_facebook_window()
+        facebook_off()
+        close_rumble_window()
+        state["rumble_chat"] = ""
     closing = asyncio.create_task(later())
 
 
@@ -1280,7 +1467,7 @@ async def test_event(kind):
 # Every reply and moderation goes through here. Twitch is done by the hub itself with Twitch's API once the streamer
 # has connected Twitch; YouTube and X (and Twitch without that) are handed to the "executor": the chat window on this
 # PC that has the CrossChat extension, which posts as the accounts signed in to that browser.
-LIMIT = {"twitch": 500, "youtube": 200, "x": 140, "kick": 500, "tiktok": 150}
+LIMIT = {"twitch": 500, "youtube": 200, "x": 140, "kick": 500, "tiktok": 150, "facebook": 8000, "rumble": 200}
 NAMES = {"twitch": "Twitch", "youtube": "YouTube", "x": "X", "kick": "Kick", "tiktok": "TikTok", "facebook": "Facebook", "rumble": "Rumble"}
 MOD_ACTIONS = {"twitch": ("delete", "timeout", "ban", "unban"), "youtube": ("delete", "timeout", "ban"),
                "kick": ("delete", "timeout", "ban", "unban")}
@@ -1288,6 +1475,7 @@ QUICK_DEFAULTS = ["Welcome in! 👋", "Thanks for the follow!", "Good question, 
 jobs = {}                                    # job id -> future the executor's answer lands in
 TW = None                                    # the Twitch API connection (set in main)
 KK = None                                    # the Kick API connection (set in main)
+RB = None                                    # the Rumble Live Stream API URL (set in main)
 DEV = None                                   # paired devices (set in main)
 LOG = None                                   # this stream's chat history (set in main)
 EMOTES = {}                                  # third-party emote name -> picture URL
@@ -1308,6 +1496,12 @@ def signed_out(platform, revoked, page):
            "CrossChat at %s." % (platform, platform, page))
     note(why)
     return {"ok": True, "why": why}
+
+
+def rumble_event():
+    if DEMO:
+        return {"type": "rumble_auth", "state": "on"}
+    return {"type": "rumble_auth", **(RB.state() if RB else {"state": "off"})}
 
 
 def kick_event():
@@ -2098,7 +2292,8 @@ async def serve(reader, writer, remote=False):
         elif url.path == "/version":
             await reply(writer, "200 OK", "application/json", json.dumps({"version": VERSION}).encode(), OPEN)
         elif url.path == "/targets":               # where a typed reply goes
-            body = {"twitch": TWITCH, "youtube_video": state["youtube_video"], "tiktok": TIKTOK, "live": streaming.is_set()}
+            body = {"twitch": TWITCH, "youtube_video": state["youtube_video"], "tiktok": TIKTOK, "facebook": FACEBOOK,
+                    "rumble_chat": state.get("rumble_chat") or "", "live": streaming.is_set()}
             await reply(writer, "200 OK", "application/json", json.dumps(body).encode())
         elif url.path == "/events":
             writer.write(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-store\r\n" + OPEN.encode()
@@ -2109,7 +2304,7 @@ async def serve(reader, writer, remote=False):
                 queue.put_nowait(old)
             for event in (status_event(), viewer_event(), {"type": "feature", "msg": state["featured"]},
                           {"type": "starred", "ids": list(starred)}, {"type": "quick", "replies": quick_replies()}, twitch_event(),
-                          kick_event(), {"type": "emotes", "emotes": EMOTES}, {"type": "tts", "settings": TTS},
+                          kick_event(), rumble_event(), {"type": "emotes", "emotes": EMOTES}, {"type": "tts", "settings": TTS},
                           {"type": "filters", "settings": FILTERS}):
                 queue.put_nowait(event)
             clients.add(queue)
@@ -2159,6 +2354,9 @@ async def serve(reader, writer, remote=False):
             await reply(writer, "200 OK", "application/json", json.dumps({"end": bool(state.get("x_end"))}).encode())
         elif url.path == "/tiktok/feed":           # the extension passes on the streamer's own TikTok LIVE chat
             mine = tiktok_feed(lambda k: (query.get(k) or [""])[0])
+            await reply(writer, "200 OK", "application/json", json.dumps({"mine": mine}).encode())
+        elif url.path == "/facebook/feed":         # the extension passes on Facebook Live comments from Live Producer
+            mine = facebook_feed(lambda k: (query.get(k) or [""])[0])
             await reply(writer, "200 OK", "application/json", json.dumps({"mine": mine}).encode())
         elif url.path == "/x/last":
             await reply(writer, "200 OK", "application/json", json.dumps(state.get("x_last")).encode())
@@ -2221,7 +2419,8 @@ async def serve_post(reader, writer, headers, path, remote=False):
         if future and not future.done():
             future.set_result(body.get("answer") if isinstance(body.get("answer"), dict) else {})
         result = {"ok": bool(future)}
-    elif path in ("/kick/connect", "/kick/disconnect", "/twitch/connect", "/twitch/disconnect", "/devices/revoke") and DEMO:
+    elif path in ("/kick/connect", "/kick/disconnect", "/twitch/connect", "/twitch/disconnect", "/devices/revoke", "/rumble/connect",
+                  "/rumble/disconnect") and DEMO:
         result = {"ok": False, "why": "The demo never touches your real accounts or devices."}
     elif path == "/pair/start" and DEMO:
         result = {"ok": False, "why": "Pairing is switched off in the demo."}
@@ -2275,6 +2474,24 @@ async def serve_post(reader, writer, headers, path, remote=False):
             result = {"ok": True}
         except ValueError as error:
             result = {"ok": False, "why": str(error)}
+    elif path == "/rumble/connect" and not remote:
+        try:
+            RB.set(body.get("url"))
+            result = {"ok": True}
+            if streaming.is_set():
+                set_status("rumble", "waiting")
+        except RumbleError as error:
+            result = {"ok": False, "why": str(error)}
+        except OSError:
+            result = {"ok": False, "why": "Could not save it in your CrossChat folder."}
+        send(rumble_event())
+    elif path == "/rumble/disconnect" and not remote:
+        RB.forget()
+        status.pop("rumble", None)
+        viewers.pop("rumble", None)
+        send(rumble_event())
+        send(status_event())
+        result = {"ok": True}
     elif path == "/kick/connect" and not remote:
         if not KK.client_id:
             result = {"ok": False, "why": "This CrossChat has no Kick app (\"kick_client_id\" in config.json)."}
@@ -2321,12 +2538,13 @@ def start_log():
 
 def companion_setup():
     """Paired devices and the Twitch connection, kept in your folder."""
-    global DEV, TW, KK, LOG, FILTERS, TTS
+    global DEV, TW, KK, RB, LOG, FILTERS, TTS
     DEV = Devices(settings_path("devices.json"))
     TW = Twitch(CFG.get("twitch_client_id") or TWITCH_CLIENT_ID, os.path.join(HOME, "twitch.bin"))
     own = bool(CFG.get("kick_client_id"))            # your own Kick app replaces CrossChat's, id and secret together
     KK = Kick(CFG["kick_client_id"] if own else KICK_CLIENT_ID, CFG.get("kick_client_secret", "") if own else KICK_CLIENT_SECRET,
               os.path.join(HOME, "kick.bin"), "http://localhost:%d/kick/callback" % PORT)
+    RB = Rumble(os.path.join(HOME, "rumble.bin"))
     LOG = ChatLog(os.path.join(HOME, "logs"), int((CFG.get("logs") or {}).get("keep_days") or 90))
     FILTERS = settings_file("filters.json", FILTER_DEFAULTS)
     TTS = settings_file("tts.json", TTS_DEFAULTS)
@@ -2353,8 +2571,13 @@ async def main():
         status["x"] = "off"
     if TIKTOK and not DEMO:
         status["tiktok"] = "off"
-    if X or TIKTOK:
+    if FACEBOOK and not DEMO:
+        status["facebook"] = "off"
+    if X or TIKTOK or FACEBOOK:
         tasks.append(asyncio.create_task(keep_running("pages", x_watch)))
+    if RB and RB.on() and not DEMO:
+        status["rumble"] = "off"
+    tasks.append(asyncio.create_task(keep_running("rumble", rumble_watch)))
     tasks.append(asyncio.create_task(keep_running("viewers", demo_stream if DEMO else audience)))
     tasks.append(asyncio.create_task(keep_running("emotes", emotes_refresh)))
     if not DEMO:

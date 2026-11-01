@@ -23,6 +23,7 @@ def config(template, target):
     answer = lambda name: os.environ.get("CROSSCHAT_" + name, "").strip()   # noqa: E731
     for key in ("twitch", "youtube", "kick", "tiktok"):
         data[key] = answer(key.upper())
+    data["facebook"] = answer("FACEBOOK") == "1"
     data["x"]["enabled"] = answer("X") == "1"
     data["x"]["auto_go_live"] = answer("X_AUTO") != "0"
     data["x"]["source"] = answer("X_SOURCE") or data["x"]["source"]

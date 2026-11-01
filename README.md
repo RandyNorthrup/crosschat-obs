@@ -13,7 +13,7 @@
   <a href="https://www.paypal.com/donate/?hosted_button_id=Q9VC7B42R7K82"><img alt="Donate with PayPal" src="https://img.shields.io/badge/donate-PayPal-0070ba"></a>
 </p>
 
-**CrossChat** is a free companion for OBS Studio when you stream to several platforms at once. It reads **Twitch, YouTube, Kick, X and TikTok** chat into one window, lets you **answer everyone with one message** (or one person on their own platform), **moderates** Twitch, YouTube and Kick, puts **themeable chat, featured messages, viewer counts and alerts** on your stream, and **starts and ends your X livestream together with OBS**. Pair your **phone or another PC** to read, answer and moderate chat from there. Everything runs on your own PC and home network.
+**CrossChat** is a free companion for OBS Studio when you stream to several platforms at once. It reads **Twitch, YouTube, Kick, X, TikTok, Facebook and Rumble** chat into one window, lets you **answer everyone with one message** (or one person on their own platform), **moderates** Twitch, YouTube and Kick, puts **themeable chat, featured messages, viewer counts and alerts** on your stream, and **starts and ends your X livestream together with OBS**. Pair your **phone or another PC** to read, answer and moderate chat from there. Everything runs on your own PC and home network.
 
 <p align="center">
   <img src="assets/video/overview.webp" alt="CrossChat in action: a question from YouTube is put on stream, then one reply goes out to Twitch, YouTube and X at once" width="100%"><br>
@@ -23,7 +23,7 @@
 ## Features
 
 **One chat window for every platform**
-- Twitch, YouTube, Kick, X and TikTok LIVE chat in one list, each line tagged with where it came from.
+- Twitch, YouTube, Kick, X, TikTok LIVE, Facebook Live and Rumble chat in one list, each line tagged with where it came from.
 - Viewer counts per platform and in total.
 - Subs, raids, cheers, Super Chats and memberships are marked in the list.
 - Deleted messages and timed-out viewers are struck through.
@@ -138,6 +138,7 @@ Every setting, the CSS hooks and how to share themes are in **[docs/THEMES.md](d
 | **Python** | 3.10 or newer. If you don't have it, the installer offers to install it. |
 | **X Live** *(optional)* | X Premium with access to [X Live Studio](https://studio.x.com/live), and OBS sending video to X (see [X Live](#x-live)). |
 | **TikTok LIVE** *(optional)* | Signed in to TikTok in the same browser, and OBS sending video to TikTok (see [TikTok LIVE](#tiktok-live)). |
+| **Facebook Live, Rumble** *(optional)* | Signed in to them in the same browser (see [Facebook Live and Rumble](#facebook-live-and-rumble)). |
 
 CrossChat doesn't send your video anywhere. OBS does that. To stream to several platforms at once, use what you already use for that: an OBS multi-output plugin such as [obs-multi-rtmp](https://github.com/sorayuki/obs-multi-rtmp), or a restreaming service.
 
@@ -214,6 +215,8 @@ A Stream Deck can trigger them with a *Hotkey* action, or open the Start-menu sh
 | **Kick** | ✅ | ✅ (official API once connected) | delete, timeout, ban, unban | ✅ | subs, gifts, hosts (see [Known limits](#known-limits)) |
 | **X** | ✅ | ✅ | — | ✅ | — |
 | **TikTok LIVE** | ✅ (your own LIVE page) | ✅ | in TikTok | ✅ | — (see [Known limits](#known-limits)) |
+| **Facebook Live** | ✅ (Live Producer) | ✅ | in Facebook | ✅ | — |
+| **Rumble** | ✅ (official API) | ✅ | in Rumble | ✅ | Rants, subs, gifted subs |
 
 ## X Live
 
@@ -247,6 +250,14 @@ TikTok has no public chat API. The tools that read TikTok chat anyway mostly sen
 
 The extension first asks CrossChat which TikTok account is yours. On every other TikTok page, someone else's LIVE included, it reads nothing. Moderate TikTok chat in TikTok itself.
 
+## Facebook Live and Rumble
+
+**Facebook Live.** Set `"facebook": true` (or answer the installer's question). When OBS starts streaming, CrossChat opens Facebook's **Live Producer**, where you press Go live as usual. While your live runs, the extension passes on the comments shown there and types your replies into its comment box, as you. Live Producer only ever shows your own broadcasts, and the extension may touch no other part of Facebook.
+
+**Rumble.** In Settings → Connections → Rumble, paste your **Live Stream API URL** from [rumble.com/account/livestream-api](https://rumble.com/account/livestream-api). CrossChat reads Rumble chat, Rants, subs, gifted subs and the viewer count through Rumble's official API, and keeps the URL encrypted on this PC. When your Rumble live starts, CrossChat opens Rumble's chat window for it, and replies are typed there as you (sign in to Rumble in the same browser). The extension never presses Rumble's Rant button.
+
+Moderate Facebook and Rumble chat on the platforms themselves.
+
 ## Settings
 
 Your settings are in `%LOCALAPPDATA%\CrossChat\config.json` (start from [`config.example.json`](config.example.json)). Restart OBS after changing them.
@@ -256,6 +267,8 @@ Your settings are in `%LOCALAPPDATA%\CrossChat\config.json` (start from [`config
 | `twitch`, `youtube`, `kick` | `""` | Your channels. A name, an `@handle`, a channel ID or a link all work. |
 | `tiktok` | `""` | Your TikTok `@name`. Its LIVE page opens in your browser when OBS goes live (see [TikTok LIVE](#tiktok-live)). |
 | `tiktok_window` | `"auto"` | Where that page goes: under the chat window, or `{"x", "y", "width", "height"}`. |
+| `facebook` | `false` | `true`: Facebook Live comments from Live Producer (see [Facebook Live and Rumble](#facebook-live-and-rumble)). |
+| `facebook_window`, `rumble_window` | `"auto"` | Where Live Producer and Rumble's chat window go. |
 | `port` | `4466` | The hub's port on `127.0.0.1`. The extension expects 4466. |
 | `browser` | `"auto"` | `"auto"` (Chrome, else Edge), `"chrome"`, `"edge"` or a full path. It must be the browser that has the extension. |
 | `window` | `"auto"` | `"auto"` docks the chat at the right edge of the main screen, or `{"x", "y", "width", "height"}`. Put it where OBS doesn't capture. |
@@ -359,6 +372,8 @@ More detail, and how to report a problem privately: [SECURITY.md](SECURITY.md).
 
 - **Windows only.** The hub uses Windows to place and close the chat window.
 - **Kick** replies and moderation use Kick's documented API. Sign-in was verified against Kick; the post and moderation calls are covered by tests, not yet by a live Kick stream. Kick alerts come from Kick's public feed and haven't been checked against a real Kick stream yet.
+- **Facebook Live** (new in 1.6) is read from Live Producer, so a redesign by Facebook can break it until CrossChat is updated. It was built and tested on a real "Only me" Facebook live.
+- **Rumble** (new in 1.6) is read through Rumble's official API, which gives the latest 50 messages; CrossChat asks every 5 seconds, so a very busy Rumble chat can miss lines. Replies were tested against Rumble's signed-in chat box, not yet on a real Rumble live.
 - **TikTok LIVE** is new in 1.5. It is read from TikTok's own LIVE page, so a redesign by TikTok can break it until CrossChat is updated. It was built and tested against TikTok's current page, not yet on a real TikTok stream. Gifts don't show as alerts yet.
 - **X Live** depends on X Live Studio's page and needs X Premium. CrossChat clicks through it like a person would, so a redesign by X can break it until CrossChat is updated.
 - **YouTube** chat is read the same way YouTube's own chat pop-out reads it.

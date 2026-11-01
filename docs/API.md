@@ -54,7 +54,7 @@ Your own overlay pages get the chat as viewers see it: `msg`, `delete`, `purge`,
 |---|---|
 | `id` | CrossChat's id for the message |
 | `t` | Time, in milliseconds since 1970 |
-| `p` | Platform: `twitch`, `youtube`, `kick`, `x`, `tiktok` or `system` |
+| `p` | Platform: `twitch`, `youtube`, `kick`, `x`, `tiktok`, `facebook`, `rumble` or `system` |
 | `name` | The viewer's display name |
 | `text` | What they wrote |
 | `kind` | `chat`, `event` (a sub, gift, raid, cheer, Super Chat or membership) or `note` (a message from CrossChat itself) |
@@ -123,7 +123,7 @@ Replies and moderation are jobs: the answer comes at once with a `job_id`, and t
 {"to": ["twitch", "youtube", "kick", "x"], "text": "Thanks for the raid!", "reply": {"p": "twitch", "id": "…", "mid": "…"}}
 ```
 
-- `text` becomes one line. Limits: Twitch and Kick 500 characters, YouTube 200, TikTok 150, X 140.
+- `text` becomes one line. Limits: Facebook 8000 characters, Twitch and Kick 500, YouTube and Rumble 200, TikTok 150, X 140.
 - Twitch and Kick replies go through their APIs and need **Connect Twitch** / **Connect Kick** in Settings. YouTube, X and TikTok replies need the chat window with the extension open (and, for TikTok, your TikTok LIVE page).
 - `"dry": true` checks everything and posts nothing.
 
@@ -181,6 +181,8 @@ These answer only the hub's own pages on this PC:
 - `/themes/save`, `/themes/delete`, `/themes/default`;
 - `/outbox/result`, used by the extension.
 
-`GET /tiktok/feed` is how the extension passes on your TikTok LIVE chat. It accepts lines only for your own TikTok name, and only from the extension or a program on this PC.
+`POST /rumble/connect` (`{"url"}`) and `/rumble/disconnect` set or remove the Rumble Live Stream API URL, this PC only.
+
+`GET /tiktok/feed` and `GET /facebook/feed` are how the extension passes on your TikTok LIVE chat and Facebook Live comments. It accepts lines only for your own TikTok name, and only from the extension or a program on this PC.
 
 `GET /show` opens the chat window. `GET /x/go` goes live on X (`?mode=private` or `?mode=dry` for a test). Both refuse other websites.
