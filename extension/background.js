@@ -32,6 +32,10 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       .then((data) => respond({ reached: true, data }), () => respond({ reached: false }));
     return true;
   }
+  if (message.type === 'yt-check' && from.startsWith(YT_CHAT)) {     // is the YouTube chat pop-out CrossChat opened still needed?
+    stillNeeded(message, sender).then(respond, () => respond({ keep: true }));
+    return true;
+  }
   if (message.type === 'rm-check' && from.startsWith(RUMBLE_CHAT)) {     // which Rumble chat is the streamer's live?
     hub('/targets').then((t) => respond({ chat: t.live ? String(t.rumble_chat || '') : '' }), () => respond(null));
     return true;
@@ -98,9 +102,80 @@ async function moderate(data, tab) {
   if (data.p !== 'youtube') return { ok: false, why: 'only YouTube, Facebook and Rumble moderation go through the extension' };
   const { youtube_video: video } = await hub('/targets');
   if (!video) return { ok: false, why: 'the stream is not live on YouTube' };
-  const tabs = chrome.tabs.query({ url: 'https://www.youtube.com/live_chat*' }).then((found) => (tab ? [tab, ...found] : found));
-  return ask(tabs, { type: 'yt-mod', video, action: data.action, message_id: data.message_id }, 'YouTube chat is not loaded yet');
+  return ask(youtubeChatPage(video), { type: 'yt-mod', video, action: data.action, message_id: data.message_id, seconds: Number(data.seconds) || 0 },
+    "YouTube's chat page could not be opened");
 }
+
+// YouTube moderates only on its own chat page: the copy embedded in the CrossChat window shows the channel owner no
+// Remove, timeout or Hide user. So moderation goes to YouTube's chat pop-out for this live. When none is open, the
+// extension opens one in a background tab of the browser (never in front, never a new window while one is open),
+// marked with crosschat=1 in its address. That tab is used for every moderation of the live, and it closes itself
+// once the live is over or CrossChat has closed (see yt-check); one for an earlier live is closed straight away.
+const YT_CHAT = 'https://www.youtube.com/live_chat';
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let opening = null;                            // { video, tabs }: the pop-out being opened, so two clicks open one
+
+function chatPageFor(url, video) {
+  try {
+    const u = new URL(url);
+    return u.origin === 'https://www.youtube.com' && u.pathname === '/live_chat' && !u.searchParams.has('embed_domain')
+      && (video === undefined || u.searchParams.get('v') === video);
+  } catch (e) {
+    return false;
+  }
+}
+
+// One CrossChat opened (not one the streamer opened by hand, which is never closed).
+const ours = (url) => chatPageFor(url) && new URL(url).searchParams.get('crosschat') === '1';
+
+function youtubeChatPage(video, wait = 1000, tries = 30) {
+  if (opening && opening.video === video) return opening.tabs;
+  const tabs = findOrOpenChatPage(video, wait, tries);
+  opening = { video, tabs };
+  const done = () => { if (opening && opening.tabs === tabs) opening = null; };
+  tabs.then(done, done);
+  return tabs;
+}
+
+async function findOrOpenChatPage(video, wait, tries) {
+  const found = await chrome.tabs.query({ url: YT_CHAT + '*' });
+  const stale = found.filter((t) => ours(t.url || '') && !chatPageFor(t.url, video)).map((t) => t.id);
+  if (stale.length) await chrome.tabs.remove(stale).catch(() => {});
+  const open = found.filter((t) => chatPageFor(t.url || t.pendingUrl || '', video));
+  let tab = null;
+  for (const t of open) {
+    const ready = await chrome.tabs.sendMessage(t.id, { type: 'yt-ready', video }).catch(() => null);
+    if (ready) return [t];
+  }
+  if (open.length) {         // open, but nothing answers there: it was loaded before the extension was (re)loaded
+    tab = open[0];
+    await chrome.tabs.reload(tab.id).catch(() => {});
+  } else {
+    const url = YT_CHAT + '?is_popout=1&v=' + encodeURIComponent(video) + '&crosschat=1';
+    const windows = await chrome.windows.getAll({ windowTypes: ['normal'] }).catch(() => []);
+    const where = windows.find((w) => w.focused) || windows[0];
+    tab = where ? await chrome.tabs.create({ windowId: where.id, url, active: false })
+      : (await chrome.windows.create({ url, focused: false, state: 'minimized' })).tabs[0];
+  }
+  for (let i = 0; i < tries; i++) {          // until YouTube's chat is on the page
+    await sleep(wait);
+    const ready = await chrome.tabs.sendMessage(tab.id, { type: 'yt-ready', video }).catch(() => null);
+    if (ready && ready.ok) break;
+  }
+  return [tab];
+}
+
+// The pop-out CrossChat opened asks every half minute whether it is still needed: not once the live has ended or
+// another one started, nor when CrossChat has been unreachable twice in a row (closed with OBS).
+async function stillNeeded(message, sender) {
+  if (!sender.tab || !ours(sender.url || '')) return { keep: true };
+  const t = await hub('/targets').catch(() => null);
+  const keep = t ? !!t.live && t.youtube_video === message.video : Number(message.misses) < 1;
+  if (!keep) await chrome.tabs.remove(sender.tab.id).catch(() => {});
+  return { keep, reached: !!t };
+}
+
+if (typeof module === 'object' && module.exports) module.exports = { moderate, chatPageFor, youtubeChatPage, stillNeeded };   // Node (the tests)
 
 // Hand the message to the page script in one of these tabs; the first one that manages it wins.
 async function ask(tabs, message, nobody) {

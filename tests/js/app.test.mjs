@@ -41,6 +41,13 @@ test('what can carry a message: Twitch and Kick once connected, the rest through
   assert.equal(A.canReply({ ...chat('twitch'), kind: 'event' }, here).ok, false);
 });
 
+test('YouTube moderation is waited for longer: it may first open YouTube’s chat pop-out', () => {
+  assert.equal(A.patience({ kind: 'mod', p: 'youtube' }), 75000);
+  assert.equal(A.patience({ kind: 'mod', p: 'twitch' }), 25000);
+  assert.equal(A.patience({ kind: 'send', to: ['youtube'] }), 25000);
+  assert.equal(A.patience(null), 25000);
+});
+
 test('moderation per platform', () => {
   const off = A.modMenu(chat('twitch'), here);
   assert.ok(off.length >= 5 && off.every((e) => !e.ok && /Connect Twitch/.test(e.why)));

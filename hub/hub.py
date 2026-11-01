@@ -1970,6 +1970,9 @@ async def by_executor(job, seconds=25):
 
 
 NO_EXECUTOR = "the CrossChat window with the extension is not open on the streaming PC"
+# YouTube moderation can first have to open YouTube's chat pop-out (only there does YouTube offer it): give it longer
+# (the chat window's app.js waits as long, patience()).
+YT_MOD_SECONDS = 75
 
 
 async def run_send(job):
@@ -2054,7 +2057,7 @@ async def run_mod(job):
             except (KickError, requests.RequestException, ValueError) as error:
                 answer = {"ok": False, "why": str(error) or "Kick did not answer"}
     else:
-        answer = await by_executor(job) or {"ok": False, "why": NO_EXECUTOR}
+        answer = await by_executor(job, YT_MOD_SECONDS if p == "youtube" else 25) or {"ok": False, "why": NO_EXECUTOR}
     log.info("moderation %s on %s: %s", action, p, "done" if answer.get("ok") else answer.get("why"))
     send({"type": "sent", "job_id": job["id"], "answer": answer})
 
