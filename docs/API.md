@@ -54,7 +54,7 @@ Your own overlay pages get the chat as viewers see it: `msg`, `delete`, `purge`,
 |---|---|
 | `id` | CrossChat's id for the message |
 | `t` | Time, in milliseconds since 1970 |
-| `p` | Platform: `twitch`, `youtube`, `kick`, `x`, `tiktok`, `facebook`, `rumble` or `system` |
+| `p` | Platform: `twitch`, `youtube`, `kick`, `x`, `tiktok`, `facebook`, `instagram`, `rumble` or `system` |
 | `name` | The viewer's display name |
 | `text` | What they wrote |
 | `kind` | `chat`, `event` (a sub, gift, raid, cheer, Super Chat or membership) or `note` (a message from CrossChat itself) |
@@ -183,6 +183,6 @@ These answer only the hub's own pages on this PC:
 
 `POST /rumble/connect` (`{"url"}`) and `/rumble/disconnect` set or remove the Rumble Live Stream API URL, this PC only.
 
-`GET /tiktok/feed` and `GET /facebook/feed` are how the extension passes on your TikTok LIVE chat and Facebook Live comments. It accepts lines only for your own TikTok name, and only from the extension or a program on this PC.
+`GET /tiktok/feed`, `GET /facebook/feed` and `GET /instagram/feed` are how the extension passes on your TikTok LIVE chat, Facebook Live comments and Instagram Live comments. It accepts lines only for your own TikTok name, and only from the extension or a program on this PC.
 
 `GET /show` opens the chat window. `GET /x/go` goes live on X (`?mode=private` or `?mode=dry` for a test). Both refuse other websites.

@@ -6,7 +6,7 @@ CrossChat is MIT licensed (see [LICENSE](LICENSE)). It uses the following, under
 
 | What | Where | Licence |
 |---|---|---|
-| [Simple Icons](https://simpleicons.org) 16.33.0: Twitch, YouTube, Kick, X, TikTok, Facebook and Rumble glyphs | `hub/web/icons.js` | CC0 1.0 |
+| [Simple Icons](https://simpleicons.org) 16.33.0: Twitch, YouTube, Kick, X, TikTok, Facebook, Instagram and Rumble glyphs | `hub/web/icons.js` | CC0 1.0 |
 | [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) 2.0.4 by Kazuhiko Arase, for the pairing QR code | `hub/web/vendor/qrcode.js` | MIT |
 
 The platform names and logos are trademarks of their owners and are used only to show where a chat message came from. CrossChat is not affiliated with or endorsed by OBS Project, X Corp., Twitch, YouTube (Google) or Kick.

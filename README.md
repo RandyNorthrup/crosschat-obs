@@ -139,6 +139,7 @@ Every setting, the CSS hooks and how to share themes are in **[docs/THEMES.md](d
 | **X Live** *(optional)* | X Premium with access to [X Live Studio](https://studio.x.com/live), and OBS sending video to X (see [X Live](#x-live)). |
 | **TikTok LIVE** *(optional)* | Signed in to TikTok in the same browser, and OBS sending video to TikTok (see [TikTok LIVE](#tiktok-live)). |
 | **Facebook Live, Rumble** *(optional)* | Signed in to them in the same browser (see [Facebook Live and Rumble](#facebook-live-and-rumble)). |
+| **Instagram Live** *(optional)* | Signed in to Instagram in the same browser, and OBS sending video to Instagram (see [Instagram Live](#instagram-live)). |
 
 CrossChat doesn't send your video anywhere. OBS does that. To stream to several platforms at once, use what you already use for that: an OBS multi-output plugin such as [obs-multi-rtmp](https://github.com/sorayuki/obs-multi-rtmp), or a restreaming service.
 
@@ -216,6 +217,7 @@ A Stream Deck can trigger them with a *Hotkey* action, or open the Start-menu sh
 | **X** | ✅ | ✅ | — | ✅ | — |
 | **TikTok LIVE** | ✅ (your own LIVE page) | ✅ | in TikTok | ✅ | — (see [Known limits](#known-limits)) |
 | **Facebook Live** | ✅ (Live Producer) | ✅ | in Facebook | ✅ | — |
+| **Instagram Live** | ✅ (Live producer) | ✅ | in Instagram | ✅ | — |
 | **Rumble** | ✅ (official API) | ✅ | in Rumble | ✅ | Rants, subs, gifted subs |
 
 ## X Live
@@ -258,6 +260,17 @@ The extension first asks CrossChat which TikTok account is yours. On every other
 
 Moderate Facebook and Rumble chat on the platforms themselves.
 
+## Instagram Live
+
+Instagram takes a stream from OBS through its **Live producer** on instagram.com (**Create → Live video**), which gives you a stream URL and key.
+
+1. Set `"instagram": true` in `config.json` (or answer the installer's question), and stay signed in to Instagram in Chrome or Edge, the browser with the CrossChat extension.
+2. In the Live producer, use a **persistent stream key** (**Manage Persistent Key**) in OBS, so the same key works every time you go live.
+3. When OBS starts streaming, CrossChat opens instagram.com in a small window under the chat window. Open **Create → Live video** there, add a title and pick the audience, press **Next**, and press **Go live** once the preview shows.
+4. While the live runs, the extension passes on the comments and viewer count the Live producer shows, and types your replies into its comment box, as you.
+
+Start the live in the window CrossChat opens (or any tab opened at instagram.com's home page): the extension works only there. The Live producer only ever shows your own live, and the extension reads nothing else on Instagram: no feed, messages or profiles. To rehearse, pick the **Practice** audience, which only you can see. Moderate Instagram comments in Instagram itself.
+
 ## Settings
 
 Your settings are in `%LOCALAPPDATA%\CrossChat\config.json` (start from [`config.example.json`](config.example.json)). Restart OBS after changing them.
@@ -268,7 +281,8 @@ Your settings are in `%LOCALAPPDATA%\CrossChat\config.json` (start from [`config
 | `tiktok` | `""` | Your TikTok `@name`. Its LIVE page opens in your browser when OBS goes live (see [TikTok LIVE](#tiktok-live)). |
 | `tiktok_window` | `"auto"` | Where that page goes: under the chat window, or `{"x", "y", "width", "height"}`. |
 | `facebook` | `false` | `true`: Facebook Live comments from Live Producer (see [Facebook Live and Rumble](#facebook-live-and-rumble)). |
-| `facebook_window`, `rumble_window` | `"auto"` | Where Live Producer and Rumble's chat window go. |
+| `instagram` | `false` | `true`: Instagram Live comments from its Live producer (see [Instagram Live](#instagram-live)). |
+| `facebook_window`, `instagram_window`, `rumble_window` | `"auto"` | Where Live Producer, instagram.com and Rumble's chat window go. |
 | `port` | `4466` | The hub's port on `127.0.0.1`. The extension expects 4466. |
 | `browser` | `"auto"` | `"auto"` (Chrome, else Edge), `"chrome"`, `"edge"` or a full path. It must be the browser that has the extension. |
 | `window` | `"auto"` | `"auto"` docks the chat at the right edge of the main screen, or `{"x", "y", "width", "height"}`. Put it where OBS doesn't capture. |
@@ -373,6 +387,7 @@ More detail, and how to report a problem privately: [SECURITY.md](SECURITY.md).
 - **Windows only.** The hub uses Windows to place and close the chat window.
 - **Kick** replies and moderation use Kick's documented API. Sign-in was verified against Kick; the post and moderation calls are covered by tests, not yet by a live Kick stream. Kick alerts come from Kick's public feed and haven't been checked against a real Kick stream yet.
 - **Facebook Live** (new in 1.6) is read from Live Producer, so a redesign by Facebook can break it until CrossChat is updated. It was built and tested on a real "Only me" Facebook live.
+- **Instagram Live** (new) is read from Instagram's Live producer, so a redesign by Instagram can break it until CrossChat is updated. Reading comments was built against a real "Practice" Instagram live; replies are typed into the same comment box and were tested on a copy of that page, not yet on a real live. The extension recognises the live, the viewer count and your own comments by Instagram's English labels.
 - **Rumble** (new in 1.6) is read through Rumble's official API, which gives the latest 50 messages; CrossChat asks every 5 seconds, so a very busy Rumble chat can miss lines. Replies were tested against Rumble's signed-in chat box, not yet on a real Rumble live.
 - **TikTok LIVE** is new in 1.5. It is read from TikTok's own LIVE page, so a redesign by TikTok can break it until CrossChat is updated. It was built and tested against TikTok's current page, not yet on a real TikTok stream. Gifts don't show as alerts yet.
 - **X Live** depends on X Live Studio's page and needs X Premium. CrossChat clicks through it like a person would, so a redesign by X can break it until CrossChat is updated.

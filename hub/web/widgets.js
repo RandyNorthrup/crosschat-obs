@@ -9,7 +9,7 @@
   const q = new URLSearchParams(location.search);
   const WIDGET = (/\/overlay\/(chat|featured|viewers|alerts)\b/.exec(location.pathname) || [])[1] || q.get('widget') || 'chat';
   const PREVIEW = q.has('preview'), DEMO = PREVIEW || q.has('demo'), STILL = q.get('demo') === 'still';
-  const SHORT = { twitch: 'TW', youtube: 'YT', kick: 'K', x: 'X', tiktok: 'TT', facebook: 'FB', rumble: 'RM' };
+  const SHORT = { twitch: 'TW', youtube: 'YT', kick: 'K', x: 'X', tiktok: 'TT', facebook: 'FB', instagram: 'IG', rumble: 'RM' };
   const BADGES = { broadcaster: 'host', owner: 'host', moderator: 'mod', vip: 'vip', subscriber: 'sub', founder: 'sub', member: 'member', verified: '✓' };
   const root = doc.getElementById('cc-root');
   doc.documentElement.dataset.widget = WIDGET;

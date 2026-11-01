@@ -78,6 +78,8 @@ DEFAULTS = {
     "tiktok_window": "auto",                 # where that page goes: "auto" (under the chat window) or {"x", "y", "width", "height"}
     "facebook": False,                       # true: Facebook Live chat, from Live Producer in your browser (it opens when you go live)
     "facebook_window": "auto",
+    "instagram": False,                      # true: Instagram Live comments, from its Live producer in your browser
+    "instagram_window": "auto",
     "rumble_window": "auto",                 # where Rumble's chat pop-out goes (replies are typed there)
     "browser": "auto",                       # "auto" (Chrome, else Edge), "chrome", "edge" or the full path of a browser
     "window": "auto",                        # "auto" (right edge of the main screen) or {"x", "y", "width", "height"}
@@ -112,7 +114,7 @@ HOME = APP                                   # your folder: config.json, crossch
 TEST, PORT = False, DEFAULTS["port"]
 DEMO = False                                 # --demo: a made-up live stream, for trying CrossChat without going live
 TWITCH = YOUTUBE = KICK = TIKTOK = ""
-FACEBOOK = False
+FACEBOOK = INSTAGRAM = False
 KICK_ROOM = 0
 
 
@@ -147,7 +149,7 @@ def channel(value, platform):
 
 def configure(argv):
     """Settings: the defaults, then config.json (or --config PATH, or the file CROSSCHAT_CONFIG names), then the command line."""
-    global ARGV, CFG, X, HOME, TEST, DEMO, PORT, TWITCH, YOUTUBE, KICK, KICK_ROOM, TIKTOK, FACEBOOK
+    global ARGV, CFG, X, HOME, TEST, DEMO, PORT, TWITCH, YOUTUBE, KICK, KICK_ROOM, TIKTOK, FACEBOOK, INSTAGRAM
     ARGV = list(argv)
     DEMO = "--demo" in ARGV
     path = os.path.abspath(arg("--config", os.environ.get("CROSSCHAT_CONFIG") or os.path.join(APP, "config.json")))
@@ -172,6 +174,7 @@ def configure(argv):
         KICK, KICK_ROOM = channel(slug, "kick"), int(room or 0)
     TIKTOK = channel(CFG["tiktok"], "tiktok")
     FACEBOOK = CFG.get("facebook") is True or str(CFG.get("facebook")).lower() in ("on", "yes", "1")
+    INSTAGRAM = CFG.get("instagram") is True or str(CFG.get("instagram")).lower() in ("on", "yes", "1")
     for name, given, used in (("twitch", CFG["twitch"], TWITCH), ("youtube", CFG["youtube"], YOUTUBE), ("kick", CFG["kick"], KICK),
                               ("tiktok", CFG["tiktok"], TIKTOK)):
         if given and not used:
@@ -753,7 +756,8 @@ def box(setting, part):
         return setting["x"], setting["y"], setting["width"], setting["height"]
     left, top, right, bottom = work_area()
     width = min(460, max(320, (right - left) // 4))
-    pages = [name for name, on in (("x", X), ("tiktok", TIKTOK), ("facebook", FACEBOOK), ("rumble", RB and RB.on())) if on]
+    pages = [name for name, on in (("x", X), ("tiktok", TIKTOK), ("facebook", FACEBOOK), ("instagram", INSTAGRAM), ("rumble", RB and RB.on()))
+             if on]
     split = top + (bottom - top) * 3 // 5 if pages else bottom
     if part == "chat":
         return right - width, top, width, split - top
@@ -883,7 +887,7 @@ def x_feed(first):
 
 
 async def x_watch():
-    """X and TikTok count as live only while their pages keep reporting in."""
+    """X, TikTok, Facebook and Instagram count as live only while their pages keep reporting in."""
     while True:
         await asyncio.sleep(5)
         if X and time.time() - state.get("x_seen", 0) > 20:
@@ -896,6 +900,10 @@ async def x_watch():
             facebook_off()
             if streaming.is_set():
                 note("Facebook: Live Producer stopped reporting (closed, or the live ended). Facebook comments are paused.")
+        if INSTAGRAM and status.get("instagram") == "on" and time.time() - state.get("instagram_seen", 0) > 20:
+            instagram_off()
+            if streaming.is_set():
+                note("Instagram: its Live producer stopped reporting (closed, or the live ended). Instagram comments are paused.")
 
 
 def x_result(ok, mode, step):
@@ -1023,6 +1031,61 @@ def facebook_feed(first):
         if name and text and mid != "fb-" and mid not in facebook_told:
             facebook_told.append(mid)
             publish("facebook", name, text, badges=["broadcaster"] if line.get("host") is True else [], mid=mid)
+    return True
+
+
+# ---- Instagram Live: comments from its Live producer, through the extension ------------------------------------
+# Instagram's Live producer (Create → Live video on instagram.com) is where a live from OBS is started and ended, and
+# it only ever shows the signed-in streamer's own live. When OBS goes live, CrossChat opens instagram.com; the
+# extension passes on the comments the producer shows and types replies into its comment box. Nothing else on
+# Instagram is read.
+instagram_told = collections.deque(maxlen=5000)  # comments already shown (the page gives them no ids; see instagram.js)
+
+
+def close_instagram_window():
+    hwnd = state.get("instagram_window")
+    if hwnd and user32.IsWindow(wintypes.HWND(hwnd)):
+        user32.PostMessageW(wintypes.HWND(hwnd), 0x0010, 0, 0)
+    state["instagram_window"] = None
+
+
+async def instagram_open():
+    close_instagram_window()
+    set_status("instagram", "waiting")
+    state["instagram_window"] = await open_app("https://www.instagram.com/", box(CFG.get("instagram_window"), "instagram"))
+
+
+def instagram_off():
+    if status.get("instagram") in ("on", "waiting"):
+        viewers.pop("instagram", None)
+        set_status("instagram", "off")
+        send(viewer_event())
+
+
+def instagram_feed(first):
+    """The extension passes on what the Live producer shows while a live is running: new comments and the viewer count."""
+    if not INSTAGRAM:
+        return False
+    if first("over"):
+        instagram_off()
+        return True
+    state["instagram_seen"] = time.time()
+    set_status("instagram", "on")
+    if first("viewers").isdigit() and viewers.get("instagram") != int(first("viewers")):
+        viewers["instagram"] = int(first("viewers"))
+        send(viewer_event())
+    try:
+        lines = json.loads(first("lines") or "[]")
+    except ValueError:
+        lines = []
+    for line in lines[:50] if isinstance(lines, list) else []:
+        if not isinstance(line, dict):
+            continue
+        mid = "ig-" + re.sub(r"\W", "", str(line.get("id", "")))[:80]
+        name, text = " ".join(str(line.get("name", "")).split())[:60], " ".join(str(line.get("text", "")).split())[:1000]
+        if name and text and mid != "ig-" and mid not in instagram_told:
+            instagram_told.append(mid)
+            publish("instagram", name, text, badges=["broadcaster"] if line.get("host") is True else [], mid=mid)
     return True
 
 
@@ -1159,6 +1222,7 @@ async def stream_started(local=False):
     x_told.clear()
     tiktok_told.clear()
     facebook_told.clear()
+    instagram_told.clear()
     seen.clear()
     if LOG and not DEMO and (CFG.get("logs") or {}).get("enabled", True):
         log.info("chat history: logs/%s.jsonl", LOG.start())
@@ -1172,6 +1236,8 @@ async def stream_started(local=False):
         asyncio.create_task(tiktok_open())
     if FACEBOOK and not local and not TEST:
         asyncio.create_task(facebook_open())
+    if INSTAGRAM and not local and not TEST:
+        asyncio.create_task(instagram_open())
     if X.get("auto_go_live") and not local and not TEST:
         async def soon():                       # give X a moment to see the video arriving
             await asyncio.sleep(X.get("delay_seconds", 12))
@@ -1209,6 +1275,8 @@ async def stream_stopped():
         tiktok_off()
         close_facebook_window()
         facebook_off()
+        close_instagram_window()
+        instagram_off()
         close_rumble_window()
         state["rumble_chat"] = ""
     closing = asyncio.create_task(later())
@@ -1467,8 +1535,9 @@ async def test_event(kind):
 # Every reply and moderation goes through here. Twitch is done by the hub itself with Twitch's API once the streamer
 # has connected Twitch; YouTube and X (and Twitch without that) are handed to the "executor": the chat window on this
 # PC that has the CrossChat extension, which posts as the accounts signed in to that browser.
-LIMIT = {"twitch": 500, "youtube": 200, "x": 140, "kick": 500, "tiktok": 150, "facebook": 8000, "rumble": 200}
-NAMES = {"twitch": "Twitch", "youtube": "YouTube", "x": "X", "kick": "Kick", "tiktok": "TikTok", "facebook": "Facebook", "rumble": "Rumble"}
+LIMIT = {"twitch": 500, "youtube": 200, "x": 140, "kick": 500, "tiktok": 150, "facebook": 8000, "instagram": 2200, "rumble": 200}
+NAMES = {"twitch": "Twitch", "youtube": "YouTube", "x": "X", "kick": "Kick", "tiktok": "TikTok", "facebook": "Facebook",
+         "instagram": "Instagram", "rumble": "Rumble"}
 MOD_ACTIONS = {"twitch": ("delete", "timeout", "ban", "unban"), "youtube": ("delete", "timeout", "ban"),
                "kick": ("delete", "timeout", "ban", "unban")}
 QUICK_DEFAULTS = ["Welcome in! 👋", "Thanks for the follow!", "Good question, one sec", "GG", "❤️", "Be right back, 2 minutes"]
@@ -2293,7 +2362,7 @@ async def serve(reader, writer, remote=False):
             await reply(writer, "200 OK", "application/json", json.dumps({"version": VERSION}).encode(), OPEN)
         elif url.path == "/targets":               # where a typed reply goes
             body = {"twitch": TWITCH, "youtube_video": state["youtube_video"], "tiktok": TIKTOK, "facebook": FACEBOOK,
-                    "rumble_chat": state.get("rumble_chat") or "", "live": streaming.is_set()}
+                    "instagram": INSTAGRAM, "rumble_chat": state.get("rumble_chat") or "", "live": streaming.is_set()}
             await reply(writer, "200 OK", "application/json", json.dumps(body).encode())
         elif url.path == "/events":
             writer.write(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-store\r\n" + OPEN.encode()
@@ -2357,6 +2426,9 @@ async def serve(reader, writer, remote=False):
             await reply(writer, "200 OK", "application/json", json.dumps({"mine": mine}).encode())
         elif url.path == "/facebook/feed":         # the extension passes on Facebook Live comments from Live Producer
             mine = facebook_feed(lambda k: (query.get(k) or [""])[0])
+            await reply(writer, "200 OK", "application/json", json.dumps({"mine": mine}).encode())
+        elif url.path == "/instagram/feed":        # the extension passes on Instagram Live comments from its Live producer
+            mine = instagram_feed(lambda k: (query.get(k) or [""])[0])
             await reply(writer, "200 OK", "application/json", json.dumps({"mine": mine}).encode())
         elif url.path == "/x/last":
             await reply(writer, "200 OK", "application/json", json.dumps(state.get("x_last")).encode())
@@ -2573,7 +2645,9 @@ async def main():
         status["tiktok"] = "off"
     if FACEBOOK and not DEMO:
         status["facebook"] = "off"
-    if X or TIKTOK or FACEBOOK:
+    if INSTAGRAM and not DEMO:
+        status["instagram"] = "off"
+    if X or TIKTOK or FACEBOOK or INSTAGRAM:
         tasks.append(asyncio.create_task(keep_running("pages", x_watch)))
     if RB and RB.on() and not DEMO:
         status["rumble"] = "off"

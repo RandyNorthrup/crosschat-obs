@@ -124,6 +124,7 @@ if (Test-Path $config) {
     $env:CROSSCHAT_KICK = Ask 'Kick channel'
     $env:CROSSCHAT_TIKTOK = Ask 'TikTok @name (if you go LIVE on TikTok)'
     $env:CROSSCHAT_FACEBOOK = if (Yes 'Do you go live on Facebook?' $false) { '1' } else { '0' }
+    $env:CROSSCHAT_INSTAGRAM = if (Yes 'Do you go live on Instagram from OBS (Create, then Live video, on instagram.com)?' $false) { '1' } else { '0' }
     $env:CROSSCHAT_X = if (Yes 'Do you stream to X (it needs X Premium and Live Studio)?' $false) { '1' } else { '0' }
     $env:CROSSCHAT_EMOTES = if (Yes 'Show 7TV, BetterTTV and FrankerFaceZ emotes (asks those services for your channel''s emotes)?') { '1' } else { '0' }
     if ($env:CROSSCHAT_X -eq '1') {

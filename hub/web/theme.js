@@ -7,7 +7,7 @@
   root.CrossChatTheme = api;
 })(typeof self !== 'undefined' ? self : globalThis, function () {
   const SCHEMA = 1;
-  const PLATFORMS = ['twitch', 'youtube', 'kick', 'x', 'tiktok', 'facebook', 'rumble'];
+  const PLATFORMS = ['twitch', 'youtube', 'kick', 'x', 'tiktok', 'facebook', 'instagram', 'rumble'];
   const ALERTS = ['sub', 'resub', 'gift', 'raid', 'cheer', 'member', 'superchat', 'follow', 'other'];
   const SANS = '"Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif';
 
@@ -32,6 +32,7 @@
       x: '#e7e9ea',
       tiktok: '#fe2c55',
       facebook: '#0866ff',
+      instagram: '#ff0069',
       rumble: '#85c742',
     },
     message: {

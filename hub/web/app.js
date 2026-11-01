@@ -12,11 +12,11 @@
   root.CrossChatApp = api;
 })(typeof self !== 'undefined' ? self : globalThis, function () {
   const NAMES = { twitch: ['Twitch', 'TW'], youtube: ['YouTube', 'YT'], kick: ['Kick', 'K'], x: ['X', 'X'], tiktok: ['TikTok', 'TT'],
-                  facebook: ['Facebook', 'FB'], rumble: ['Rumble', 'RM'] };
+                  facebook: ['Facebook', 'FB'], instagram: ['Instagram', 'IG'], rumble: ['Rumble', 'RM'] };
   // Platforms a reply can go to, and the longest message each takes. Kick only once Kick is connected in Settings.
-  const LIMIT = { twitch: 500, youtube: 200, x: 140, kick: 500, tiktok: 150, facebook: 8000, rumble: 200 };
+  const LIMIT = { twitch: 500, youtube: 200, x: 140, kick: 500, tiktok: 150, facebook: 8000, instagram: 2200, rumble: 200 };
   // Chats read and answered through the streamer's own live page in the browser (the extension does the typing).
-  const PAGE_PLATFORMS = ['tiktok', 'facebook', 'rumble'];
+  const PAGE_PLATFORMS = ['tiktok', 'facebook', 'instagram', 'rumble'];
   const QUICK_MAX = 30, QUICK_LENGTH = 100;
   const LONGEST_TIMEOUT = { twitch: 1209600, kick: 604800 };    // 14 days; 7 days
 
@@ -158,7 +158,7 @@
 
   // ---- reading chat aloud ----------------------------------------------------------------------------------------------
   const TTS_READ = ['all', 'questions', 'events', 'command', 'featured'];
-  const TTS_PLATFORMS = ['twitch', 'youtube', 'kick', 'x', 'tiktok', 'facebook', 'rumble'];
+  const TTS_PLATFORMS = ['twitch', 'youtube', 'kick', 'x', 'tiktok', 'facebook', 'instagram', 'rumble'];
 
   // Text-to-speech settings as the hub keeps them, from whatever came in (missing or wrong values get the defaults).
   function ttsSettings(raw) {
