@@ -5,6 +5,7 @@ import time
 
 import devices
 import hub
+import pytest
 import twitch_api
 
 
@@ -87,6 +88,7 @@ def test_device_names():
     assert devices.device_name("") == "Device"
 
 
+@pytest.mark.keyring
 def test_twitch_tokens_are_encrypted_for_this_windows_user(tmp_path):
     secret = b'{"access_token": "abc"}'
     sealed = twitch_api.protect(secret)

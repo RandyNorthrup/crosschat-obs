@@ -1,6 +1,6 @@
 """The OBS script (obs/crosschat.lua) run in LuaJIT, the Lua OBS uses, with a stand-in for OBS's own functions.
 
-It starts a stand-in hub.py through the script's real code (ShellExecuteExW on Windows, posix_spawn on a Mac) and
+It starts a stand-in hub.py through the script's real code (ShellExecuteExW on Windows, posix_spawn on a Mac or Linux) and
 checks the watchdog: a hub that stops with an error is started again, at most five times in ten minutes, and one that
 ends normally is left alone. The scenario itself is tests/obs_script_driver.lua. It runs inside this process with
 lupa (pip install lupa) where lupa has LuaJIT (Windows, Linux), else with a `luajit` program (brew install luajit on a
@@ -25,12 +25,18 @@ LUAJIT = shutil.which("luajit")
 pytestmark = pytest.mark.skipif(not (luajit21 or LUAJIT), reason="needs LuaJIT: pip install lupa, or brew install luajit")
 FAKE = """import json, os, sys
 app = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-held = []                                       # the files this program was handed open (a Mac can name them)
+held = []                                       # the files this program was handed open (a Mac or Linux can name them)
 if sys.platform == "darwin":
     import fcntl
     for fd in range(3, 256):
         try:
             held.append(fcntl.fcntl(fd, fcntl.F_GETPATH, bytes(1024)).rstrip(b"\\0").decode())
+        except OSError:
+            pass
+elif sys.platform.startswith("linux"):
+    for fd in range(3, 256):
+        try:
+            held.append(os.readlink("/proc/self/fd/%d" % fd))
         except OSError:
             pass
 with open(os.path.join(app, "NAME.held.jsonl"), "a", encoding="utf-8") as f:
@@ -92,14 +98,30 @@ def obs(tmp_path):
     return Obs()
 
 
+def obs_folder():
+    """Where OBS keeps its settings on this system (where the script tells the hub to look)."""
+    if sys.platform == "win32":
+        return os.path.join(os.environ.get("APPDATA", ""), "obs-studio")
+    if sys.platform == "darwin":
+        return os.path.expanduser("~/Library/Application Support/obs-studio")
+    base = os.environ.get("XDG_CONFIG_HOME", "")
+    return os.path.join(base if base.startswith("/") else os.path.expanduser("~/.config"), "obs-studio")
+
+
 def test_the_script_starts_the_hub_for_this_obs(obs):
     obs.run()
-    folder = os.path.join(os.environ.get("APPDATA", ""), "obs-studio") if sys.platform == "win32" else \
-        os.path.expanduser("~/Library/Application Support/obs-studio")
+    folder = obs_folder()
     pid = os.getpid() if luajit21 else None              # (the luajit program is OBS here, with its own pid)
     first = obs.runs()[0]
     assert first[0] == "--obs-pid" and first[1].isdigit() and first[2:] == ["--obs-config", folder]
     assert pid is None or first[1] == str(pid)
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="XDG folders are a Linux matter")
+def test_on_linux_the_script_finds_obs_settings_where_obs_does(obs, monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "elsewhere"))      # (what a Flatpak or a custom setup sets)
+    obs.run()
+    assert obs.runs()[0][2:] == ["--obs-config", str(tmp_path / "elsewhere" / "obs-studio")]
 
 
 def test_a_hub_that_ends_normally_is_left_alone(obs):
@@ -119,9 +141,10 @@ def test_buttons_run_control_py(obs):
     assert obs.runs("control") == [["show"]]
 
 
-@pytest.mark.skipif(sys.platform != "darwin", reason="a Mac matter: on Windows the hub is started without OBS's handles")
+@pytest.mark.skipif(sys.platform == "win32", reason="a Mac and Linux matter: on Windows the hub is started without OBS's handles")
 def test_the_hub_gets_none_of_obs_own_files_or_sockets(obs):
-    # A hub holding OBS's WebSocket server socket kept OBS's port taken after OBS closed (found with OBS 33 on macOS 15)
+    # A hub holding OBS's WebSocket server socket kept OBS's port taken after OBS closed (found with OBS 33 on macOS 15;
+    # on Linux, posix_spawn passes them too unless the script closes them)
     obs.run(press="show")
     for name in ("hub", "control"):
         held = obs.held(name)

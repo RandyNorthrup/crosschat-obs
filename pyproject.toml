@@ -16,3 +16,4 @@ ignore = ["E731"]          # the hub names small one-line lookups with lambda on
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-p no:cacheprovider"
+markers = ["keyring: keeps a secret through hub/vault.py (on Linux that needs a desktop keyring; skipped where none answers)"]

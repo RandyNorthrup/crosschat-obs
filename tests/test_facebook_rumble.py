@@ -90,6 +90,7 @@ def test_rumble_reads_chat_rants_and_subs(home, monkeypatch):
     assert hub.status["rumble"] == "waiting" and "rumble" not in hub.viewers and hub.state["rumble_chat"] == ""
 
 
+@pytest.mark.keyring
 def test_rumble_url_is_checked_encrypted_and_never_shown(tmp_path, monkeypatch):
     r = rumble_api.Rumble(str(tmp_path / "rumble.bin"))
     for bad in ("https://evil.example/-livestream-api/get-data?key=abcdefgh", "http://rumble.com/-livestream-api/get-data?key=abcdefgh",
@@ -120,6 +121,7 @@ def test_rumble_url_is_checked_encrypted_and_never_shown(tmp_path, monkeypatch):
     assert not (tmp_path / "rumble.bin").exists() and not r.on()
 
 
+@pytest.mark.keyring
 def test_rumble_connect_is_this_pc_only(home):
     home({})
 

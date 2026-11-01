@@ -287,6 +287,7 @@ def test_chat_reaches_discord_as_plain_text_that_pings_nobody():
         "**turbo** (Kick) turbo gifted 5 subs"
 
 
+@pytest.mark.keyring
 def test_webhook_url_is_checked_encrypted_and_never_shown(tmp_path, discord, monkeypatch):
     d = discord_relay.Discord(str(tmp_path / "discord.bin"), hub.NAMES, base=discord.base)
     for bad in ("http://discord.com/api/webhooks/%s/%s" % (HOOK_ID, HOOK_TOKEN), "https://evil.example/api/webhooks/%s/%s" % (HOOK_ID, HOOK_TOKEN),
@@ -314,6 +315,7 @@ def test_webhook_url_is_checked_encrypted_and_never_shown(tmp_path, discord, mon
     assert not (tmp_path / "discord.bin").exists() and again.state()["state"] == "off"
 
 
+@pytest.mark.keyring
 def test_posting_batches_waits_when_asked_and_stops_when_the_webhook_is_gone(tmp_path, discord):
     changed = []
     d = discord_relay.Discord(str(tmp_path / "discord.bin"), hub.NAMES, base=discord.base, changed=lambda: changed.append(1))
@@ -371,6 +373,7 @@ def test_chat_faster_than_discord_drops_the_oldest_lines_and_says_so(tmp_path):
     assert first["content"].startswith("_(100 messages skipped") and "line 100\n" in first["content"] and "line 99\n" not in first["content"]
 
 
+@pytest.mark.keyring
 def test_hub_posts_to_discord_only_during_a_real_stream(home, discord):
     home({"twitch": "me", "youtube": "@mychannel", "kick": "me-too"})
     hub.DC.base = discord.base
@@ -403,6 +406,7 @@ def test_hub_posts_to_discord_only_during_a_real_stream(home, discord):
             hub.closing.cancel()
 
 
+@pytest.mark.keyring
 def test_discord_routes(home, discord):
     home({})
     hub.DC.base = discord.base

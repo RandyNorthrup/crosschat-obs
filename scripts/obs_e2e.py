@@ -11,17 +11,24 @@ Theme API answer, and that the hub leaves when OBS closes.
     so it runs with a stand-in home folder of its own; your OBS settings in ~/Library/Application Support/obs-studio
     are never read or changed. Run it from a Terminal on the Mac, or over SSH while someone is logged in at the Mac.
     python3 scripts/obs_e2e.py [--obs /Applications/OBS.app] [--crosschat "~/Library/Application Support/CrossChat"]
+  Linux: the installed obs (or --obs PATH), with its settings in a throwaway folder (XDG_CONFIG_HOME), so
+    ~/.config/obs-studio is never read or changed; or --obs flatpak for OBS from Flathub, which always uses its own
+    settings folder: yours waits next to the test and is put back at the end, and the CrossChat folder must be in your
+    home folder, where OBS's sandbox can see it. Without a desktop (no DISPLAY) OBS runs on an Xvfb display of its own.
+    python3 scripts/obs_e2e.py [--obs /usr/bin/obs | --obs flatpak] [--crosschat ~/.local/share/CrossChat]
 
 --crosschat tests another CrossChat folder (an installed copy) instead of this checkout. The OBS script there uses
-that folder's own Python (python\\pythonw.exe or .venv on Windows, .venv/bin/python3 on a Mac), as it would for a
-streamer. --keep leaves OBS and the hub running at the end (for screenshots). Needs ffmpeg (on PATH, or --ffmpeg),
-and requests and websockets (hub/requirements.txt).
+that folder's own Python (python\\pythonw.exe or .venv on Windows, .venv/bin/python3 on a Mac or Linux), as it would for
+a streamer. --keep leaves OBS and the hub running at the end (for screenshots). Needs ffmpeg (on PATH, or --ffmpeg),
+and requests and websockets (hub/requirements.txt); on Linux without a desktop, Xvfb.
 """
 import argparse
+import glob
 import json
 import os
 import plistlib
 import queue
+import re
 import shutil
 import signal
 import socket
@@ -269,29 +276,158 @@ def mac_close(obs):
     obs.send_signal(signal.SIGTERM)
 
 
+# ---- Linux: the installed OBS, or OBS from Flathub ------------------------------------------------------------------
+FLATPAK = "com.obsproject.Studio"
+FLATPAK_SETTINGS = os.path.expanduser("~/.var/app/%s/config/obs-studio" % FLATPAK)
+
+
+def linux_obs(program):
+    """The obs program (`program`, else obs on PATH), or "flatpak" for OBS from Flathub: (program, version), or None."""
+    if program == "flatpak":
+        said = subprocess.run(["flatpak", "info", FLATPAK], capture_output=True, text=True).stdout if shutil.which("flatpak") else ""
+        found = re.search(r"Version:\s*(\d+\.\d+\.\d+)", said)
+        if not check(bool(found), "OBS from Flathub found", "flatpak info %s found nothing" % FLATPAK):
+            return None
+        return shutil.which("flatpak"), found.group(1)
+    exe = shutil.which(program or "obs")
+    if not check(bool(exe), "OBS found", program or "no obs on PATH (pass --obs)"):
+        return None
+    found = re.search(r"\d+\.\d+\.\d+", subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=60).stdout)
+    return exe, found.group(0) if found else "30.0.0"
+
+
+def linux_has_browser(flatpak):
+    """Whether this OBS has its Browser Source (Ubuntu's and Debian's own obs-studio package leaves it out)."""
+    return flatpak or bool(glob.glob("/usr/lib*/obs-plugins/obs-browser.so") + glob.glob("/usr/lib/*/obs-plugins/obs-browser.so")
+                           + glob.glob("/usr/local/lib*/obs-plugins/obs-browser.so"))
+
+
+def linux_settings(home, flatpak, crosschat):
+    """(settings folder, extra arguments, extra environment). The installed OBS, and the CrossChat script (which looks
+    where OBS does), get XDG_CONFIG_HOME in `home`. OBS from Flathub always uses its own folder: whatever is there
+    waits in `home` until linux_restore. Without a desktop, OBS gets an Xvfb display of its own."""
+    env = {}
+    if not os.environ.get("DISPLAY"):
+        screen = linux_xvfb()
+        if not check(bool(screen), "an Xvfb display for OBS", "no desktop here, and Xvfb isn't installed or didn't start"):
+            return None
+        env.update(DISPLAY=screen, WAYLAND_DISPLAY=None, QT_QPA_PLATFORM="xcb")
+    if not flatpak:
+        config = os.path.join(home, "xdg-config", "obs-studio")
+        env["XDG_CONFIG_HOME"] = os.path.dirname(config)
+        return config, [], env
+    # the sandbox has a /tmp of its own but sees the home folder: the CrossChat script must be there
+    if not check(crosschat.startswith(os.path.expanduser("~") + os.sep), "this CrossChat is where OBS's sandbox can see it", crosschat):
+        return None
+    if os.path.exists(FLATPAK_SETTINGS):
+        shutil.move(FLATPAK_SETTINGS, os.path.join(home, "your-flatpak-obs-settings"))
+        print("Your OBS (Flathub) settings wait in %s and are put back at the end." % os.path.join(home, "your-flatpak-obs-settings"))
+    return FLATPAK_SETTINGS, ["run", "--env=CROSSCHAT_CONFIG=" + os.path.join(home, "config.json"), FLATPAK], env
+
+
+def linux_restore(home):
+    """OBS from Flathub: this test's settings go next to its log in `home`, and yours come back."""
+    if os.path.exists(FLATPAK_SETTINGS):
+        shutil.move(FLATPAK_SETTINGS, os.path.join(home, "test-flatpak-obs-settings"))
+    if os.path.exists(os.path.join(home, "your-flatpak-obs-settings")):
+        shutil.move(os.path.join(home, "your-flatpak-obs-settings"), FLATPAK_SETTINGS)
+
+
+LINUX_SCREENS = []                           # the Xvfb displays started here, stopped at the end
+
+
+def linux_xvfb():
+    """The name (":n") of a new 1920x1080 Xvfb display, or None."""
+    if not shutil.which("Xvfb"):
+        return None
+    for n in range(90, 130):
+        if os.path.exists("/tmp/.X%d-lock" % n) or os.path.exists("/tmp/.X11-unix/X%d" % n):
+            continue
+        screen = subprocess.Popen(["Xvfb", ":%d" % n, "-screen", "0", "1920x1080x24", "-nolisten", "tcp"], stdin=subprocess.DEVNULL,
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if wait_for(lambda n=n, screen=screen: os.path.exists("/tmp/.X11-unix/X%d" % n) or screen.poll() is not None, 10, 0.1) \
+                and screen.poll() is None:
+            LINUX_SCREENS.append(screen)
+            return ":%d" % n
+        screen.kill()
+    return None
+
+
+def linux_close(obs, flatpak):
+    """Close OBS normally: OBS on Linux does on Ctrl+C (SIGINT). In the Flatpak, that goes to OBS itself, the child of
+    the sandbox's first process (flatpak ps names it), not to `flatpak run`."""
+    pid = obs.pid
+    if flatpak:
+        listed = subprocess.run(["flatpak", "ps", "--columns=child-pid,application"], capture_output=True, text=True).stdout.split()
+        starts = {listed[i] for i in range(0, len(listed) - 1, 2) if listed[i + 1] == FLATPAK}
+        for entry in os.listdir("/proc"):
+            try:
+                with open("/proc/%s/stat" % entry, encoding="utf-8", errors="replace") as f:
+                    head, rest = f.read().rsplit(")", 1)
+            except (OSError, ValueError):
+                continue
+            if rest.split()[1] in starts and head.endswith("(obs"):
+                pid = int(entry)
+    os.kill(pid, signal.SIGINT)
+
+
+def obs_log(config):
+    """The CrossChat script's lines in OBS's newest log."""
+    try:
+        folder = os.path.join(config, "logs")
+        newest = max((os.path.join(folder, f) for f in os.listdir(folder)), key=os.path.getmtime)
+        with open(newest, encoding="utf-8", errors="replace") as f:
+            return [line.rstrip() for line in f if "crosschat" in line.lower()]
+    except (OSError, ValueError):
+        return []
+
+
+def obs_answers():
+    """True when obs-websocket says hello on its port and takes the password."""
+    try:
+        ws, _ = obs_connect()
+        ws.close()
+        return True
+    except Exception:                        # refused, not ready yet, closed: not answering
+        return False
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--obs", help="Windows: the folder of a portable OBS (the extracted .zip). macOS: OBS.app (default %s)" % MAC_OBS)
+    parser.add_argument("--obs", help="Windows: the folder of a portable OBS (the extracted .zip). macOS: OBS.app (default %s). "
+                                      "Linux: the obs program (default: obs on PATH), or flatpak for OBS from Flathub" % MAC_OBS)
     parser.add_argument("--crosschat", default=ROOT, help="the CrossChat folder to test, such as an installed copy (default: this checkout)")
     parser.add_argument("--ffmpeg", default="ffmpeg", help="the ffmpeg program for the RTMP receiver (default: ffmpeg on PATH)")
     parser.add_argument("--keep", action="store_true", help="leave OBS and the hub running at the end")
     parser.add_argument("--backdrop", help="a 1920x1080 picture behind the widgets (for screenshots)")
     args = parser.parse_args()
     mac = sys.platform == "darwin"
+    linux = sys.platform.startswith("linux")
+    flatpak = linux and args.obs == "flatpak"
     crosschat = os.path.abspath(os.path.expanduser(args.crosschat))
-    if not mac and not args.obs:
+    if not (mac or linux) and not args.obs:
         parser.error("--obs: the folder of a portable OBS")
-    found = mac_obs(os.path.expanduser(args.obs or MAC_OBS)) if mac else windows_obs(args.obs)
+    found = mac_obs(os.path.expanduser(args.obs or MAC_OBS)) if mac else linux_obs(args.obs) if linux else windows_obs(args.obs)
     if not found:
         return 1
     exe, version = found
-    print("OBS %s at %s" % (version, exe))
+    print("OBS %s at %s" % (version, FLATPAK + " (Flathub)" if flatpak else exe))
     if hub_up():
         check(False, "port %d is free" % HUB_PORT, "something already answers there")
         return 1
 
     home = tempfile.mkdtemp(prefix="crosschat-e2e-")
-    config, flags, extra_env = mac_settings(os.path.join(home, "home")) if mac else windows_settings(args.obs)
+    if mac:
+        settings = mac_settings(os.path.join(home, "home"))
+    elif linux:
+        settings = linux_settings(home, flatpak, crosschat)
+    else:
+        settings = windows_settings(args.obs)
+    if not settings:
+        shutil.rmtree(home, ignore_errors=True)
+        return 1
+    config, flags, extra_env = settings
+    browser = linux_has_browser(flatpak) if linux else True         # (Ubuntu's own OBS has no Browser Source)
     obs_settings(config, version, args.backdrop, os.path.join(crosschat, "obs", "crosschat.lua"))
     if mac:
         mac_first_start(config)
@@ -299,8 +435,20 @@ def main():
                                                          "x": {"enabled": True, "auto_go_live": False}}))
     receiver = subprocess.Popen([args.ffmpeg, "-hide_banner", "-loglevel", "error", "-listen", "1", "-i",
                                  "rtmp://127.0.0.1:1935/live/e2e", "-f", "null", "-"], stdin=subprocess.DEVNULL)
-    env = dict(os.environ, CROSSCHAT_CONFIG=os.path.join(home, "config.json"), **extra_env)
-    obs = subprocess.Popen([exe, *flags, *FLAGS], cwd=os.path.dirname(exe), env=env)
+    env = {k: v for k, v in {**os.environ, "CROSSCHAT_CONFIG": os.path.join(home, "config.json"), **extra_env}.items() if v is not None}
+
+    def start_obs():
+        return subprocess.Popen([exe, *flags, *FLAGS], cwd=os.path.dirname(exe), env=env)
+
+    def close_obs(running):
+        if mac:
+            mac_close(running)
+        elif linux:
+            linux_close(running, flatpak)
+        else:
+            windows_close(running)
+
+    obs = start_obs()
     try:
         about = wait_for(hub_up, 60, 0.5)
         check(bool(about), "the OBS script started the hub", "nothing on port %d after 60 s" % HUB_PORT)
@@ -315,11 +463,18 @@ def main():
         for widget in ("chat", "featured", "viewers", "alerts"):
             r = requests.get("%s/overlay/%s" % (BASE, widget), timeout=5)
             check(r.status_code == 200 and "<html" in r.text.lower(), "overlay page /overlay/%s" % widget, r.status_code)
-        shown = wait_for(lambda: {p["url"].split("/overlay/")[1].split("?")[0] for p in obs_pages() if "/overlay/" in p.get("url", "")}
-                         >= {"chat", "featured", "viewers", "alerts"}, 30, 0.5)
-        check(bool(shown), "OBS's browser sources show the four widgets", [p.get("url") for p in obs_pages()])
-        dock = wait_for(dock_page, 30, 0.5)
-        check(bool(dock), "the chat window is docked in OBS (Custom Browser Dock)", [p.get("url") for p in obs_pages()])
+        dock = None
+        if browser:
+            shown = wait_for(lambda: {p["url"].split("/overlay/")[1].split("?")[0] for p in obs_pages() if "/overlay/" in p.get("url", "")}
+                             >= {"chat", "featured", "viewers", "alerts"}, 30, 0.5)
+            check(bool(shown), "OBS's browser sources show the four widgets", [p.get("url") for p in obs_pages()])
+            if linux:                        # (seen with OBS 33.0.1 from Flathub: its window is there, unmapped, and no page loads)
+                print("SKIP  the chat window docked in OBS: on Linux the dock this test writes into OBS's settings stays hidden")
+            else:
+                dock = wait_for(dock_page, 30, 0.5)
+                check(bool(dock), "the chat window is docked in OBS (Custom Browser Dock)", [p.get("url") for p in obs_pages()])
+        else:
+            print("SKIP  OBS's browser sources and the docked chat window: this OBS has no Browser Source")
         themes = requests.get(BASE + "/themes", timeout=5).json()
         check(len([t for t in themes["themes"] if t["builtin"]]) >= 1, "built-in themes listed (%d)" % len(themes["themes"]))
         r = requests.post(BASE + "/themes/save", json={"name": "e2e-theme", "theme": {"schema": 1, "label": "E2E"}}, timeout=5,
@@ -353,19 +508,34 @@ def main():
         check(bool(expect(events, lambda e: e["type"] == "status" and not e["live"], 30)), "hub sees the stream stop (OFF AIR)")
         ws.close()
         if args.keep:
-            print("OBS and the hub are still running (--keep). Close OBS when you are done.")
+            print("OBS and the hub are still running (--keep%s). Close OBS when you are done."
+                  % (", on display " + env["DISPLAY"] if LINUX_SCREENS else ""))
             return 0 if not failures else 1
-        (mac_close if mac else windows_close)(obs)
+        close_obs(obs)
         obs.wait(30)
         # (the hub mustn't hold on to anything of OBS's: a restarted OBS needs its WebSocket port back at once)
         check(bool(wait_for(lambda: nobody_listens(WS_PORT), 3, 0.25)), "OBS's WebSocket port is free once OBS has closed")
         check(bool(wait_for(lambda: not hub_up(), 30, 0.5)), "hub leaves when OBS closes")
+        said = obs_log(config)
+        time.sleep(3)                                                # OBS started again a moment later
+        obs = start_obs()
+        check(bool(wait_for(obs_answers, 60, 0.5)), "an OBS started again 3 s later has its WebSocket server", "no Hello on port %d" % WS_PORT)
+        check(bool(wait_for(hub_up, 60, 0.5)), "and its script starts the hub again", "nothing on port %d" % HUB_PORT)
+        close_obs(obs)
+        obs.wait(30)
+        check(bool(wait_for(lambda: not hub_up(), 30, 0.5)), "that hub leaves with OBS too")
+        for text in said:                                            # what the script said in the first OBS, for the record
+            print("  OBS log: " + text)
     finally:
         if not args.keep:
             if obs.poll() is None:
                 obs.kill()
             receiver.kill()
             requests.post(BASE + "/themes/delete", json={"name": "e2e-theme"}, timeout=2, headers={"Origin": BASE}) if hub_up() else None
+            if flatpak:
+                linux_restore(home)
+            for screen in LINUX_SCREENS:
+                screen.terminate()
             if failures or sys.exc_info()[0]:
                 print("The hub's log (crosschat.log) and OBS's own settings and logs are kept in %s" % home)
             else:

@@ -1,6 +1,7 @@
 """The hub against a stand-in for obs-websocket 5: authentication, stream start and stop, a wrong password."""
 import asyncio
 import json
+import os
 
 import hub
 from websockets.asyncio.server import serve
@@ -82,6 +83,31 @@ def test_a_public_stream_is_not_a_test(home):
             await asyncio.wait_for(hub.obs_link(), 10)
     asyncio.run(test())
     assert seen == [(True, False)]
+
+
+def test_with_obs_stdin_the_hub_stays_until_its_input_ends(home, monkeypatch):
+    """OBS from Flathub: no process id to watch, so the hub follows OBS (reconnecting when the connection drops) until
+    the pipe OBS holds is closed, as it is when OBS ends."""
+    reader, writer = os.pipe()
+    monkeypatch.setattr(hub, "OBS_INPUT", reader)
+    connections = []
+
+    async def script(ws, request):
+        connections.append(1)
+        await request("GetStreamStatus", {"outputActive": False})
+        if len(connections) == 2:                  # the second time: OBS ends
+            os.close(writer)
+            await asyncio.sleep(10)                # the hub hangs up by itself
+
+    async def test():
+        async with fake_obs(script) as server:
+            home({"obs": {"port": server.sockets[0].getsockname()[1], "password": PASSWORD}}, "--obs-stdin")
+            await asyncio.wait_for(hub.obs_link(), 20)
+    try:
+        asyncio.run(test())
+    finally:
+        os.close(reader)
+    assert len(connections) == 2 and hub.obs_gone.is_set()
 
 
 def test_a_wrong_password_is_reported(home, monkeypatch):

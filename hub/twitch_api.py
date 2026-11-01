@@ -3,7 +3,8 @@
 Sign-in uses Twitch's device code flow for public apps: CrossChat shows a short code, the streamer enters it at
 twitch.tv/activate, and Twitch hands CrossChat a token. There is no client secret. The tokens are kept in
 twitch.bin, encrypted with Windows' DPAPI for the current Windows user (on a Mac: under a key in the login Keychain;
-see vault.py), so the file is useless on another account or PC.
+on Linux: under a key in the desktop keyring; see vault.py), so the file is useless on another account or PC. When they
+can't be encrypted (Linux without a keyring), the sign-in isn't kept at all.
 """
 import json
 import os
@@ -11,7 +12,7 @@ import time
 
 import requests
 
-from vault import protect, unprotect
+from vault import protect, refusal, unprotect
 
 ID = "https://id.twitch.tv/oauth2"
 API = "https://api.twitch.tv/helix"
@@ -53,7 +54,11 @@ class Twitch:
         return bool(self.client_id and self.tokens.get("access_token"))
 
     def save(self):
-        data = protect(json.dumps({"tokens": self.tokens, "user": self.user}).encode())
+        try:
+            data = protect(json.dumps({"tokens": self.tokens, "user": self.user}).encode())
+        except OSError as error:                 # not kept safely: not kept at all, not even until CrossChat closes
+            self.tokens, self.user, self.why = {}, {}, refusal(error)
+            raise TwitchError(self.why) from None
         with open(self.path + ".tmp", "wb") as f:
             f.write(data)
         os.replace(self.path + ".tmp", self.path)
