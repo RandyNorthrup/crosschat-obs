@@ -17,6 +17,7 @@ FIELDS = {
     "kick": ("channel", "kick", True),
     "tiktok": ("channel", "tiktok", True),
     "facebook": ("bool", None, True),
+    "instagram": ("bool", None, True),
     "x.enabled": ("bool", None, True),
     "x.auto_go_live": ("bool", None, False),
     "x.title": ("text", 120, False),
@@ -34,7 +35,7 @@ FIELDS = {
     "remote.port": ("int", (1024, 65535), False),
 }
 LABELS = {"twitch": "Twitch channel", "youtube": "YouTube channel", "kick": "Kick channel", "tiktok": "TikTok @name",
-          "facebook": "Facebook Live", "x.enabled": "X", "x.auto_go_live": "Go live on X by itself", "x.title": "X title",
+          "facebook": "Facebook Live", "instagram": "Instagram Live", "x.enabled": "X", "x.auto_go_live": "Go live on X by itself", "x.title": "X title",
           "x.title_file": "X title file", "x.source": "X source name", "window": "Window position",
           "open_window_on_stream_start": "Open the window when the stream starts",
           "close_window_seconds_after_stream": "Close the windows after the stream", "emotes.bttv": "BetterTTV emotes",
@@ -84,7 +85,7 @@ def editable(cfg):
     """What Settings → Channels & options shows: the editable values, which need a restart, and whether this looks like
     a first run (no channel set up at all)."""
     values = {key: shown(cfg, key) for key in FIELDS}
-    first_run = not any(values[k] for k in ("twitch", "youtube", "kick", "tiktok", "facebook", "x.enabled"))
+    first_run = not any(values[k] for k in ("twitch", "youtube", "kick", "tiktok", "facebook", "instagram", "x.enabled"))
     return {"settings": values, "restart": [k for k, f in FIELDS.items() if f[2]],
             "custom_window": isinstance(cfg.get("window"), dict), "first_run": first_run}
 

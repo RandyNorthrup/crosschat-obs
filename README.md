@@ -7,13 +7,14 @@
   <a href="https://github.com/RandyNorthrup/crosschat-obs/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/RandyNorthrup/crosschat-obs/total?label=downloads&color=2b9c9a"></a>
   <a href="https://github.com/RandyNorthrup/crosschat-obs/actions/workflows/ci.yml"><img alt="Checks" src="https://img.shields.io/github/actions/workflow/status/RandyNorthrup/crosschat-obs/ci.yml?branch=main&label=checks"></a>
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4">
+  <img alt="macOS beta" src="https://img.shields.io/badge/macOS-beta-999999">
   <img alt="Tested with OBS Studio 33.0.1" src="https://img.shields.io/badge/OBS%20Studio-33.0.1-302E31">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-b87045"></a>
   <a href="https://github.com/sponsors/RandyNorthrup"><img alt="Sponsor on GitHub" src="https://img.shields.io/badge/sponsor-GitHub-db61a2"></a>
   <a href="https://www.paypal.com/donate/?hosted_button_id=Q9VC7B42R7K82"><img alt="Donate with PayPal" src="https://img.shields.io/badge/donate-PayPal-0070ba"></a>
 </p>
 
-**CrossChat** is a free companion for OBS Studio when you stream to several platforms at once. It reads **Twitch, YouTube, Kick, X, TikTok, Facebook and Rumble** chat into one window, lets you **answer everyone with one message** (or one person on their own platform), **moderates** Twitch, YouTube and Kick, puts **themeable chat, featured messages, viewer counts and alerts** on your stream, and **starts and ends your X livestream together with OBS**. Pair your **phone or another PC** to read, answer and moderate chat from there. Everything runs on your own PC and home network.
+**CrossChat** is a free companion for OBS Studio when you stream to several platforms at once. It reads **Twitch, YouTube, Kick, X, TikTok, Facebook, Instagram and Rumble** chat into one window, lets you **answer everyone with one message** (or one person on their own platform), **moderates** Twitch, YouTube, Kick and Rumble (and deletes Facebook comments), puts **themeable chat, featured messages, viewer counts and alerts** on your stream, and **starts and ends your X livestream together with OBS**. Pair your **phone or another PC** to read, answer and moderate chat from there. Everything runs on your own PC and home network.
 
 <p align="center">
   <img src="assets/video/overview.webp" alt="CrossChat in action: a question from YouTube is put on stream, then one reply goes out to Twitch, YouTube and X at once" width="100%"><br>
@@ -23,9 +24,10 @@
 ## Features
 
 **One chat window for every platform**
-- Twitch, YouTube, Kick, X, TikTok LIVE, Facebook Live and Rumble chat in one list, each line tagged with where it came from.
+- Twitch, YouTube, Kick, X, TikTok LIVE, Facebook Live, Instagram Live and Rumble chat in one list, each line tagged with where it came from.
 - Viewer counts per platform and in total.
-- Subs, raids, cheers, Super Chats and memberships are marked in the list.
+- Subs, raids, cheers, Super Chats, memberships, Rumble Rants and TikTok gifts, follows and shares are marked in the list.
+- **Viewer cards:** click a name to see their messages this stream and in earlier streams, and act on them.
 - Deleted messages and timed-out viewers are struck through.
 - **7TV, BetterTTV and FrankerFaceZ emotes**, as well as each platform's own.
 - **First-time chatters** stand out, and each platform's connection health is a glance away.
@@ -39,7 +41,7 @@
 - Type once to post to every live platform, as you.
 - Use **only:** to post to a single platform, or open a message and press **reply** to answer that person on their own platform. On Twitch that's a threaded reply.
 - **Quick replies:** one-tap lines and emoji you edit yourself.
-- **Moderation:** delete a message, time out or ban, on Twitch, YouTube and Kick.
+- **Moderation:** delete a message, time out or ban, on Twitch, YouTube and Kick; delete or mute on Rumble; delete comments on Facebook.
 - **Answer later:** star messages to come back to. Questions are picked out for you.
 - **Twitch and Kick through their official APIs.** Connect once in Settings.
 - YouTube and X go out through your signed-in browser and the CrossChat extension.
@@ -268,7 +270,7 @@ Turn off the automatic start with `"auto_go_live": false` and use **Go live on X
 
 ## TikTok LIVE
 
-TikTok has no public chat API. The tools that read TikTok chat anyway mostly send your TikTok session to an outside "signing" service. CrossChat doesn't.
+TikTok has no public chat API. Tools that connect to TikTok LIVE chat directly usually do it through an outside "signing" service (Euler Stream is the common one), which learns which live you're reading; you only hand it your TikTok session if you sign in through it to send messages. CrossChat uses no outside service: it reads your own LIVE page in your own browser.
 
 1. Set `"tiktok": "@yourname"` in `config.json` (or answer the installer's question).
 2. Stay signed in to TikTok in Chrome or Edge, the browser with the CrossChat extension.
@@ -407,7 +409,7 @@ When you pair a device, Windows asks once whether Python may use the network. Ch
 
 ## Privacy and security
 
-CrossChat has no server and no account. Everything runs on your PC; it talks only to the platforms you set up, straight from your PC. **[SECURITY.md](SECURITY.md) lists every connection it makes and what is sent.**
+CrossChat has no server and no account. Everything runs on your PC and talks straight from it to the platforms you set up, plus a few named helpers: decapi.me as a fallback for the Twitch viewer count (it's sent your channel name), the 7TV, BetterTTV and FrankerFaceZ emote services unless you turn them off, and, only if you switch them on, Discord and GitHub's update check. **[SECURITY.md](SECURITY.md) lists every connection it makes and what is sent.**
 
 - The hub listens on `127.0.0.1` only and answers only under that address. Other websites get nothing from it, not even the chat, and can't put the CrossChat window in a frame.
 - Your own overlay pages run at their own address and get only the public chat: they can't reply, moderate or change anything as you.
@@ -445,14 +447,15 @@ More detail, and how to report a problem privately: [SECURITY.md](SECURITY.md).
 - **Kick** replies and moderation use Kick's documented API. Sign-in was verified against Kick; the post and moderation calls are covered by tests, not yet by a live Kick stream. Kick alerts come from Kick's public feed and haven't been checked against a real Kick stream yet.
 - **Facebook Live** (new in 1.6) is read from Live Producer, so a redesign by Facebook can break it until CrossChat is updated. It was built and tested on a real "Only me" Facebook live.
 - **Instagram Live** (new) is read from Instagram's Live producer, so a redesign by Instagram can break it until CrossChat is updated. Reading comments was built against a real "Practice" Instagram live; replies are typed into the same comment box and were tested on a copy of that page, not yet on a real live. The extension recognises the live, the viewer count and your own comments by Instagram's English labels.
-- **Rumble** (new in 1.6) is read through Rumble's official API, which gives the latest 50 messages; CrossChat asks every 5 seconds, so a very busy Rumble chat can miss lines. Replies were tested against Rumble's signed-in chat box, not yet on a real Rumble live.
-- **TikTok LIVE** is new in 1.5. It is read from TikTok's own LIVE page, so a redesign by TikTok can break it until CrossChat is updated. It was built and tested against TikTok's current page, not yet on a real TikTok stream. Gifts don't show as alerts yet.
+- **Rumble** is read through Rumble's official API, which gives the latest 50 messages; CrossChat asks every 5 seconds, so a very busy Rumble chat can miss lines. Replies and **Delete** were tested on a real (unlisted) Rumble live; the mutes reached Rumble's server, which refused the only test possible (muting yourself), so muting someone else hasn't been seen working yet. Rumble's chat window has to stay open while you're live.
+- **Facebook comment delete** was tested on a real Live Producer live (with the streamer's own comment). Deleting a viewer's comment uses the same menu but hasn't been seen on a real live yet.
+- **TikTok LIVE** is read from TikTok's own LIVE page, so a redesign by TikTok can break it until CrossChat is updated. Gift, follow, share and join rows were checked against a real public TikTok LIVE; the whole path hasn't run on a streamer's own TikTok LIVE yet (TikTok lets accounts go LIVE from 1,000 followers).
 - **X Live** depends on X Live Studio's page and needs X Premium. CrossChat clicks through it like a person would, so a redesign by X can break it until CrossChat is updated.
 - **YouTube** chat is read the same way YouTube's own chat pop-out reads it.
 - **YouTube moderation** clicks through YouTube's own chat menu in the CrossChat window, so the signed-in account must own the channel or moderate it. It hasn't been checked against a live YouTube stream yet.
-- **Twitch moderation and replies** use Twitch's documented API. Sign-in and token handling were verified against Twitch. The individual ban, delete and post calls are covered by tests, not by real moderation on a live channel.
+- **Twitch and Kick moderation and replies** use their documented APIs. Sign-in and token handling were verified against Twitch and Kick. The individual ban, delete and post calls are covered by tests, not yet by moderating a real viewer on a live channel (that needs a second account in the chat).
 - **The companion** uses plain `http` on your home network, like a router's own page. Don't forward its port. For away-from-home use, switch on [Tailscale](#the-companion-away-from-home-tailscale).
-- **Twitch's simulcasting guidelines** have restricted showing other platforms' chat on a Twitch stream. Check the current rules. `"overlay": {"platforms": ["twitch"]}` (or `?platforms=twitch` on one source) shows Twitch chat only.
+- **Twitch and merged chat on stream:** Twitch's written simulcasting rules still say not to show other platforms' chat on a Twitch stream, but in February 2026 Twitch's CEO said Twitch won't take enforcement action against creators for showing combined chat. Until the written rules change, the choice is yours: `"overlay": {"platforms": ["twitch"]}` (or `?platforms=twitch` on one source) shows Twitch chat only. Reading every chat in the CrossChat window yourself is fine either way.
 
 ## Uninstall
 
@@ -487,7 +490,7 @@ CrossChat is applying for free code signing from [SignPath Foundation](https://s
 - **Approvers:** [Randy Northrup](https://github.com/RandyNorthrup)
 - Every release is built by GitHub Actions from this repository's source. Nobody signs anything built elsewhere.
 
-**Privacy policy:** CrossChat will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. It talks only to the chat platforms you set up and, unless you turn them off in the installer or `config.json`, to 7TV, BetterTTV and FrankerFaceZ for emote pictures. Only if you switch them on: Discord, through the webhook you connect, and GitHub, once a day, for the update notice. The full list of connections and what each one sends is in [SECURITY.md](SECURITY.md#what-leaves-your-pc).
+**Privacy policy:** CrossChat will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. It talks only to the chat platforms you set up, to decapi.me as a fallback for the Twitch viewer count (with your channel name) and, unless you turn them off in the installer or `config.json`, to 7TV, BetterTTV and FrankerFaceZ for emote pictures. Only if you switch them on: Discord, through the webhook you connect, and GitHub, once a day, for the update notice. The full list of connections and what each one sends is in [SECURITY.md](SECURITY.md#what-leaves-your-pc).
 
 ## Credits
 

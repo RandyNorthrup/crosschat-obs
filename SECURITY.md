@@ -130,7 +130,7 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
   - `www.facebook.com/live/producer`, Facebook's Live Producer, which only ever shows your own broadcasts. No other part of Facebook;
   - `www.instagram.com/` (the home page only, where CrossChat opens it), for Instagram's Live producer, which opens over that page and only ever shows your own live. The extension reads only that live's comments and viewer count, and only while CrossChat says Instagram is on and you're live: never the feed, messages or profiles. It never presses the share button beside the comment box;
   - `rumble.com/chat/popup/`, Rumble's chat window, only to type your replies in your own live's chat (CrossChat tells it which one). It never presses the paid Rant button.
-- TikTok has no public chat API. Unlike tools that send your TikTok session to an outside "signing" service, CrossChat reads chat only from your own LIVE page, in your own browser.
+- TikTok has no public chat API. Tools that connect to TikTok LIVE chat directly usually go through an outside "signing" service, which learns which live you're reading (and gets your TikTok session too if you sign in through it to send messages). CrossChat uses no outside service: it reads chat only from your own LIVE page, in your own browser.
 - On YouTube and X it types your reply into the site's own chat box, as the account already signed in there. YouTube moderation goes through YouTube's own message menu.
 - Twitch and Kick replies don't use the extension at all: they go through those platforms' official APIs, from the hub.
 

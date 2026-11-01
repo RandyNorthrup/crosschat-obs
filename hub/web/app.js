@@ -291,6 +291,7 @@
     { key: 'kick', group: 'Channels', label: 'Kick channel', type: 'text', max: 200, placeholder: 'kick.com/yourname', hint: 'Your channel name or link. CrossChat reads its chat.' },
     { key: 'tiktok', group: 'Channels', label: 'TikTok @name', type: 'text', max: 200, placeholder: '@yourname', hint: 'Your TikTok LIVE page opens in your browser when you go live, and its chat is read there.' },
     { key: 'facebook', group: 'Channels', label: 'Facebook Live', type: 'bool', hint: 'Reads comments from Live Producer, which opens in your browser when you go live.' },
+    { key: 'instagram', group: 'Channels', label: 'Instagram Live', type: 'bool', hint: 'Reads comments from Instagram’s live producer (Create → Live video on instagram.com), which opens in your browser when you go live.' },
     { key: 'x.enabled', group: 'X', label: 'X livestreams', type: 'bool', hint: 'Reads and answers the chat of your livestream on X.' },
     { key: 'x.auto_go_live', group: 'X', label: 'Go live on X by itself', type: 'bool', hint: 'Starts the X livestream a few seconds after OBS starts streaming.' },
     { key: 'x.title', group: 'X', label: 'Livestream title', type: 'text', max: 120, placeholder: 'Live now', hint: 'The title X shows, unless a title file is set.' },

@@ -51,7 +51,7 @@ VIAddVersionKey "LegalCopyright" "MIT License, ${PUBLISHER}"
 !define MUI_ABORTWARNING
 
 !define MUI_WELCOMEPAGE_TITLE "CrossChat ${VERSION}"
-!define MUI_WELCOMEPAGE_TEXT "Every stream chat in one window for OBS Studio: read and reply to Twitch, YouTube, Kick, X, TikTok, Facebook and Rumble, moderate Twitch, YouTube and Kick, and put chat, featured messages, viewer counts and alerts on your stream.$\r$\n$\r$\nCrossChat installs for your Windows account only, brings its own Python, and needs no administrator rights.$\r$\n$\r$\nUpdating? Your settings, themes, sign-ins and chat history are kept. Close nothing: setup restarts CrossChat for an open OBS."
+!define MUI_WELCOMEPAGE_TEXT "Every stream chat in one window for OBS Studio: read and reply to Twitch, YouTube, Kick, X, TikTok, Facebook, Instagram and Rumble, moderate Twitch, YouTube and Kick, and put chat, featured messages, viewer counts and alerts on your stream.$\r$\n$\r$\nCrossChat installs for your Windows account only, brings its own Python, and needs no administrator rights.$\r$\n$\r$\nUpdating? Your settings, themes, sign-ins and chat history are kept. Close nothing: setup restarts CrossChat for an open OBS."
 !insertmacro MUI_PAGE_WELCOME
 
 !define MUI_PAGE_HEADER_TEXT "Privacy"

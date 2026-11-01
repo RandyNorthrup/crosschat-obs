@@ -4,26 +4,40 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-31
+
 ### Added
 
-- The installer shows what CrossChat connects to, and asks whether to use 7TV, BetterTTV and FrankerFaceZ emotes (the one outside service CrossChat uses by default).
-- A code signing policy in the README, for signing releases through SignPath Foundation.
-- **Delete Facebook comments** from the CrossChat window. The extension uses Live Producer's own comment menu and finds the comment by the id Facebook gave it.
-
-### Fixed
-
-- In a checkout, git now ignores every `.bin` file in the folder, so an encrypted sign-in like `rumble.bin` can't be committed by accident.
-- **A setup program**, `CrossChat-Setup-<version>.exe`, now the normal way to install. See [docs/INSTALLER.md](docs/INSTALLER.md).
+- **A setup program**, `CrossChat-Setup-<version>.exe`, now the normal way to install on Windows. See [docs/INSTALLER.md](docs/INSTALLER.md).
   - Installs for your Windows account only, needs no administrator rights, and brings its own Python (python.org's embeddable package), so there's nothing else to install.
   - No console windows. It shows a privacy page, asks before switching on OBS's WebSocket server, and adds CrossChat to *Settings → Apps* with an uninstaller.
   - It keeps your settings, themes, sign-ins and chat history on update.
-  - Channels are set in CrossChat's Settings.
-  - Built in the release workflow from pinned, checksum-checked downloads, with a build provenance attestation like the zip.
-  - The zip with `Install.cmd` is still published.
+  - Built in the release workflow from pinned, checksum-checked downloads, with a build provenance attestation like the zip. The zip with `Install.cmd` is still published.
+- **Settings → Channels & options**: set your channels and options in the CrossChat window instead of `config.json`. Every value is checked, the file is replaced in one step with a `.bak` kept, and the window says which changes need OBS restarted.
+- **Viewer cards**: click a name to see when they first chatted, how many messages, their lines this stream and in earlier streams (searchable), with read-aloud, filter and moderation at hand.
+- **Instagram Live comments**, read from Instagram's live producer on instagram.com, with replies typed into its comment box. Set `"instagram": true`, answer the installer's question, or switch it on in Settings.
+- **Moderation on Facebook and Rumble** from the CrossChat window, through each site's own menus, as you:
+  - Facebook: delete a comment (Live Producer's own menu).
+  - Rumble: delete a message, mute for 5 minutes, mute for this stream, or mute forever (Rumble's own "Moderate this comment" menu).
+- **TikTok gifts, follows, shares and likes as alerts**, from your own TikTok LIVE page. A gift shows its name and count, one alert per combo; TikTok's page shows no prices, so none are made up. Likes are added up per viewer and stay off on-stream alerts unless you turn them on. Joins are off; turn them on in Settings → Filters. A viewer can't fake an alert by typing "followed the host" or "×99".
+- **One alert wording for every platform**, shared by the widgets, the on-stream chat and the window. Rumble Rants and YouTube Super Stickers get their own alert types and switches.
+- **Discord**: post a going-live notice, the messages you show on stream, or all chat to a channel of your server through a webhook. No bot and no sign-in. Chat can't ping anyone, and hidden messages never go. The webhook is kept encrypted and never shown again.
+- **The companion away from home, with Tailscale** (Windows): one switch in Settings → Paired devices. Pairing is still needed, and it listens only on your PC's own Tailscale address, never on an address that merely looks like one.
+- **Update notice**, off unless you switch it on (installer or Settings → About): once a day CrossChat asks GitHub whether a newer version is out and shows a link to its release page. Nothing about you is sent, and nothing is downloaded.
+- **Mac (beta)**: a macOS download with `Install.command`. Sign-ins are encrypted under a key in your login Keychain, and the chat window is placed through your browser. It's tested on macOS in CI (tests, a full install, start and uninstall), but not yet with OBS on a real Mac.
+- The installer shows what CrossChat connects to, and asks whether to use 7TV, BetterTTV and FrankerFaceZ emotes.
+- A code signing policy in the README, for signing releases through SignPath Foundation (application in progress).
+
+### Fixed
+
+- Facebook and Rumble messages carried no moderation id, so moderation menus for them couldn't work.
+- A Rumble reply could stall when Rumble kept its Send button off; the text is now typed the way a person types.
+- TikTok chat lines could be missed when TikTok reused a row on the page, or when more than 50 short lines arrived at once.
+- In a checkout, git now ignores every `.bin` file in the folder, so an encrypted sign-in like `rumble.bin` can't be committed by accident.
 
 ### Changed
 
-- The OBS script runs CrossChat with the setup program's Python when it's there, then the one `Install.cmd` made, then the Python launcher. The script's own Python field still comes first.
+- The OBS script runs CrossChat with the setup program's Python when it's there, then the one `Install.cmd` made, then the Python launcher. The script's own Python field still comes first. Its start-and-restart code is now tested in LuaJIT on Windows and macOS.
 
 ## [1.6.0] - 2026-10-31
 

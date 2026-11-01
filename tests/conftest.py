@@ -17,6 +17,18 @@ def keychain():
     vault.forget_key()
 
 
+@pytest.fixture(autouse=True)
+def no_windows(monkeypatch):
+    """No test ever opens a real browser window on the PC running the tests (a test that starts a live would)."""
+    opened = []
+
+    async def open_app(url, where):
+        opened.append(url)
+        return None
+    monkeypatch.setattr(hub, "open_app", open_app)
+    return opened
+
+
 @pytest.fixture
 def home(tmp_path):
     """A hub configured from an empty folder of its own: no message boxes, no browser windows, themes kept in tmp."""
