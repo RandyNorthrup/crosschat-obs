@@ -244,6 +244,17 @@ test('an extension older than CrossChat is noticed, anything else is not', () =>
     ['1.6', '1.7.0'], ['1.6.0<b>', '1.7.0'], [{}, '1.7.0']]) assert.equal(A.extensionBehind(ext, hub), false, String(ext) + ' vs ' + String(hub));
 });
 
+test('the window names the shortcut of its own system: no Start menu on a Mac', () => {
+  // navigator.platform in OBS's own browser on macOS 15 (OBS 33.0.1) and in Chrome there is "MacIntel"
+  assert.equal(A.onMac('MacIntel'), true);
+  assert.match(A.openChatHow('MacIntel'), /^Applications → CrossChat → Open chat/);
+  assert.doesNotMatch(A.openChatHow('MacIntel'), /Start menu/);
+  for (const platform of ['Win32', '', undefined, null, {}]) {
+    assert.equal(A.onMac(platform), false, String(platform));
+    assert.equal(A.openChatHow(platform), 'Start menu → CrossChat → Open chat', String(platform));
+  }
+});
+
 test('a Discord webhook URL is recognised before it goes to the hub', () => {
   const token = 'abcDEF123_-'.repeat(6);
   assert.equal(A.discordWebhook('https://discord.com/api/webhooks/123456789012345678/' + token), true);
