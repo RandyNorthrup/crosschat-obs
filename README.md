@@ -271,7 +271,7 @@ The extension first asks CrossChat which TikTok account is yours. On every other
 
 **Deleting Facebook comments.** In the CrossChat window, a Facebook comment's menu has **Delete comment**. The extension opens that comment's own menu in Live Producer, picks Delete and confirms Facebook's question, as you. It finds the comment by the id Facebook gave it, so it can't delete a different one. Hiding comments and banning people are still done in Facebook itself.
 
-Moderate Rumble chat on Rumble itself.
+**Moderating Rumble chat.** A Rumble message's menu in the CrossChat window has **Delete message**, **Mute 5 minutes**, **Mute for this stream** and **Mute forever**: the same choices Rumble gives the streamer. The extension uses Rumble's own "Moderate this comment" menu in the chat window CrossChat opened, as you. Rumble's API gives chat lines no id, so the extension picks the newest line with that sender's name and those exact words. To answer Rumble's "delete this message?" question, a few lines of the extension run inside Rumble's chat page and say yes to that one question, once, right after CrossChat asks; every other question is left to you. Unmute people under **Muted users** in Rumble's chat.
 
 ## Discord
 

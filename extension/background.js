@@ -84,13 +84,18 @@ async function post(data, tab) {
   return out;
 }
 
-// Moderation that has to go through the platform's own page: YouTube, and deleting Facebook comments in Live Producer.
+// Moderation that has to go through the platform's own page: YouTube, deleting Facebook comments in Live Producer, and
+// deleting or muting in Rumble's chat pop-out.
 // The hub moderates Twitch and Kick itself through their APIs, and X offers nothing CrossChat can do.
 async function moderate(data, tab) {
   if (data.p === 'facebook') {
     return ask(chrome.tabs.query({ url: PRODUCER + '*' }), { type: 'fb-mod', action: data.action, message_id: data.message_id }, 'Facebook Live Producer is not open');
   }
-  if (data.p !== 'youtube') return { ok: false, why: 'only YouTube and Facebook moderation go through the extension' };
+  if (data.p === 'rumble') {
+    return ask(chrome.tabs.query({ url: RUMBLE_CHAT + '*' }), { type: 'rm-mod', action: data.action, name: String(data.name || ''), text: String(data.text || '') },
+      'the Rumble chat window is not open');
+  }
+  if (data.p !== 'youtube') return { ok: false, why: 'only YouTube, Facebook and Rumble moderation go through the extension' };
   const { youtube_video: video } = await hub('/targets');
   if (!video) return { ok: false, why: 'the stream is not live on YouTube' };
   const tabs = chrome.tabs.query({ url: 'https://www.youtube.com/live_chat*' }).then((found) => (tab ? [tab, ...found] : found));

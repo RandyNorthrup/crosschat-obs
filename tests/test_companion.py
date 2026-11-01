@@ -231,6 +231,36 @@ def test_moderation_rules(home):
     run(serving(test))
 
 
+def test_facebook_and_rumble_moderation_go_through_their_own_pages(home):
+    home({"twitch": "somechannel"})
+
+    async def test(port):
+        executor = asyncio.Queue()
+        hub.state["executor"] = executor
+        hub.rumble_read({"livestreams": [{"id": "7fiazm", "is_live": True, "chat": {"recent_messages": [
+            {"username": "Bo", "text": "spam spam", "created_on": "2026-11-01T01:27:34+00:00", "badges": []}]}}]}, [], {})
+        hub.facebook_feed(lambda k: {"lines": json.dumps([{"id": "123_456", "name": "Cy", "text": "rude words"}])}.get(k, ""))
+        rumble_mid = next(m["mid"] for m in hub.messages if m["p"] == "rumble")          # what the window would send
+        # Rumble: the hub sends the extension the name and words it has (Rumble lines have no id), and only Rumble's
+        # 5-minute mute counts as a timeout, whatever length the page asked for.
+        assert json.loads((await post(port, "/mod", {"p": "rumble", "action": "timeout", "message_id": rumble_mid,
+                                                     "name": "someone else", "seconds": 3600}))[2])["ok"] is True
+        assert json.loads((await post(port, "/mod", {"p": "rumble", "action": "mute", "message_id": rumble_mid}))[2])["ok"] is True
+        assert json.loads((await post(port, "/mod", {"p": "facebook", "action": "delete", "message_id": "fb-123_456"}))[2])["ok"] is True
+        await asyncio.sleep(0.05)
+        outbox = [e["job"] for e in drain(executor) if e["type"] == "outbox"]
+        assert [(j["p"], j["action"]) for j in outbox] == [("rumble", "timeout"), ("rumble", "mute"), ("facebook", "delete")]
+        assert outbox[0]["name"] == "Bo" and outbox[0]["text"] == "spam spam" and outbox[0]["seconds"] == 300
+        assert outbox[2]["message_id"] == "fb-123_456"
+        # A line the hub no longer has, and what these pages can't do, are refused up front.
+        gone = json.loads((await post(port, "/mod", {"p": "rumble", "action": "delete", "message_id": "rm-nope"}))[2])
+        assert gone["ok"] is False and "no longer" in gone["why"]
+        assert json.loads((await post(port, "/mod", {"p": "facebook", "action": "ban"}))[2])["ok"] is False
+        assert json.loads((await post(port, "/mod", {"p": "rumble", "action": "unban"}))[2])["ok"] is False
+        hub.state["executor"] = None
+    run(serving(test))
+
+
 def test_demo_mode_answers_everything_on_this_pc(home, tmp_path):
     (tmp_path / "devices.json").write_text('{"devices": [{"id": "real", "name": "My phone", "hash": "x"}]}')
     folder = home({"twitch": "realchannel"}, "--demo")

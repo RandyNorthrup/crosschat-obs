@@ -11,7 +11,7 @@ window.addEventListener('message', (event) => {
   const back = (answer) => window.postMessage({ crosschat: answerType, n: data.n, answer }, location.origin);
   const job = type === 'send'
     ? { to: data.to, text: data.text, reply: data.reply, dry: !!data.dry }
-    : { p: data.p, action: data.action, message_id: data.message_id, user_id: data.user_id, name: data.name };
+    : { p: data.p, action: data.action, message_id: data.message_id, user_id: data.user_id, name: data.name, text: data.text, seconds: data.seconds };
   try {
     chrome.runtime.sendMessage({ type, data: job }, (answer) => back(chrome.runtime.lastError ? null : answer));
   } catch (e) {

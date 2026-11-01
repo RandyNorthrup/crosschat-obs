@@ -57,6 +57,14 @@ test('moderation per platform', () => {
   const kick = A.modMenu(chat('kick'), { ...here, kick: 'on' });
   assert.deepEqual(kick.filter((e) => e.ok).map((e) => e.action + (e.seconds || '')), ['delete', 'timeout600', 'timeout3600', 'timeout', 'ban', 'unban']);
   assert.match(A.modMenu(chat('twitch', { badges: ['broadcaster'] }), { ...here, twitch: 'on' })[0].why, /you/);
+  // Facebook (delete only) and Rumble (delete, 5-minute mute, mute for the stream, mute forever) go through their pages.
+  assert.deepEqual(A.modMenu(chat('facebook'), here).map((e) => e.action + ':' + e.ok), ['delete:true']);
+  const rumble = A.modMenu(chat('rumble'), here);
+  assert.deepEqual(rumble.map((e) => e.action + (e.seconds || '')), ['delete', 'timeout300', 'mute', 'ban']);
+  assert.equal(rumble.find((e) => e.action === 'ban').danger, true);
+  assert.ok(A.modMenu(chat('rumble'), { ...here, executor: false }).every((e) => !e.ok && /window/.test(e.why)));
+  assert.ok(A.modMenu(chat('facebook', { mid: '' }), here).every((e) => !e.ok));
+  assert.equal(A.describe('mute', 'Bo', 0), 'muted Bo for this stream');
 });
 
 test('custom timeouts fit each platform', () => {

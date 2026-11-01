@@ -53,6 +53,18 @@
     if (!m || m.kind !== 'chat' || !m.name) return off('Only chat messages can be moderated');
     if ((m.badges || []).some((b) => b === 'broadcaster' || b === 'owner')) return off("That's you");
     if (m.p === 'x') return off("X chat can't be moderated from CrossChat");
+    if (m.p === 'facebook' || m.p === 'rumble') {   // through the platform's own page, by the extension in this window
+      const why = ctx.executor ? '' : ctx.remote ? 'Needs the CrossChat window open on the streaming PC' : 'Needs this window open in Chrome or Edge with the CrossChat extension';
+      const ok = !why && !!m.mid;
+      const whyNot = why || (m.mid ? '' : name(m.p) + ' gave this message no id');
+      if (m.p === 'facebook') return [{ action: 'delete', label: 'Delete comment', ok, why: whyNot }];
+      return [
+        { action: 'delete', label: 'Delete message', ok, why: whyNot },
+        { action: 'timeout', seconds: 300, label: 'Mute 5 minutes', ok, why: whyNot },
+        { action: 'mute', label: 'Mute for this stream', ok, why: whyNot },
+        { action: 'ban', label: 'Mute forever', danger: true, ok, why: whyNot },
+      ];
+    }
     if (PAGE_PLATFORMS.includes(m.p)) return off('Moderate ' + name(m.p) + ' chat in ' + name(m.p));
     if (m.p === 'twitch' || m.p === 'kick') {     // both through the platform's own API, once connected in Settings
       const why = ctx[m.p] === 'on' ? '' : 'Connect ' + name(m.p) + (ctx.remote ? ' on the streaming PC (Settings)' : ' in Settings') + ' to moderate';
@@ -87,7 +99,7 @@
 
   function describe(action, who, seconds) {
     return { delete: 'removed the message from ' + who, timeout: 'timed out ' + who + ' for ' + duration(seconds),
-             ban: 'banned ' + who, unban: 'unbanned ' + who }[action] || action + ' ' + who;
+             mute: 'muted ' + who + ' for this stream', ban: 'banned ' + who, unban: 'unbanned ' + who }[action] || action + ' ' + who;
   }
 
   // The quick-reply list as the hub accepts it: trimmed, no blanks or repeats, at most 30 of at most 100 characters.
@@ -420,7 +432,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     if (job.kind === 'mod') {
       const who = A.name(job.p);
       if (answer && answer.ok) note(who + ': ' + A.describe(job.action, job.who, job.seconds) + '.', 'good');
-      else note(who + ': could not ' + ({ delete: 'remove that message', timeout: 'time out ' + job.who, ban: 'ban ' + job.who, unban: 'unban ' + job.who }[job.action] || job.action)
+      else note(who + ': could not ' + ({ delete: 'remove that message', timeout: 'time out ' + job.who, mute: 'mute ' + job.who, ban: 'ban ' + job.who, unban: 'unban ' + job.who }[job.action] || job.action)
                 + ' (' + ((answer && answer.why) || 'no answer') + ')', 'bad');
       return;
     }
@@ -444,7 +456,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     jobs[n] = { job, timer: setTimeout(() => done(n, null), 25000) };
     if (job.kind === 'mod') {
       window.postMessage({ crosschat: 'mod', n, p: job.p, action: job.action, message_id: job.message_id || '', user_id: job.user_id || '',
-                           name: job.name || '', seconds: job.seconds || 0, reason: job.reason || '' }, location.origin);
+                           name: job.name || '', text: job.text || '', seconds: job.seconds || 0, reason: job.reason || '' }, location.origin);
     } else {
       window.postMessage({ crosschat: 'send', n, to: job.to || [], text: job.text || '', reply: job.reply || null, dry: !!job.dry }, location.origin);
     }
@@ -934,7 +946,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
   // The moderation entries for message m (delete, timeouts, ban, unban), each asking first where it should.
   function modItems(menu, m, c, close) {
     A.modMenu(m, c).forEach((entry) => {
-      const icon = { delete: '🗑', timeout: '⏱', ban: '⛔', unban: '↺' }[entry.action] || '•';
+      const icon = { delete: '🗑', timeout: '⏱', mute: '🔇', ban: '⛔', unban: '↺' }[entry.action] || '•';
       menu.append(item(icon, entry.label, entry, async () => {
         close();
         if (entry.custom) {
@@ -943,7 +955,10 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
           const minutes = await ask({ title: 'Time out ' + m.name, text: 'How long on ' + A.name(m.p) + '? (1 minute to ' + (kick ? '7' : '14') + ' days)', ok: 'Time out', input: true });
           if (minutes) moderate(m, entry, A.timeoutSeconds(m.p, minutes));
         } else if (entry.action === 'ban') {
-          if (await ask({ title: (m.p === 'youtube' ? 'Hide ' : 'Ban ') + m.name + '?', text: m.p === 'youtube' ? 'They won\'t be able to chat on your channel until you unhide them in YouTube Studio.' : 'They won\'t be able to chat on your ' + A.name(m.p) + ' channel until you unban them.', ok: m.p === 'youtube' ? 'Hide user' : 'Ban' })) moderate(m, entry, 0);
+          const ban = m.p === 'youtube' ? { title: 'Hide ' + m.name + '?', text: 'They won\'t be able to chat on your channel until you unhide them in YouTube Studio.', ok: 'Hide user' }
+            : m.p === 'rumble' ? { title: 'Mute ' + m.name + ' forever?', text: 'They won\'t be able to chat on your Rumble channel until you unmute them under Muted users in Rumble\'s chat.', ok: 'Mute forever' }
+            : { title: 'Ban ' + m.name + '?', text: 'They won\'t be able to chat on your ' + A.name(m.p) + ' channel until you unban them.', ok: 'Ban' };
+          if (await ask(ban)) moderate(m, entry, 0);
         } else moderate(m, entry, entry.seconds || 0);
       }, { danger: entry.danger }));
     });

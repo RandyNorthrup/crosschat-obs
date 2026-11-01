@@ -1100,7 +1100,7 @@ def facebook_feed(first):
         name, text = " ".join(str(line.get("name", "")).split())[:60], " ".join(str(line.get("text", "")).split())[:1000]
         if name and text and mid != "fb-" and mid not in facebook_told:
             facebook_told.append(mid)
-            publish("facebook", name, text, badges=["broadcaster"] if line.get("host") is True else [], mid=mid)
+            publish("facebook", name, text, badges=["broadcaster"] if line.get("host") is True else [], mid=mid, raw=mid)
     return True
 
 
@@ -1222,7 +1222,7 @@ def rumble_read(data, told, last):
             mid = new("m", m, m["username"], m.get("created_on"), m["text"])
             if mid:
                 badges = [b for b in m.get("badges") or [] if isinstance(b, str)][:6]
-                publish("rumble", str(m["username"])[:60], " ".join(str(m["text"]).split())[:500], badges=badges, mid=mid)
+                publish("rumble", str(m["username"])[:60], " ".join(str(m["text"]).split())[:500], badges=badges, mid=mid, raw=mid)
     for r in reversed(chat.get("recent_rants") or []):
         if isinstance(r, dict) and r.get("username"):
             mid = new("r", r, r["username"], r.get("created_on"), r.get("text"))
@@ -1616,7 +1616,9 @@ LIMIT = {"twitch": 500, "youtube": 200, "x": 140, "kick": 500, "tiktok": 150, "f
 NAMES = {"twitch": "Twitch", "youtube": "YouTube", "x": "X", "kick": "Kick", "tiktok": "TikTok", "facebook": "Facebook",
          "instagram": "Instagram", "rumble": "Rumble"}
 MOD_ACTIONS = {"twitch": ("delete", "timeout", "ban", "unban"), "youtube": ("delete", "timeout", "ban"),
-               "kick": ("delete", "timeout", "ban", "unban")}
+               "kick": ("delete", "timeout", "ban", "unban"),
+               "facebook": ("delete",),                       # Live Producer's own comment menu, through the extension
+               "rumble": ("delete", "timeout", "mute", "ban")}  # Rumble's chat pop-out: 5 minutes, this stream, forever
 QUICK_DEFAULTS = ["Welcome in! 👋", "Thanks for the follow!", "Good question, one sec", "GG", "❤️", "Be right back, 2 minutes"]
 jobs = {}                                    # job id -> future the executor's answer lands in
 TW = None                                    # the Twitch API connection (set in main)
@@ -2032,6 +2034,15 @@ def new_mod(body):
            "user_id": re.sub(r"[^\w.:=-]", "", str(body.get("user_id") or ""))[:120],
            "seconds": max(0, min(int(body.get("seconds") or 0), 1209600)) if str(body.get("seconds") or "0").isdigit() else 600,
            "reason": " ".join(str(body.get("reason") or "").split())[:200], "video": state["youtube_video"]}
+    if p == "rumble":
+        # Rumble's API gives chat lines no id, so the extension finds the line in Rumble's chat by name and words: the
+        # hub's own copy of the message says which, whatever the page sent.
+        said = next((m for m in reversed(messages) if m.get("p") == "rumble" and m.get("mid") == job["message_id"]), None)
+        if not said:
+            return {"ok": False, "why": "That Rumble message is no longer in the chat"}
+        job["name"], job["text"] = said["name"][:60], said["text"][:500]
+        if action == "timeout":
+            job["seconds"] = 300                 # Rumble's only timed mute
     asyncio.create_task(run_mod(job))
     return {"ok": True, "job_id": job["id"]}
 

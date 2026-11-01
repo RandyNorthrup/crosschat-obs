@@ -88,6 +88,16 @@
         "rumble.js"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://rumble.com/chat/popup/*"
+      ],
+      "js": [
+        "rumble-confirm.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start"
     }
   ]
 }
