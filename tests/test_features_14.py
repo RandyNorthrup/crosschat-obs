@@ -292,7 +292,7 @@ def test_companion_stays_off_when_windows_cannot_say(fresh, monkeypatch):
     monkeypatch.setattr(hub, "remote_why", "")
     hub.DEV.start_pairing()
     run(hub.remote_on())
-    assert hub.remote_server is None and "couldn't ask Windows" in hub.remote_why
+    assert hub.remote_server is None and ("macOS doesn't tell apps" if hub.MAC else "couldn't ask Windows") in hub.remote_why
 
 
 def test_removing_the_last_device_closes_the_companion(fresh, monkeypatch):

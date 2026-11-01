@@ -2,7 +2,8 @@
 
 Sign-in is Kick's OAuth 2.1 code flow with PKCE: CrossChat opens Kick's authorize page in the browser, Kick sends the
 browser back to the hub (http://localhost:<port>/kick/callback) with a one-time code, and the hub trades it for a
-token. The tokens are kept in kick.bin, encrypted for the current Windows user (DPAPI), like Twitch's.
+token. The tokens are kept in kick.bin, encrypted for the current Windows user (DPAPI; on a Mac, under a key in the login
+Keychain), like Twitch's.
 """
 import base64
 import hashlib

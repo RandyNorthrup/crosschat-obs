@@ -137,7 +137,7 @@ Every setting, the CSS hooks and how to share themes are in **[docs/THEMES.md](d
 
 | | |
 |---|---|
-| **PC** | Windows 10 or 11, 64-bit (tested on Windows 11) |
+| **PC** | Windows 10 or 11, 64-bit (tested on Windows 11). A Mac works too, as a beta: see [Mac (beta)](#mac-beta). |
 | **OBS Studio** | 28 or newer, with its built-in WebSocket server. Tested with **33.0.1** (obs-websocket 5.7.6). |
 | **Browser** | Google Chrome, or Microsoft Edge. Needed only for replying, and for X and TikTok. |
 | **Python** | Nothing to install: the setup program brings its own (python.org's embeddable Python). The zip's `Install.cmd` needs Python 3.10 or newer, and offers to install it. |
@@ -181,6 +181,27 @@ CrossChat doesn't send your video anywhere. OBS does that. To stream to several 
 To check everything without going live, press **Send test to OBS** in the Theme Studio, or start OBS streaming to a test server on your own PC. CrossChat sees that a stream to `rtmp://127.0.0.1` is a test and doesn't start anything public.
 
 **Prefer a zip?** `CrossChat-<version>-windows.zip` is still on every release. Extract it and double-click `Install.cmd`: it uses a Python 3.10+ already on your PC (or offers to install one), sets up its own environment, and asks for your channels in a console window. Then follow steps 3–5 above.
+
+## Mac (beta)
+
+There is a Mac download too. It's a **beta**: on every change, GitHub's Mac machines run the hub's tests, the Keychain storage, the OBS script's start-and-restart code (in LuaJIT, the Lua OBS uses) and a full install, start and uninstall from the download. **It has not yet been run with OBS on a real Mac.** Tell us what works and what doesn't in [Issues](https://github.com/RandyNorthrup/crosschat-obs/issues).
+
+You need a recent macOS (tested on macOS 15 with Apple silicon, on GitHub's machines; Intel Macs are untested), OBS Studio 28 or newer, Chrome, Edge or Chromium, and Python 3.10 or newer from [python.org](https://www.python.org/downloads/macos/) or Homebrew (`brew install python@3.13`). The installer tells you if Python is missing; it doesn't install it for you.
+
+1. **Download** `CrossChat-<version>-mac.zip` from **[Releases](https://github.com/RandyNorthrup/crosschat-obs/releases/latest)** and double-click it to unpack it.
+2. **Double-click `Install.command`.** If macOS says it can't check the developer (the download isn't signed by Apple), open Terminal, type `bash ` with a space, drag `Install.command` into the window and press Return.
+   It installs to `~/Library/Application Support/CrossChat`, sets up its own Python environment with checksum-verified packages, asks the same questions as on Windows, and adds an **Applications → CrossChat** folder (Open chat, Theme Studio, Try the demo, Go live on X, Uninstall).
+3. **Add the script to OBS:** *Tools → Scripts → +*, press **Cmd+Shift+G**, paste the path the installer put on your clipboard (`~/Library/Application Support/CrossChat/obs/crosschat.lua`) and press Return.
+4. **Add the extension:** `chrome://extensions` → **Developer mode** → **Load unpacked** → **Cmd+Shift+G** → `~/Library/Application Support/CrossChat/extension`.
+5. **Widgets:** the same Browser Source addresses as on Windows.
+
+What's different on a Mac:
+
+- **Sign-ins** (Twitch, Kick, Rumble) are encrypted under a key CrossChat keeps in your login Keychain, instead of Windows' DPAPI. The uninstaller removes the key.
+- **The chat window** is moved and closed through the browser's own AppleScript. The first time, macOS asks whether CrossChat (or OBS) may control your browser. If you say no, or macOS doesn't ask, windows still open where they should; CrossChat just can't move or close them afterwards (it tries again a minute later, so allowing it later works too). Opening a window also brings the browser to the front.
+- **The phone companion** stays off until you choose the address. macOS doesn't tell apps whether a network is a private one, so CrossChat won't guess: on your home network, set `"remote": {"bind": "<your Mac's address>"}` in `config.json` (*System Settings → Wi-Fi → Details* shows the address).
+- **Read-aloud** uses the Mac's own voices.
+- **Uninstall:** Applications → CrossChat → **Uninstall CrossChat**. It offers to keep your settings and themes in `Documents/CrossChat backup`.
 
 ## Try it without going live
 
@@ -393,7 +414,7 @@ CrossChat has no server and no account. Everything runs on your PC; it talks onl
 - Anything that *does* something (opening windows, going live, featuring a message, changing settings) is refused when another website asks for it.
 - **Reading chat** uses the platforms' public, signed-out chat feeds.
 - **Twitch and Kick replies and moderation** use their official APIs once you connect them in Settings.
-  - The tokens are encrypted for your Windows account (DPAPI). Disconnecting deletes them and revokes them at Twitch or Kick.
+  - The tokens are encrypted for your Windows account (DPAPI), or on a Mac under a key in your login Keychain. Disconnecting deletes them and revokes them at Twitch or Kick.
 - **The extension reads no logins.** It has no Chrome permissions; it only types your YouTube and X replies into those sites' own chat boxes.
 - **The companion port (4467)** only opens after you pair a device, and only on a network Windows calls Private, or on your own Tailscale address if you switch that on.
   - It answers paired devices only: an HttpOnly cookie per device, of which only a hash is stored.
@@ -420,7 +441,7 @@ More detail, and how to report a problem privately: [SECURITY.md](SECURITY.md).
 
 ## Known limits
 
-- **Windows only.** The hub uses Windows to place and close the chat window.
+- **Mac is a beta.** Everything but OBS itself is tested on macOS by GitHub's Mac machines; it hasn't been run with OBS on a real Mac yet. See [Mac (beta)](#mac-beta) for what differs.
 - **Kick** replies and moderation use Kick's documented API. Sign-in was verified against Kick; the post and moderation calls are covered by tests, not yet by a live Kick stream. Kick alerts come from Kick's public feed and haven't been checked against a real Kick stream yet.
 - **Facebook Live** (new in 1.6) is read from Live Producer, so a redesign by Facebook can break it until CrossChat is updated. It was built and tested on a real "Only me" Facebook live.
 - **Instagram Live** (new) is read from Instagram's Live producer, so a redesign by Instagram can break it until CrossChat is updated. Reading comments was built against a real "Practice" Instagram live; replies are typed into the same comment box and were tested on a copy of that page, not yet on a real live. The extension recognises the live, the viewer count and your own comments by Instagram's English labels.
@@ -435,7 +456,7 @@ More detail, and how to report a problem privately: [SECURITY.md](SECURITY.md).
 
 ## Uninstall
 
-Start menu → CrossChat → **Uninstall CrossChat**, or *Settings → Apps → CrossChat → Uninstall*. It offers to keep your settings and themes in `Documents\CrossChat backup`.
+Start menu → CrossChat → **Uninstall CrossChat**, or *Settings → Apps → CrossChat → Uninstall* (on a Mac: Applications → CrossChat → **Uninstall CrossChat**). It offers to keep your settings and themes in `Documents\CrossChat backup`.
 
 Then remove the two pieces it can't:
 - the script in OBS (*Tools → Scripts*, select it, **−**);
@@ -451,7 +472,10 @@ python -m pytest                                         # 63 tests: config, pla
 node --test "tests/js/*.test.mjs"                        # 35 tests: theme engine, chat app, emotes and chat delay
 python scripts/obs_e2e.py --obs <portable OBS folder>    # end to end against a real OBS (see the file)
 pwsh scripts/package.ps1                                 # builds dist\CrossChat-<version>-windows.zip
+python scripts/package_mac.py                            # builds dist/CrossChat-<version>-mac.zip (any system)
 ```
+
+`pip install lupa` (on a Mac: `brew install luajit`) adds the OBS script tests (`tests/test_obs_script.py`): they run `obs/crosschat.lua` in LuaJIT with a stand-in for OBS and check that it starts the hub and restarts a crashed one, on Windows and on a Mac. On a Mac, `bash scripts/install.sh` installs from a checkout.
 
 `scripts/obs_e2e.py` sets up a throwaway portable OBS with the script and the four widgets. It streams to an RTMP receiver on your PC (ffmpeg) and checks 19 things, from the script starting the hub to the hub leaving when OBS closes. It never touches your own OBS. Version 1.0.0 passed all 19 on OBS 33.0.1.
 

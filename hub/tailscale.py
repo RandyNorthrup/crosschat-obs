@@ -11,6 +11,7 @@ on Tailscale's own network adapter, and that adapter is up.
 import ipaddress
 import re
 import subprocess
+import sys
 
 NO_WINDOW = 0x08000000
 RANGE = ipaddress.ip_network("100.64.0.0/10")          # where Tailscale's addresses are
@@ -37,6 +38,8 @@ def pick(lines):
 def address(run=subprocess.run):
     """This PC's Tailscale address, or '' when Tailscale isn't installed, isn't running or isn't signed in. Blocking:
     the hub runs it in a worker thread."""
+    if sys.platform != "win32":                  # (the Mac beta: not yet; the companion there uses "remote.bind")
+        return ""
     try:
         out = run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ASK], capture_output=True, text=True, timeout=15,
                   creationflags=NO_WINDOW)

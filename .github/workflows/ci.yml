@@ -28,7 +28,7 @@ jobs:
       - name: Python packages
         run: |
           python -m pip install --require-hashes -r hub/requirements.lock
-          python -m pip install pytest ruff
+          python -m pip install pytest ruff lupa
       - name: Lint (ruff)
         run: ruff check hub scripts tests
       - name: Python tests
@@ -48,3 +48,71 @@ jobs:
         if: matrix.python == '3.14'
         shell: pwsh
         run: ./installer/build.ps1
+      - name: Mac package builds
+        run: python scripts/package_mac.py
+
+  # macOS (beta): the same tests on a Mac, the OBS script in LuaJIT, then a real install and uninstall from the download.
+  test-mac:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.14"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: 22
+      - name: Python packages, and LuaJIT for the OBS script tests
+        run: |
+          python -m pip install --require-hashes -r hub/requirements.lock
+          python -m pip install pytest
+          brew install luajit
+      - name: Python tests (Keychain, OBS script in LuaJIT, hub)
+        run: python -m pytest -q -rs
+      - name: JavaScript tests
+        run: node --test "tests/js/*.test.mjs"
+      - name: Install from the Mac download, run the hub, uninstall
+        run: |
+          python scripts/package_mac.py
+          mkdir "$RUNNER_TEMP/download"
+          ditto -x -k dist/CrossChat-*-mac.zip "$RUNNER_TEMP/download"
+          cd "$RUNNER_TEMP/download"/CrossChat-*-mac
+          test -x Install.command && test -x scripts/install.sh
+          bash scripts/install.sh --quiet
+          app="$HOME/Library/Application Support/CrossChat"
+          "$app/.venv/bin/python3" -c "import requests, websockets; print('packages ok')"
+          test -f "$app/config.json" && test -f "$app/hub/vault.py" && test -x "$app/Uninstall.command"
+          ls "$HOME/Applications/CrossChat"
+          test -d "$HOME/Applications/CrossChat/Open chat.app"
+          "$app/.venv/bin/python3" "$app/hub/hub.py" --demo --port 4477 --no-window --quiet &
+          hub=$!
+          for i in $(seq 30); do curl -fs http://127.0.0.1:4477/version && break; sleep 1; done
+          curl -fs http://127.0.0.1:4477/version
+          kill "$hub"
+          bash "$app/scripts/uninstall.sh" --quiet
+          test ! -e "$app" && test ! -e "$HOME/Applications/CrossChat" && test -f "$HOME/Documents/CrossChat backup/config.json"
+      - name: Window control on this Mac (information only)
+        continue-on-error: true
+        timeout-minutes: 3
+        run: |
+          python - <<'EOF'
+          import asyncio, subprocess, sys, time
+          sys.path.insert(0, "hub")
+          import macos
+          app = macos.browser("auto")
+          print("browser:", app, "| screen:", macos.work_area())
+          ask = lambda: subprocess.run(["osascript", "-l", "JavaScript", "-e", macos.WINDOWS, app, "list", ""], capture_output=True, text=True)
+          before = ask()
+          print("list before:", before.returncode, before.stdout.strip(), before.stderr.strip())
+          handle = asyncio.run(macos.open_app(app, "about:blank", (100, 120, 500, 400)))
+          time.sleep(3)
+          after = ask()
+          print("opened:", handle, "| list after:", after.returncode, after.stdout.strip(), after.stderr.strip())
+          macos.close(handle)
+          EOF

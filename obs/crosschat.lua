@@ -4,8 +4,10 @@
 -- hotkeys (Settings > Hotkeys, "CrossChat: ...") ask the hub for things.
 local obs = obslua
 local ffi = require("ffi")
+local bit = require("bit")
+local WINDOWS = ffi.os == "Windows"   -- anything else is a Mac (beta): there the hub is started with posix_spawn
 
-pcall(ffi.cdef, [[
+if WINDOWS then pcall(ffi.cdef, [[
   int MultiByteToWideChar(unsigned int page, unsigned long flags, const char* text, int size, wchar_t* out, int room);
   void* ShellExecuteW(void* hwnd, const wchar_t* operation, const wchar_t* file, const wchar_t* parameters,
                       const wchar_t* directory, int show);
@@ -23,9 +25,20 @@ pcall(ffi.cdef, [[
   int ShellExecuteExW(CROSSCHAT_SHELLEXECUTEINFOW* info);
   int GetExitCodeProcess(void* process, unsigned long* code);
   int CloseHandle(void* handle);
-]])
-local kernel32 = ffi.load("kernel32")
-local shell32 = ffi.load("shell32")
+]]) else pcall(ffi.cdef, [[
+  int posix_spawn(int* pid, const char* path, void* const* actions, const void* attributes, char* const argv[], char* const envp[]);
+  int posix_spawnp(int* pid, const char* file, void* const* actions, const void* attributes, char* const argv[], char* const envp[]);
+  int posix_spawn_file_actions_init(void** actions);
+  int posix_spawn_file_actions_addopen(void** actions, int fd, const char* path, int flags, unsigned short mode);
+  int posix_spawn_file_actions_destroy(void** actions);
+  int waitpid(int pid, int* status, int options);
+  int getpid(void);
+  int access(const char* path, int mode);
+  char*** _NSGetEnviron(void);
+]]) end
+local kernel32 = WINDOWS and ffi.load("kernel32") or nil
+local shell32 = WINDOWS and ffi.load("shell32") or nil
+local SEP = WINDOWS and "\\" or "/"
 
 local VERSION = "1.6.0"
 local PORT = 4466
@@ -63,12 +76,78 @@ end
 
 -- The CrossChat folder: the one above this script's obs folder.
 local function app_folder()
+  if not WINDOWS then
+    return script_path() .. ".."
+  end
   return ((script_path() .. ".."):gsub("/", "\\"))
+end
+
+-- macOS (beta): programs are started with posix_spawn (no shell, so nothing to quote) and collected with waitpid,
+-- so the watchdog below sees the hub's exit code just as it does on Windows.
+local helpers = {}            -- other programs started from here, collected once they finish (or they'd linger as zombies)
+
+local function spawn(argv)
+  local args = ffi.new("char*[?]", #argv + 1)          -- zero-filled, so the list ends with NULL
+  local keep = {}
+  for i, text in ipairs(argv) do
+    keep[i] = ffi.new("char[?]", #text + 1, text)
+    args[i - 1] = keep[i]
+  end
+  local actions = ffi.new("void*[1]")
+  ffi.C.posix_spawn_file_actions_init(actions)
+  for fd = 0, 2 do
+    ffi.C.posix_spawn_file_actions_addopen(actions, fd, "/dev/null", fd == 0 and 0 or 1, 0)   -- O_RDONLY, O_WRONLY
+  end
+  local pid = ffi.new("int[1]")
+  local failed = ffi.C.posix_spawnp(pid, argv[1], actions, nil, args, ffi.C._NSGetEnviron()[0])
+  ffi.C.posix_spawn_file_actions_destroy(actions)
+  if failed ~= 0 then
+    return nil
+  end
+  return pid[0]
+end
+
+local function reap()
+  local status = ffi.new("int[1]")
+  local left = {}
+  for _, pid in ipairs(helpers) do
+    if ffi.C.waitpid(pid, status, 1) == 0 then          -- WNOHANG: 0 while it still runs
+      table.insert(left, pid)
+    end
+  end
+  helpers = left
+end
+
+if not WINDOWS then
+  exists = function(path)
+    return ffi.C.access(path, 0) == 0
+  end
+  run = function(file, arguments)
+    local argv = { file }
+    for _, text in ipairs(arguments or {}) do
+      table.insert(argv, text)
+    end
+    local pid = spawn(argv)
+    if pid ~= nil then
+      table.insert(helpers, pid)
+    end
+    return pid ~= nil
+  end
+end
+
+local function open_page(address)
+  if WINDOWS then
+    return run(address, nil, nil, 1)
+  end
+  return run("/usr/bin/open", { address })
 end
 
 -- OBS's settings folder (where obs-websocket keeps its port and password). Portable OBS (started with --portable,
 -- or with a portable_mode file next to its bin folder) keeps it in config\obs-studio inside its own folder.
 local function obs_config_folder()
+  if not WINDOWS then
+    return (os.getenv("HOME") or "") .. "/Library/Application Support/obs-studio"
+  end
   local buffer = ffi.new("wchar_t[?]", 32768)
   kernel32.GetModuleFileNameW(nil, buffer, 32768)
   local root = (narrow(buffer):gsub("[/\\]bin[/\\]64bit[/\\][^/\\]+$", ""))
@@ -88,6 +167,10 @@ end
 local function python()
   if python_setting ~= "" then
     return python_setting, ""
+  end
+  if not WINDOWS then
+    local mine = app_folder() .. "/.venv/bin/python3"
+    return exists(mine) and mine or "python3", ""
   end
   for _, mine in ipairs({ app_folder() .. "\\python\\pythonw.exe", app_folder() .. "\\.venv\\Scripts\\pythonw.exe" }) do
     if exists(mine) then
@@ -116,19 +199,44 @@ local function run_watched(file, parameters, directory)
   return true
 end
 
+-- macOS: the same, with the pid to wait for.
+local function spawn_watched(argv)
+  local pid = spawn(argv)
+  if pid == nil then
+    return false
+  end
+  if hub_process ~= nil then
+    table.insert(helpers, hub_process)                 -- an earlier hub still gets collected when it ends
+  end
+  hub_process = pid
+  return true
+end
+
 local function python_run(script, arguments, watched)
   local exe, prefix = python()
-  local hub = app_folder() .. "\\hub"
-  local parameters = prefix .. '"' .. hub .. "\\" .. script .. '" ' .. (arguments or "")
+  local hub = app_folder() .. SEP .. "hub"
   local ok
-  if watched then
-    ok = run_watched(exe, parameters, hub)
+  if not WINDOWS then
+    local argv = { exe, hub .. "/" .. script }
+    for _, text in ipairs(type(arguments) == "table" and arguments or { arguments }) do
+      table.insert(argv, text)
+    end
+    if watched then
+      ok = spawn_watched(argv)
+    else
+      ok = run(exe, { unpack(argv, 2) })
+    end
   else
-    ok = run(exe, parameters, hub)
+    local parameters = prefix .. '"' .. hub .. "\\" .. script .. '" ' .. (arguments or "")
+    if watched then
+      ok = run_watched(exe, parameters, hub)
+    else
+      ok = run(exe, parameters, hub)
+    end
   end
   if not ok then
-    obs.script_log(obs.LOG_WARNING, "could not start Python (" .. exe .. "). Run CrossChat's setup again, or set the Python field in "
-      .. "Tools > Scripts > crosschat.lua.")
+    obs.script_log(obs.LOG_WARNING, "could not start Python (" .. exe .. "). Run " .. (WINDOWS and "CrossChat's setup" or "Install.command")
+      .. " again, or set the Python field in Tools > Scripts > crosschat.lua.")
   end
   return ok
 end
@@ -136,23 +244,53 @@ end
 local function start_hub()
   local folder = obs_config_folder()
   obs.script_log(obs.LOG_INFO, "starting the hub (OBS settings in " .. folder .. ")")
+  if not WINDOWS then
+    python_run("hub.py", { "--obs-pid", tostring(ffi.C.getpid()), "--obs-config", folder }, true)
+    return
+  end
   python_run("hub.py", string.format('--obs-pid %d --obs-config "%s"', kernel32.GetCurrentProcessId(), folder), true)
+end
+
+-- How the hub this script started has ended: nil while it still runs, else its exit code.
+local function hub_ended()
+  if WINDOWS then
+    local code = ffi.new("unsigned long[1]")
+    if kernel32.GetExitCodeProcess(hub_process, code) == 0 or code[0] == STILL_ACTIVE then
+      return nil
+    end
+    kernel32.CloseHandle(hub_process)
+    return tonumber(code[0])
+  end
+  local status = ffi.new("int[1]")
+  local done = ffi.C.waitpid(hub_process, status, 1)   -- WNOHANG
+  if done == 0 then
+    return nil
+  end
+  if done < 0 then
+    return 0                  -- someone else collected it: nothing to go on, so no restart
+  end
+  if bit.band(status[0], 0x7f) == 0 then
+    return bit.band(bit.rshift(status[0], 8), 0xff)
+  end
+  return 128 + bit.band(status[0], 0x7f)                -- ended by a signal
 end
 
 -- The watchdog: if the hub stops with an error (not because OBS is closing or another hub already runs, which end
 -- it normally), start it again. Five restarts in ten minutes means something is really wrong: then it stops trying
 -- and says so in the script log.
 local function watch_hub()
+  if not WINDOWS then
+    reap()
+  end
   if hub_process == nil then
     return
   end
-  local code = ffi.new("unsigned long[1]")
-  if kernel32.GetExitCodeProcess(hub_process, code) == 0 or code[0] == STILL_ACTIVE then
+  local code = hub_ended()
+  if code == nil then
     return
   end
-  kernel32.CloseHandle(hub_process)
   hub_process = nil
-  if code[0] == 0 or not exists(app_folder() .. "\\hub\\hub.py") then
+  if code == 0 or not exists(app_folder() .. SEP .. "hub" .. SEP .. "hub.py") then
     return                    -- it ended normally, or CrossChat was uninstalled
   end
   local now = os.time()
@@ -168,7 +306,7 @@ local function watch_hub()
     return
   end
   table.insert(restarts, now)
-  obs.script_log(obs.LOG_WARNING, "the hub stopped with an error (code " .. tonumber(code[0]) .. "); starting it again")
+  obs.script_log(obs.LOG_WARNING, "the hub stopped with an error (code " .. code .. "); starting it again")
   start_hub()
 end
 
@@ -195,7 +333,7 @@ function script_properties()
   local props = obs.obs_properties_create()
   obs.obs_properties_add_button(props, "show", "Open chat window", control("show"))
   obs.obs_properties_add_button(props, "studio", "Open Theme Studio", function()
-    run("http://127.0.0.1:" .. PORT .. "/studio", nil, nil, 1)
+    open_page("http://127.0.0.1:" .. PORT .. "/studio")
     return false
   end)
   obs.obs_properties_add_button(props, "unfeature", "Hide featured message", control("unfeature"))
@@ -206,7 +344,8 @@ function script_properties()
     start_hub()
     return false
   end)
-  local field = obs.obs_properties_add_path(props, "python", "Python (optional)", obs.OBS_PATH_FILE, "pythonw.exe (pythonw.exe)", nil)
+  local field = obs.obs_properties_add_path(props, "python", "Python (optional)", obs.OBS_PATH_FILE,
+    WINDOWS and "pythonw.exe (pythonw.exe)" or "Python (python3*)", nil)
   obs.obs_property_set_long_description(field, "Leave empty: CrossChat uses the Python the installer set up.")
   return props
 end
@@ -236,10 +375,10 @@ end
 
 function script_unload()
   obs.timer_remove(watch_hub)
-  if hub_process ~= nil then
+  if hub_process ~= nil and WINDOWS then
     kernel32.CloseHandle(hub_process)
-    hub_process = nil
   end
+  hub_process = nil           -- (on a Mac the hub stays a child of OBS and leaves with it)
 end
 
 function script_save(settings)
