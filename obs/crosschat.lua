@@ -404,35 +404,6 @@ local function watch_hub()
   start_hub()
 end
 
--- A browser source that loads before the hub listens shows an error page until it's refreshed (OBS loads the scenes
--- while the hub is still starting, and OBS from Flathub starts it through flatpak-spawn, which takes a moment more).
--- So a few seconds after OBS starts, CrossChat's own widgets, the browser sources whose address is the hub's port on
--- this computer, are refreshed once. Nothing else is touched.
-local function refresh_widgets()
-  obs.timer_remove(refresh_widgets)
-  local sources = obs.obs_enum_sources()
-  if sources == nil then
-    return
-  end
-  local mine = { "http://127.0.0.1:" .. PORT .. "/", "http://localhost:" .. PORT .. "/" }
-  for _, source in ipairs(sources) do
-    if obs.obs_source_get_unversioned_id(source) == "browser_source" then
-      local settings = obs.obs_source_get_settings(source)
-      local url = obs.obs_data_get_string(settings, "url")
-      obs.obs_data_release(settings)
-      if url:sub(1, #mine[1]) == mine[1] or url:sub(1, #mine[2]) == mine[2] then
-        local props = obs.obs_source_properties(source)
-        local refresh = obs.obs_properties_get(props, "refreshnocache")
-        if refresh ~= nil then
-          obs.obs_property_button_clicked(refresh, source)
-        end
-        obs.obs_properties_destroy(props)
-      end
-    end
-  end
-  obs.source_list_release(sources)
-end
-
 local function control(command)
   return function(pressed)
     if pressed == nil or pressed then
@@ -494,12 +465,10 @@ function script_load(settings)
   end
   start_hub()
   obs.timer_add(watch_hub, 5000)
-  obs.timer_add(refresh_widgets, 6000)
 end
 
 function script_unload()
   obs.timer_remove(watch_hub)
-  obs.timer_remove(refresh_widgets)
   if hub_process ~= nil and WINDOWS then
     kernel32.CloseHandle(hub_process)
   end
