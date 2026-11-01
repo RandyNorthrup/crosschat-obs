@@ -64,6 +64,8 @@ h1 { margin: 0; font: 800 21px var(--display); letter-spacing: .08em; color: var
 #notice { color: var(--warn); background: color-mix(in srgb, var(--warn) 9%, var(--panel)); line-height: 1.45; }
 #notice span { white-space: normal; color: var(--text); }
 #notice b { color: var(--warn); }
+#update b { color: var(--ok); }
+#update a { flex: none; color: var(--accent-hi); font-weight: 600; }
 
 /* ---- views: all, questions, answer later ------------------------------------------------------------ */
 #views { flex: none; display: flex; gap: 6px; padding: 8px 14px 0; background: var(--bg); }
@@ -269,6 +271,8 @@ a.btn:not([href]) { opacity: .45; cursor: default; }
 .health li.none { color: var(--hint); }
 .card { margin-top: 12px; padding: 11px 13px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); }
 .card h4 { margin: 0 0 7px; font: 700 14px var(--display); }
+.card input.secret { flex: 1 1 220px; min-height: 40px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: inherit; padding: 6px 10px; }
+.card .field.platforms { margin-bottom: 4px; }
 
 /* chat history */
 #history { width: min(760px, calc(100vw - 24px)); height: min(86vh, 900px); }

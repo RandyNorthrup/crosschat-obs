@@ -204,3 +204,20 @@ test('a platform CrossChat does not know never breaks anything', () => {
   assert.deepEqual(A.targetsFor({ myspace: 'on', twitch: 'off' }, null, 'off'), []);
   assert.deepEqual(A.logFilter([m, { p: 'tiktok', name: 'a', text: 'b' }], { p: 'tiktok' }).length, 1);
 });
+
+test('the update notice only ever links to a CrossChat release page on GitHub', () => {
+  const page = 'https://github.com/RandyNorthrup/crosschat-obs/releases/tag/v1.7.0';
+  assert.equal(A.releaseLink(page), page);
+  for (const bad of ['https://evil.example/', 'http://github.com/RandyNorthrup/crosschat-obs/releases/tag/v1.7.0', page + '?x=1', page + '/../../evil',
+    'https://github.com/someone/else/releases/tag/v1.7.0', 'javascript:alert(1)', '', null, undefined]) assert.equal(A.releaseLink(bad), '', String(bad));
+});
+
+test('a Discord webhook URL is recognised before it goes to the hub', () => {
+  const token = 'abcDEF123_-'.repeat(6);
+  assert.equal(A.discordWebhook('https://discord.com/api/webhooks/123456789012345678/' + token), true);
+  assert.equal(A.discordWebhook(' https://canary.discord.com/api/webhooks/123456789012345678/' + token + ' '), true);
+  for (const bad of ['http://discord.com/api/webhooks/123456789012345678/' + token, 'https://discord.com.evil.example/api/webhooks/123456789012345678/' + token,
+    'https://discord.com/api/webhooks/123456789012345678/' + token + '?x', 'https://discord.com/api/webhooks/abc/' + token, '']) {
+    assert.equal(A.discordWebhook(bad), false, bad);
+  }
+});

@@ -41,11 +41,15 @@ import requests
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed, InvalidHandshake
 
+import config_file
 import emotes as emote_sources
 import settings_ui
+import tailscale
+import updates
 import viewers as viewer_cards
 from chatlog import ChatLog
 from devices import Devices, device_name
+from discord_relay import HELLO, SUPPRESS_NOTIFICATIONS, Discord, DiscordError
 from kick_api import Kick, KickError
 from rumble_api import Rumble, RumbleError
 from twitch_api import Twitch, TwitchError
@@ -88,7 +92,8 @@ DEFAULTS = {
     "close_window_seconds_after_stream": 120,
     "overlay": {"platforms": "all", "theme": "classic"},
     "obs": {"host": "127.0.0.1", "port": 0, "password": ""},     # port 0 and no password: read from OBS's own settings
-    "remote": {"enabled": True, "port": 4467},                  # the companion for paired devices on the home network
+    "remote": {"enabled": True, "port": 4467, "tailscale": False},  # the companion for paired devices; tailscale: also away from home
+    "updates": {"check": False},             # true: ask GitHub once a day whether a newer CrossChat is out (nothing else is sent)
     "twitch_client_id": "",
     "kick_client_id": "",                    # your own Kick app instead of CrossChat's (both or neither)
     "kick_client_secret": "",
@@ -266,6 +271,8 @@ def publish(platform, name, text, color="", badges=(), mid="", kind="chat", raw=
         LOG.write(event)
     send(event)
     speak_maybe(event)
+    if to_discord():
+        DC.chat(event)                           # (only if the streamer picked "all chat"; never hidden ones)
 
 
 def status_event():
@@ -1176,6 +1183,8 @@ async def stream_started(local=False):
         asyncio.create_task(tiktok_open())
     if FACEBOOK and not local and not TEST:
         asyncio.create_task(facebook_open())
+    if DC and not local and not TEST:
+        DC.live(live_notice())
     if X.get("auto_go_live") and not local and not TEST:
         async def soon():                       # give X a moment to see the video arriving
             await asyncio.sleep(X.get("delay_seconds", 12))
@@ -1430,6 +1439,8 @@ def feature(mid):
     send({"type": "feature", "msg": found})
     if found and TTS["enabled"] and TTS["read"] == "featured":
         say(speech(found, force=True), found["id"])
+    if found and to_discord():
+        DC.featured(found)
     return True
 
 
@@ -1480,6 +1491,7 @@ jobs = {}                                    # job id -> future the executor's a
 TW = None                                    # the Twitch API connection (set in main)
 KK = None                                    # the Kick API connection (set in main)
 RB = None                                    # the Rumble Live Stream API URL (set in main)
+DC = None                                    # the Discord webhook chat is posted to (set in main)
 DEV = None                                   # paired devices (set in main)
 LOG = None                                   # this stream's chat history (set in main)
 EMOTES = {}                                  # third-party emote name -> picture URL
@@ -1512,6 +1524,83 @@ def kick_event():
     if DEMO:
         return {"type": "kick_auth", "state": "on", "login": "you"}
     return {"type": "kick_auth", **(KK.state() if KK else {"state": "off"})}
+
+
+# ---- Discord (posting through a webhook), the update notice, and settings the window switches ----------------------
+def discord_event():
+    if DEMO:
+        return {"type": "discord_auth", "state": "on", "name": "stream-chat", "live": True, "featured": True, "chat": False}
+    return {"type": "discord_auth", **(DC.state() if DC else {"state": "off"})}
+
+
+def to_discord():
+    """Chat and featured messages go to Discord only during a real stream (not a test, the demo or a stream to this PC)."""
+    return bool(DC and streaming.is_set() and not TEST and not state.get("local"))
+
+
+def live_notice():
+    """The going-live post in Discord: where to watch, from the channels in config.json."""
+    links = [("Twitch", TWITCH and "https://www.twitch.tv/" + TWITCH),
+             ("YouTube", YOUTUBE and "https://www.youtube.com/%s/live" % (YOUTUBE if YOUTUBE.startswith("@") else "channel/" + YOUTUBE)),
+             ("Kick", KICK and "https://kick.com/" + KICK), ("TikTok", TIKTOK and "https://www.tiktok.com/@%s/live" % TIKTOK)]
+    return "\n".join(["🔴 **Live now!**"] + ["%s: %s" % (name, url) for name, url in links if url])
+
+
+def save_setting(key, value):
+    """A switch flipped in the window, written to config.json (the demo keeps it in memory only)."""
+    if not DEMO:
+        config_file.change(CONFIG_PATH, key, value)
+    section, _, name = key.partition(".")
+    if name:
+        CFG.setdefault(section, {})[name] = value
+    else:
+        CFG[section] = value
+
+
+update_state = {"checked": 0.0, "found": None, "wake": None}
+
+
+def update_wanted():
+    return (CFG.get("updates") or {}).get("check") is True and not DEMO
+
+
+def update_event():
+    """For the window on this PC: whether the check is on, and the newer release when there is one."""
+    found = update_state["found"] if update_wanted() else None
+    theirs = updates.version((found or {}).get("version"))
+    newer = bool(theirs and theirs > (updates.version(VERSION) or (0,)))
+    return {"type": "update", "check": update_wanted(), "version": "%d.%d.%d" % theirs if newer else "",
+            "url": updates.page(theirs) if newer else ""}
+
+
+async def update_watch():
+    """The update notice, when switched on: GitHub is asked at most once a day. The last time is kept in your folder,
+    so restarting OBS doesn't ask again."""
+    update_state["wake"] = asyncio.Event()
+    try:
+        with open(settings_path("update-check.json"), encoding="utf-8") as f:
+            saved = json.load(f)
+        update_state["checked"] = float(saved.get("checked") or 0)
+        update_state["found"] = saved.get("found") if isinstance(saved.get("found"), dict) else None
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+    while True:
+        if update_wanted() and time.time() - update_state["checked"] >= updates.DAY:
+            update_state["checked"] = time.time()
+            try:
+                update_state["found"] = await asyncio.to_thread(updates.newest, VERSION)
+            except updates.UpdateError as error:
+                log.info("update check: %s", error)
+            try:
+                write_file(settings_path("update-check.json"), json.dumps({"checked": update_state["checked"], "found": update_state["found"]}))
+            except OSError:
+                pass
+            send(update_event(), only=local_clients)
+        update_state["wake"].clear()
+        try:
+            await asyncio.wait_for(update_state["wake"].wait(), 3600)
+        except asyncio.TimeoutError:
+            pass
 
 
 def settings_path(name):
@@ -1895,12 +1984,19 @@ async def network_refusal(address):
 
 
 async def remote_on():
+    """The companion, on the home network and (when switched on) on Tailscale."""
+    await lan_on()
+    await tailscale_on()
+
+
+async def lan_on():
     """Listen on the home network once there is a paired device or a pairing in progress (not before, so nothing is
     exposed and Windows doesn't ask about the firewall until the streamer pairs something).
 
     It listens only on this PC's address on the home network (not on every network adapter, such as a VPN), and
     not at all when Windows has that network down as Public (a café or hotel network, where others could listen in).
-    "remote": {"bind": "0.0.0.0"} in config.json listens everywhere instead, for setups like Tailscale.
+    For away from home there is "remote": {"tailscale": true} (see tailscale_on); "remote": {"bind": "0.0.0.0"} in
+    config.json listens everywhere instead.
     """
     global remote_server, remote_address, remote_why
     if remote_server or not (CFG.get("remote") or {}).get("enabled", True) or not (DEV.devices or DEV.pairing_open()):
@@ -1927,29 +2023,95 @@ def remote_bind():
     return str((CFG.get("remote") or {}).get("bind") or "auto")
 
 
-async def remote_off():
+def lan_off():
     global remote_server
     if remote_server:
         remote_server.close()
         remote_server = None
 
 
+async def remote_off():
+    lan_off()
+    await tailscale_off()
+
+
+# Tailscale: the streamer's own devices in one private, encrypted network, so the phone reaches the companion from
+# anywhere. Only on the PC's own Tailscale address (see tailscale.py), only when switched on, and pairing is still needed.
+tailscale_server = None
+tailscale_address = ""  # where it listens
+tailscale_seen = ""     # this PC's Tailscale address when last looked
+tailscale_why = ""      # why it doesn't listen there, for Settings
+TAILSCALE_MISSING = ("Tailscale isn't running on this PC. Install it from tailscale.com and sign in, here and on your phone, "
+                     "then pair the phone again.")
+
+
+def tailscale_wanted():
+    remote = CFG.get("remote") or {}
+    return remote.get("tailscale") is True and remote.get("enabled", True) is not False and remote_bind() != "0.0.0.0" and not DEMO
+
+
+def tailscale_url():
+    return "http://%s:%d/" % (tailscale_address, remote_port()) if tailscale_server else None
+
+
+def companion_event():
+    """For Settings on this PC: the Tailscale switch, this PC's Tailscale address, and why the companion isn't there."""
+    return {"type": "companion", "tailscale": (CFG.get("remote") or {}).get("tailscale") is True, "address": tailscale_seen,
+            "listening": bool(tailscale_server), "why": tailscale_why if tailscale_wanted() else ""}
+
+
+async def tailscale_on():
+    """Also listen on this PC's Tailscale address, when switched on and something is paired or pairing. When Tailscale
+    isn't running, Settings says so."""
+    global tailscale_server, tailscale_address, tailscale_seen, tailscale_why
+    if tailscale_server or not tailscale_wanted():
+        return
+    tailscale_seen = await asyncio.to_thread(tailscale.address)
+    tailscale_why = "" if tailscale_seen else TAILSCALE_MISSING
+    if tailscale_seen and (DEV.devices or DEV.pairing_open()) and not (remote_server and remote_address == tailscale_seen):
+        try:
+            tailscale_server = await asyncio.start_server(lambda r, w: serve(r, w, remote=True), tailscale_seen, remote_port())
+            tailscale_address = tailscale_seen
+            log.info("companion on Tailscale at %s", tailscale_url())
+        except OSError as error:
+            tailscale_why = "CrossChat could not open port %d on the Tailscale address (%s)." % (remote_port(), error.strerror)
+    send(companion_event(), only=local_clients)
+
+
+async def tailscale_off():
+    global tailscale_server, tailscale_address
+    if tailscale_server:
+        tailscale_server.close()
+        tailscale_server, tailscale_address = None, ""
+        log.info("the companion stopped listening on Tailscale")
+        send(companion_event(), only=local_clients)
+
+
 async def remote_watch():
     """The companion closes when nothing is paired any more, and when the network changes: a laptop taken from home to
-    a café, or a network switched to Public. It opens again only on a Private network."""
+    a café, or a network switched to Public. It opens again only on a Private network. On Tailscale it closes when
+    Tailscale stops (or the switch goes off), and opens when Tailscale comes back."""
     rounds = 0
     while True:
         await asyncio.sleep(30)
         rounds += 1
-        if not remote_server:
-            continue
-        if not DEV.devices and not DEV.pairing_open():
-            log.info("nothing is paired any more; the companion closes")
-            await remote_off()
-        elif remote_bind() == "auto" and (lan_ip() != remote_address or (rounds % 4 == 0 and await network_refusal(remote_address))):
-            log.info("this PC is on another network now; the companion starts over")
-            await remote_off()
-            await remote_on()
+        await companion_round(rounds)
+
+
+async def companion_round(rounds):
+    paired = bool(DEV.devices or DEV.pairing_open())
+    if (remote_server or tailscale_server) and not paired:
+        log.info("nothing is paired any more; the companion closes")
+        await remote_off()
+        return
+    if remote_server and remote_bind() == "auto" and (lan_ip() != remote_address or (rounds % 4 == 0 and await network_refusal(remote_address))):
+        log.info("this PC is on another network now; the companion starts over")
+        lan_off()
+        await lan_on()
+    if tailscale_server and (not tailscale_wanted() or await asyncio.to_thread(tailscale.address) != tailscale_address):
+        await tailscale_off()                    # Tailscale stopped, or has another address now
+    if not tailscale_server and tailscale_wanted() and paired:
+        await tailscale_on()
 
 
 def devices_event():
@@ -2321,13 +2483,15 @@ async def serve(reader, writer, remote=False):
                 queue.put_nowait(old)
             for event in (status_event(), viewer_event(), {"type": "feature", "msg": state["featured"]},
                           {"type": "starred", "ids": list(starred)}, {"type": "quick", "replies": quick_replies()}, twitch_event(),
-                          kick_event(), rumble_event(), {"type": "emotes", "emotes": EMOTES}, {"type": "tts", "settings": TTS},
+                          kick_event(), rumble_event(), discord_event(), {"type": "emotes", "emotes": EMOTES}, {"type": "tts", "settings": TTS},
                           {"type": "filters", "settings": FILTERS}):
                 queue.put_nowait(event)
             clients.add(queue)
             if not remote and not outsider:
                 local_clients.add(queue)
                 queue.put_nowait(devices_event())
+                queue.put_nowait(companion_event())
+                queue.put_nowait(update_event())
                 if query.get("executor") == ["1"]:           # the chat window with the extension: it posts for everyone
                     take_role("executor", queue)
                     send(executor_event())
@@ -2437,7 +2601,8 @@ async def serve_post(reader, writer, headers, path, remote=False):
             future.set_result(body.get("answer") if isinstance(body.get("answer"), dict) else {})
         result = {"ok": bool(future)}
     elif path in ("/kick/connect", "/kick/disconnect", "/twitch/connect", "/twitch/disconnect", "/devices/revoke", "/rumble/connect",
-                  "/rumble/disconnect") and DEMO:
+                  "/rumble/disconnect", "/discord/connect", "/discord/options", "/discord/test", "/discord/disconnect",
+                  "/companion/tailscale") and DEMO:
         result = {"ok": False, "why": "The demo never touches your real accounts or devices."}
     elif path == "/pair/start" and DEMO:
         result = {"ok": False, "why": "Pairing is switched off in the demo."}
@@ -2451,10 +2616,12 @@ async def serve_post(reader, writer, headers, path, remote=False):
     elif path == "/pair/start" and not remote:
         code, expires = DEV.start_pairing()
         await remote_on()
-        url = lan_url()
-        result = {"ok": bool(remote_server), "code": code, "url": (url + "pair?code=" + code) if url else None, "expires": int(expires)}
-        if not remote_server:
-            result["why"] = remote_why or "The companion is switched off in config.json (\"remote\": {\"enabled\"})."
+        url = tailscale_url() or lan_url()         # Tailscale's address works at home and away
+        result = {"ok": bool(remote_server or tailscale_server), "code": code, "url": (url + "pair?code=" + code) if url else None,
+                  "expires": int(expires)}
+        if not result["ok"]:
+            result["why"] = (" ".join(w for w in (remote_why, tailscale_why if tailscale_wanted() else "") if w)
+                             or "The companion is switched off in config.json (\"remote\": {\"enabled\"}).")
         send({"type": "pair", **result}, only=local_clients)
     elif path == "/devices/revoke" and not remote:
         result = {"ok": DEV.revoke(str(body.get("id") or ""))}
@@ -2516,6 +2683,53 @@ async def serve_post(reader, writer, headers, path, remote=False):
         send(rumble_event())
         send(status_event())
         result = {"ok": True}
+    elif path == "/discord/connect" and not remote:
+        try:
+            await asyncio.to_thread(DC.set, body.get("url"), body)
+            result = {"ok": True}
+        except DiscordError as error:
+            result = {"ok": False, "why": str(error)}
+        except OSError:
+            result = {"ok": False, "why": "Could not save it in your CrossChat folder."}
+        send(discord_event())
+    elif path == "/discord/options" and not remote:
+        try:
+            DC.choose(body)
+            result = {"ok": True}
+        except OSError:
+            result = {"ok": False, "why": "Could not save it in your CrossChat folder."}
+        send(discord_event())
+    elif path == "/discord/test" and not remote:
+        try:
+            await asyncio.to_thread(DC.post, {"content": HELLO, "allowed_mentions": {"parse": []}, "flags": SUPPRESS_NOTIFICATIONS})
+            result = {"ok": True}
+        except DiscordError as error:
+            result = {"ok": False, "why": str(error)}
+        send(discord_event())
+    elif path == "/discord/disconnect" and not remote:
+        DC.forget()
+        send(discord_event())
+        result = {"ok": True}
+    elif path == "/companion/tailscale" and not remote:
+        try:
+            save_setting("remote.tailscale", body.get("on") is True)
+            result = {"ok": True}
+        except (OSError, ValueError) as error:
+            result = {"ok": False, "why": str(error) if isinstance(error, ValueError) else "Could not write config.json."}
+        if tailscale_wanted():
+            await tailscale_on()
+        else:
+            await tailscale_off()
+        send(companion_event(), only=local_clients)
+    elif path == "/updates" and not remote:
+        try:
+            save_setting("updates.check", body.get("check") is True)
+            result = {"ok": True}
+        except (OSError, ValueError) as error:
+            result = {"ok": False, "why": str(error) if isinstance(error, ValueError) else "Could not write config.json."}
+        if update_state["wake"]:
+            update_state["wake"].set()           # switched on: ask GitHub now (unless it was asked in the last day)
+        send(update_event(), only=local_clients)
     elif path == "/kick/connect" and not remote:
         if not KK.client_id:
             result = {"ok": False, "why": "This CrossChat has no Kick app (\"kick_client_id\" in config.json)."}
@@ -2562,13 +2776,14 @@ def start_log():
 
 def companion_setup():
     """Paired devices and the Twitch connection, kept in your folder."""
-    global DEV, TW, KK, RB, LOG, FILTERS, TTS
+    global DEV, TW, KK, RB, DC, LOG, FILTERS, TTS
     DEV = Devices(settings_path("devices.json"))
     TW = Twitch(CFG.get("twitch_client_id") or TWITCH_CLIENT_ID, os.path.join(HOME, "twitch.bin"))
     own = bool(CFG.get("kick_client_id"))            # your own Kick app replaces CrossChat's, id and secret together
     KK = Kick(CFG["kick_client_id"] if own else KICK_CLIENT_ID, CFG.get("kick_client_secret", "") if own else KICK_CLIENT_SECRET,
               os.path.join(HOME, "kick.bin"), "http://localhost:%d/kick/callback" % PORT)
     RB = Rumble(os.path.join(HOME, "rumble.bin"))
+    DC = Discord(os.path.join(HOME, "discord.bin"), NAMES, changed=lambda: send(discord_event()))
     LOG = ChatLog(os.path.join(HOME, "logs"), int((CFG.get("logs") or {}).get("keep_days") or 90))
     FILTERS = settings_file("filters.json", FILTER_DEFAULTS)
     TTS = settings_file("tts.json", TTS_DEFAULTS)
@@ -2606,6 +2821,8 @@ async def main():
     tasks.append(asyncio.create_task(keep_running("emotes", emotes_refresh)))
     if not DEMO:
         tasks.append(asyncio.create_task(keep_running("companion", remote_watch)))
+        tasks.append(asyncio.create_task(keep_running("discord", DC.run)))
+        tasks.append(asyncio.create_task(keep_running("updates", update_watch)))
     async with server:
         if TEST:
             await stream_started()

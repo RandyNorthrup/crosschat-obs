@@ -149,11 +149,11 @@ These are set up on the streaming PC, in Settings there.
 | **Look and sound** | Auto (follows the device), Light or Dark; a ding when a message arrives. Each device remembers its own. |
 | **Text to speech** | What to read, voice, speed, volume (on the streaming PC). **Stop reading** works from any device. |
 | **Filters** | Words, viewers, `!commands`, bots (on the streaming PC). |
-| **Connections** | Each chat's health; connect or disconnect Twitch and Kick (on the streaming PC). |
-| **Paired devices** | The list, **Remove**, and **Pair a device** (on the streaming PC). |
+| **Connections** | Each chat's health; connect or disconnect Twitch, Kick, Rumble and Discord (on the streaming PC). |
+| **Paired devices** | The list, **Remove**, **Pair a device**, and the Tailscale switch for away from home (on the streaming PC). |
 | **Chat history** | Saved chat of every stream: search and export (on the streaming PC). |
 | **Check the stream** | Test chat, alert, featured message or viewer count on the widgets in OBS, without going live. |
-| **About** | The version, and on the streaming PC the address other devices use. |
+| **About** | The version, and on the streaming PC the address other devices use and the update notice switch (off by default). |
 
 ## Keeping it private
 
@@ -165,7 +165,11 @@ These are set up on the streaming PC, in Settings there.
   - The companion uses plain `http` on your local network, like a printer's or router's own page.
   - Use it on a network you trust, not public or hotel Wi-Fi.
   - **Don't forward its port** on your router.
-- **From away from home**, the safe way is [Tailscale](https://tailscale.com): a private network between your own devices, free for personal use. Install it on the streaming PC and the phone, then open the companion address with the PC's Tailscale name or address. Pairing works the same.
+- **From away from home**, the safe way is [Tailscale](https://tailscale.com): a private, encrypted network between your own devices, free for personal use.
+  1. Install Tailscale on the streaming PC and on the phone, and sign in to the same account on both.
+  2. On the streaming PC: Settings → Paired devices → switch on **Away from home too, with Tailscale**. It shows the PC's Tailscale address, or says what's missing.
+  3. **Pair a device** and scan the QR code. With Tailscale on, the code uses the PC's Tailscale address, so it works at home and away while Tailscale runs on the phone. A phone paired before needs pairing once more.
+  - Pairing is still required. The companion listens only on the address Windows has on Tailscale's own adapter, and stops listening there when Tailscale stops.
 - Removing a device in Settings takes effect immediately. The device then says it is no longer paired.
 
 ## Troubleshooting

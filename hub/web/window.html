@@ -41,6 +41,7 @@
 </header>
 <div id="featured" class="bar" aria-live="polite" hidden><b>ON STREAM</b><span></span><button id="unfeature" type="button" title="Take it off the stream">Hide</button></div>
 <div id="notice" class="bar" role="status" hidden><b>!</b><span></span></div>
+<div id="update" class="bar" role="status" hidden><b>NEW</b><span></span><a id="update-link" href="#" target="_blank" rel="noopener noreferrer">What’s new</a><button id="update-hide" type="button" title="Hide until the next version">Later</button></div>
 <div id="views" role="tablist" aria-label="Show">
   <button type="button" role="tab" id="view-all" data-view="all" aria-selected="true" aria-controls="list">All</button>
   <button type="button" role="tab" id="view-questions" data-view="questions" aria-selected="false" aria-controls="list">Questions <em id="count-questions"></em></button>
@@ -200,6 +201,26 @@
         </div>
         <div class="buttons"><button class="btn" type="button" id="rumble-disconnect" hidden>Disconnect</button></div>
       </div>
+      <div class="card" id="discord-section">
+        <h4>Discord</h4>
+        <div class="status"><i class="dot" id="discord-dot"></i><span id="discord-state">Not connected</span></div>
+        <p class="hint" id="discord-hint">Post to a channel of your Discord server while you’re live. In Discord: <b>Server Settings → Integrations → Webhooks → New Webhook → Copy Webhook URL</b>, then paste it here.</p>
+        <div class="buttons" id="discord-form">
+          <input id="discord-url" class="secret" type="password" autocomplete="off" spellcheck="false" aria-label="Discord webhook URL"
+                 placeholder="https://discord.com/api/webhooks/…">
+          <button class="btn primary" type="button" id="discord-connect">Connect Discord</button>
+        </div>
+        <fieldset class="field platforms" id="discord-choices" hidden>
+          <legend>Post there</legend>
+          <label><input type="checkbox" data-discord="live"> A going-live notice</label>
+          <label><input type="checkbox" data-discord="featured"> Messages you show on stream</label>
+          <label><input type="checkbox" data-discord="chat"> All chat</label>
+        </fieldset>
+        <div class="buttons">
+          <button class="btn" type="button" id="discord-test" hidden>Send a test post</button>
+          <button class="btn" type="button" id="discord-disconnect" hidden>Disconnect</button>
+        </div>
+      </div>
     </section>
     <section class="section" id="devices-section">
       <h3>Paired devices</h3>
@@ -216,6 +237,8 @@
         </div>
       </div>
       <p class="hint">The first time, Windows asks whether CrossChat may use the network: allow it on <b>private networks</b>.</p>
+      <label class="switch">Away from home too, with Tailscale <input id="tailscale-switch" type="checkbox"></label>
+      <p class="hint" id="tailscale-hint"></p>
     </section>
     <section class="section" id="history-section">
       <h3>Chat history</h3>
@@ -236,6 +259,10 @@
     <section class="section">
       <h3>About</h3>
       <p class="hint" id="about"></p>
+      <div id="update-row">
+        <label class="switch">Tell me when a new version is out <input id="update-check" type="checkbox"></label>
+        <p class="hint">CrossChat then asks GitHub once a day which version is the newest. Nothing about you is sent, and nothing is downloaded or installed: you get a link to the release page.</p>
+      </div>
     </section>
   </div>
 </dialog>

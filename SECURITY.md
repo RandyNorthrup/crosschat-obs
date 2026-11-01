@@ -8,7 +8,7 @@ Fixes go into the newest release only.
 
 ## What leaves your PC
 
-CrossChat has no server of its own. It makes no analytics, crash-report or update-check connections. Everything it sends goes straight from your PC to the services below, over HTTPS or TLS, and only for the features you turn on.
+CrossChat has no server of its own. It makes no analytics or crash-report connections, and checks for updates only if you switch that on. Everything it sends goes straight from your PC to the services below, over HTTPS or TLS, and only for the features you turn on.
 
 | Where | What is sent | When |
 |---|---|---|
@@ -22,6 +22,8 @@ CrossChat has no server of its own. It makes no analytics, crash-report or updat
 | TikTok (`www.tiktok.com`), in your browser | Nothing beyond what your browser already does: CrossChat reads chat from your own TikTok LIVE page there | A TikTok name is set and you're live |
 | Facebook Live Producer, in your browser | Nothing beyond what your browser already does: CrossChat reads comments from Live Producer there | `"facebook": true` and you're live |
 | Rumble API (`rumble.com`) | Your own Live Stream API URL, to read your chat, Rants, subs and viewers | You connected Rumble and you're live |
+| Discord (`discord.com`), through your webhook | Your webhook URL, and what you picked: a going-live notice with your channel links, the messages you show on stream, all chat. Only what viewers already see on stream | You connected Discord and you're live (and **Send a test post**) |
+| GitHub (`api.github.com`) | Nothing about you: one request for the newest CrossChat version number. Like any web request, GitHub sees your IP address | You switched on **Tell me when a new version is out** (off by default), at most once a day |
 | 7TV, BetterTTV, FrankerFaceZ | Your Twitch channel's public numeric id | Emotes are on (the default), once an hour |
 | Google Fonts | A font request from your browser or OBS | Only if a theme uses a Google font |
 | Microsoft or Google speech | The chat line being read aloud | Only if you pick a voice marked **online** for text-to-speech |
@@ -68,14 +70,19 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 - Changes must come from the companion page itself, as JSON.
 - Paired devices can read chat and reply, moderate, star, feature, read a chat message aloud and send test events. They can't:
   - pair other devices;
-  - connect Twitch or Kick;
+  - connect Twitch, Kick, Rumble or Discord;
+  - switch Tailscale or the update notice;
   - change themes, filters or text-to-speech settings;
   - read chat history;
   - open windows;
   - go live on X;
   - act as the extension;
   - make the PC say anything that isn't a message from the chat.
-- It is plain `http` on your local network. Don't forward the port. For use away from home, a private network such as Tailscale is the safe way: set `"remote": {"bind": "<your Tailscale IP>"}` in `config.json`.
+- It is plain `http` on your local network. Don't forward the port.
+- **Away from home, with Tailscale** (off until you switch it on in Settings → Paired devices): the companion also listens on your PC's own Tailscale address, a private, encrypted network between your own devices.
+  - The address counts only when Windows has it on Tailscale's own network adapter and that adapter is up. An address in Tailscale's range alone isn't trusted: internet providers hand out that range too.
+  - Pairing is still needed. Anyone else on your tailnet (a shared node, say) reaches only the pairing page.
+  - It closes when Tailscale stops or the switch goes off, and opens again when Tailscale is back.
 
 **Twitch:**
 
@@ -90,6 +97,17 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 - CrossChat reads Rumble through its official Live Stream API: a private URL you paste in Settings. It works like a password, so it's kept encrypted for your Windows account (`rumble.bin`), never logged, never put in an error message and never handed to a page or device.
 - Rumble's answer also holds your stream key; CrossChat uses only the chat, Rants, subs and viewer count from it.
 - **Disconnect** deletes the file. To cancel the URL itself, reset it at rumble.com/account/livestream-api.
+
+**Discord:**
+
+- CrossChat only posts, through a webhook you make in your server's settings. There is no bot, no Discord sign-in, and nothing is read from Discord. A webhook can post in its one channel and nothing else.
+- The webhook URL works like a password, so it's kept encrypted for your Windows account (`discord.bin`), never logged, never put in an error message and never shown again or handed to a page or device. Connecting checks it with Discord first.
+- Chat can't ping anyone: every post says no mentions are allowed, and every `@` is broken up. Discord formatting in chat is shown as typed, and links in chat are shown as code, which can't be clicked or previewed.
+- Only what viewers already see on stream is posted: never messages your filters hid, notes, tests or anything about your PC. Nothing is posted during a test stream to this PC.
+- Posts are spaced at least 2 seconds apart, and CrossChat waits as long as Discord asks. If the webhook is deleted, CrossChat stops and says so.
+- **Disconnect** deletes the file. To stop the webhook everywhere, delete it in Discord.
+
+**Update notice:** off unless you switch it on (in the installer or Settings → About). Then, at most once a day, CrossChat asks GitHub's public API for the newest release's version number: a fixed address, no cookies, nothing about you. It never downloads or installs anything. The link it shows is made by CrossChat from the version number and always goes to this repository's release page.
 
 **Kick:**
 
@@ -135,7 +153,8 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 - `quick.json`, your quick replies;
 - `filters.json` and `tts.json`, your filter and text-to-speech settings;
 - `devices.json`, hashes of paired devices' keys;
-- `twitch.bin` and `kick.bin`, the tokens, and `rumble.bin`, your Rumble API URL, all encrypted for your Windows account;
+- `twitch.bin` and `kick.bin`, the tokens, `rumble.bin`, your Rumble API URL, and `discord.bin`, your Discord webhook, all encrypted for your Windows account;
+- `update-check.json`, when the update notice last asked GitHub and what it found;
 - `logs\`, chat history;
 - `crosschat.log`. The log has no passwords, keys, tokens or cookies.
 

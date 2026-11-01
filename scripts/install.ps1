@@ -109,7 +109,8 @@ Say 'Done.'
 Step 'Privacy'
 Say 'CrossChat runs only on this PC. It has no server, no account and no telemetry.'
 Say 'It connects only to the chat platforms you set up, and, unless you turn them off, to 7TV, BetterTTV and'
-Say 'FrankerFaceZ for emote pictures (they get your Twitch channel''s public id).'
+Say 'FrankerFaceZ for emote pictures (they get your Twitch channel''s public id). If you want it, it also asks GitHub'
+Say 'once a day whether a newer CrossChat is out (off unless you say yes below).'
 Say 'Every connection and what it sends: https://github.com/RandyNorthrup/crosschat-obs/blob/main/SECURITY.md#what-leaves-your-pc'
 
 # ---- your channels ----------------------------------------------------------------------------------------
@@ -126,6 +127,7 @@ if (Test-Path $config) {
     $env:CROSSCHAT_FACEBOOK = if (Yes 'Do you go live on Facebook?' $false) { '1' } else { '0' }
     $env:CROSSCHAT_X = if (Yes 'Do you stream to X (it needs X Premium and Live Studio)?' $false) { '1' } else { '0' }
     $env:CROSSCHAT_EMOTES = if (Yes 'Show 7TV, BetterTTV and FrankerFaceZ emotes (asks those services for your channel''s emotes)?') { '1' } else { '0' }
+    $env:CROSSCHAT_UPDATES = if (Yes 'Tell you when a new CrossChat is out (asks GitHub once a day; sends nothing about you, downloads nothing)?' $false) { '1' } else { '0' }
     if ($env:CROSSCHAT_X -eq '1') {
         $env:CROSSCHAT_X_AUTO = if (Yes 'Go live on X by itself whenever OBS starts streaming?') { '1' } else { '0' }
         $env:CROSSCHAT_X_SOURCE = Ask 'Name of the source in X Live Studio that OBS streams to' 'OBS'
