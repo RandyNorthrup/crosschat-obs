@@ -8,6 +8,7 @@
   <a href="https://github.com/RandyNorthrup/crosschat-obs/actions/workflows/ci.yml"><img alt="Checks" src="https://img.shields.io/github/actions/workflow/status/RandyNorthrup/crosschat-obs/ci.yml?branch=main&label=checks"></a>
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4">
   <img alt="macOS 15, tested on Intel Macs" src="https://img.shields.io/badge/macOS-15%20(Intel%20tested)-999999">
+  <img alt="Linux beta" src="https://img.shields.io/badge/Linux-beta-999999">
   <img alt="Tested with OBS Studio 33.0.1" src="https://img.shields.io/badge/OBS%20Studio-33.0.1-302E31">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-b87045"></a>
   <a href="https://github.com/sponsors/RandyNorthrup"><img alt="Sponsor on GitHub" src="https://img.shields.io/badge/sponsor-GitHub-db61a2"></a>
@@ -139,10 +140,10 @@ Every setting, the CSS hooks and how to share themes are in **[docs/THEMES.md](d
 
 | | |
 |---|---|
-| **PC** | Windows 10 or 11, 64-bit (tested on Windows 11), or a Mac with macOS 15 (tested with OBS on Intel Macs; see [Mac](#mac)). |
+| **PC** | Windows 10 or 11, 64-bit (tested on Windows 11), or a Mac with macOS 15 (tested with OBS on Intel Macs; see [Mac](#mac)), or 64-bit Linux as a beta (tested on Ubuntu 25.10; see [Linux (beta)](#linux-beta)). |
 | **OBS Studio** | 28 or newer, with its built-in WebSocket server. Tested with **33.0.1** (obs-websocket 5.7.6). |
-| **Browser** | Google Chrome, or Microsoft Edge. Needed only for replying, and for X and TikTok. |
-| **Python** | Nothing to install: the setup program brings its own (python.org's embeddable Python). The zip's `Install.cmd` needs Python 3.10 or newer, and offers to install it. |
+| **Browser** | Google Chrome, or Microsoft Edge (on a Mac or Linux also Chromium; on Linux also Brave). Needed only for replying, and for X and TikTok. |
+| **Python** | Nothing to install: the setup program brings its own (python.org's embeddable Python). The zip's `Install.cmd` needs Python 3.10 or newer, and offers to install it. On a Mac or Linux, Python 3.10 or newer. |
 | **X Live** *(optional)* | X Premium with access to [X Live Studio](https://studio.x.com/live), and OBS sending video to X (see [X Live](#x-live)). |
 | **TikTok LIVE** *(optional)* | Signed in to TikTok in the same browser, and OBS sending video to TikTok (see [TikTok LIVE](#tiktok-live)). |
 | **Facebook Live, Rumble** *(optional)* | Signed in to them in the same browser (see [Facebook Live and Rumble](#facebook-live-and-rumble)). |
@@ -223,6 +224,38 @@ What's different on a Mac:
 - **The phone companion** stays off until you choose the address. macOS doesn't tell apps whether a network is a private one, so CrossChat won't guess: on your home network, set `"remote": {"bind": "<your Mac's address>"}` in `config.json` (*System Settings → Wi-Fi → Details* shows the address).
 - **Read-aloud** uses the Mac's own voices.
 - **Uninstall:** Applications (in your home folder) → CrossChat → **Uninstall CrossChat**. It offers to keep your settings and themes in `Documents/CrossChat backup`.
+
+## Linux (beta)
+
+There is a Linux download too, as a **beta**: `CrossChat-<version>-linux.tar.gz`. It was checked on a real computer with **Ubuntu 25.10** (x86_64) in October 2026, with two OBS builds: Ubuntu's own **OBS Studio 30.2.3** and **OBS Studio 33.0.1 from Flathub**, each on a virtual display (Xvfb):
+
+| Checked on Ubuntu 25.10 | Ubuntu's OBS 30.2.3 | OBS 33.0.1 from Flathub |
+|---|:-:|:-:|
+| OBS starts the hub with CrossChat's own Python; the hub follows the stream starting and stopping, sees a stream to this computer as a test, and leaves when OBS closes; OBS's WebSocket port is free at once, and an OBS started again 3 s later works | ✅ | ✅ the hub runs outside OBS's sandbox |
+| The four widgets in OBS's browser sources | this OBS has no Browser Source | ✅ |
+| The installer from the built download (in a stand-in home folder): packages checked against their checksums, the folder readable by your account only, app-menu entries, OBS's WebSocket server switched on; the uninstaller removes it all and keeps your settings | ✅ | |
+
+Also checked there: the sign-in key in the desktop keyring (GNOME Keyring 48, in a D-Bus session of its own): stored, read back, removed by the uninstaller; the chat window opened, placed, moved and closed in Chrome 153 on an X display, with and without a window manager; the Tailscale address taken from a `tailscale0` interface only while it's up; and the hub's and the OBS script's tests (all 181). On every change, GitHub's Ubuntu machines run the tests with a real keyring, the window checks, an install and uninstall from the download, and OBS end to end (from the OBS Project's PPA and from Flathub).
+
+**Still a beta on Linux**, because no one has seen these working on a real Linux desktop yet: the chat window on a desktop you're sitting at (X11 or Wayland, see below), the CrossChat extension in a Linux browser, the chat docked in OBS (Custom Browser Dock), read-aloud, the phone companion, and other distributions than Ubuntu. Tell us what works and what doesn't in [Issues](https://github.com/RandyNorthrup/crosschat-obs/issues).
+
+You need a 64-bit Linux desktop, Python 3.10 or newer with its `venv` module (Ubuntu and Debian: `sudo apt install python3-venv`), Chrome, Chromium, Edge or Brave, and OBS Studio 28 or newer. For the on-stream widgets OBS needs its **Browser Source**: OBS from [Flathub](https://flathub.org/apps/com.obsproject.Studio) has it, and so does OBS from the OBS Project's PPA on Ubuntu (`ppa:obsproject/obs-studio`); Ubuntu's and Debian's own `obs-studio` package doesn't. To keep sign-ins, you need a desktop keyring (GNOME Keyring, KWallet or another Secret Service) and `secret-tool` (Ubuntu and Debian: `sudo apt install libsecret-tools`; Fedora and Arch: `libsecret`). The installer tells you what's missing; it doesn't install system packages for you.
+
+1. **Download** `CrossChat-<version>-linux.tar.gz` from **[Releases](https://github.com/RandyNorthrup/crosschat-obs/releases/latest)** and unpack it: `tar -xzf CrossChat-<version>-linux.tar.gz`
+2. **Run the installer** in a terminal: `cd CrossChat-<version>-linux` and `bash scripts/install.sh`.
+   It installs to `~/.local/share/CrossChat` (readable by your account only), sets up its own Python environment with checksum-verified packages, asks the same questions as on Windows, and adds **CrossChat: Open chat**, **Theme Studio**, **Try the demo**, **Go live on X** and **Uninstall CrossChat** to your desktop's app menu.
+3. **Add the script to OBS:** *Tools → Scripts → +*, press **Ctrl+L**, type or paste `~/.local/share/CrossChat/obs/crosschat.lua` (the installer puts the full path on your clipboard when `wl-copy`, `xclip` or `xsel` is there) and press Enter. OBS from Flathub sees that folder too; there the script starts the hub outside OBS's sandbox with `flatpak-spawn` (the OBS Flatpak is allowed to).
+4. **Add the extension:** `chrome://extensions` → **Developer mode** → **Load unpacked** → **Ctrl+L** → `~/.local/share/CrossChat/extension`.
+5. **Widgets:** the same Browser Source addresses as on Windows.
+
+What's different on Linux:
+
+- **Sign-ins** (Twitch, Kick, Rumble, Discord) are encrypted as on a Mac (AES-256, sealed with HMAC-SHA256) under a key CrossChat keeps in your desktop keyring, through the Secret Service. If no keyring answers, CrossChat keeps no sign-in at all and says why: never one in plain text. A locked keyring asks you to unlock it. The uninstaller removes the key.
+- **The chat window** is placed, moved and closed through X11. On a Wayland desktop that works when the browser runs through XWayland; a browser running as a Wayland program opens the window where the desktop puts it, and CrossChat can't move or close it (it doesn't open a second one while one is open). With several screens, `"auto"` uses the right edge of the whole desktop: set `"window"` in `config.json` to put it somewhere else. Opening a window can bring the browser to the front.
+- **Message boxes** use `zenity` or `kdialog`, whichever your desktop has.
+- **The phone companion** stays off until you choose the address, as on a Mac: Linux doesn't tell apps whether a network is a private one. Set `"remote": {"bind": "<your computer's address>"}` in `config.json` on your home network.
+- **Tailscale** works as on Windows: only the address of Tailscale's own interface (`tailscale0`) counts, and only while it's up.
+- **Uninstall:** app menu → **Uninstall CrossChat** (it opens in a terminal), or `bash ~/.local/share/CrossChat/scripts/uninstall.sh`. It offers to keep your settings and themes in `Documents/CrossChat backup`.
 
 ## Try it without going live
 
@@ -336,7 +369,7 @@ The companion is for your home network. To use it from anywhere, for example on 
 3. In CrossChat: Settings → Paired devices → switch on **Away from home too, with Tailscale**. It shows your PC's Tailscale address, or says what's missing.
 4. Press **Pair a device** and scan the QR code. With Tailscale on, the code uses the PC's Tailscale address, so it works at home and away. A phone you paired before needs pairing once more.
 
-Pairing is still required, and the companion listens only on the address Windows has on Tailscale's own adapter. When Tailscale stops, the companion stops listening there; it comes back with Tailscale.
+Pairing is still required, and the companion listens only on the address Windows has on Tailscale's own adapter (on Linux, the address of Tailscale's own interface, `tailscale0`, while it's up). When Tailscale stops, the companion stops listening there; it comes back with Tailscale.
 
 ## Instagram Live
 
@@ -362,7 +395,7 @@ Your settings are in `%LOCALAPPDATA%\CrossChat\config.json` (start from [`config
 | `instagram` | `false` | `true`: Instagram Live comments from its Live producer (see [Instagram Live](#instagram-live)). |
 | `facebook_window`, `instagram_window`, `rumble_window` | `"auto"` | Where Live Producer, instagram.com and Rumble's chat window go. |
 | `port` | `4466` | The hub's port on `127.0.0.1`. The extension expects 4466. |
-| `browser` | `"auto"` | `"auto"` (Chrome, else Edge), `"chrome"`, `"edge"` or a full path. It must be the browser that has the extension. |
+| `browser` | `"auto"` | `"auto"` (Chrome, else Edge), `"chrome"`, `"edge"` or a full path. On a Mac also `"chromium"`; on Linux also `"chromium"` and `"brave"` (after Edge), or a program on your PATH. It must be the browser that has the extension. |
 | `window` | `"auto"` | `"auto"` docks the chat at the right edge of the main screen, or `{"x", "y", "width", "height"}`. Put it where OBS doesn't capture. |
 | `open_window_on_stream_start` | `true` | Open the chat window when OBS starts streaming. |
 | `close_window_seconds_after_stream` | `120` | How long it stays after the stream ends. |
@@ -437,7 +470,7 @@ CrossChat has no server and no account. Everything runs on your PC and talks str
 - Anything that *does* something (opening windows, going live, featuring a message, changing settings) is refused when another website asks for it.
 - **Reading chat** uses the platforms' public, signed-out chat feeds.
 - **Twitch and Kick replies and moderation** use their official APIs once you connect them in Settings.
-  - The tokens are encrypted for your Windows account (DPAPI), or on a Mac under a key in your login Keychain. Disconnecting deletes them and revokes them at Twitch or Kick.
+  - The tokens are encrypted for your Windows account (DPAPI), or on a Mac under a key in your login Keychain, or on Linux under a key in your desktop keyring (with no keyring, Linux keeps no sign-ins at all). Disconnecting deletes them and revokes them at Twitch or Kick.
 - **The extension reads no logins.** It has no Chrome permissions; it only types your YouTube and X replies into those sites' own chat boxes.
 - **The companion port (4467)** only opens after you pair a device, and only on a network Windows calls Private, or on your own Tailscale address if you switch that on.
   - It answers paired devices only: an HttpOnly cookie per device, of which only a hash is stored.
@@ -466,6 +499,7 @@ More detail, and how to report a problem privately: [SECURITY.md](SECURITY.md).
 ## Known limits
 
 - **Mac:** checked with OBS 33.0.1 on macOS 15.7.4 and 15.7.9, on Intel Macs (see [Mac](#mac) for exactly what). Still a beta there: Apple-silicon Macs with OBS, moving and closing the chat window (it needs macOS's permission to control the browser, which only a person at the Mac can give), read-aloud and the phone companion.
+- **Linux is a beta.** Checked on Ubuntu 25.10 with Ubuntu's OBS 30.2.3 and OBS 33.0.1 from Flathub, on a virtual display (see [Linux (beta)](#linux-beta) for exactly what). Not seen yet on a desktop someone sits at: the chat window there (on Wayland, CrossChat can move and close it only when the browser runs through XWayland), the extension in a Linux browser, the chat docked in OBS, read-aloud and the phone companion; other distributions are untested. Ubuntu's and Debian's own OBS package has no Browser Source, so the widgets need OBS from Flathub or the OBS Project's PPA. Snap and Flatpak browsers are untested.
 - **Kick** replies and moderation use Kick's documented API. Sign-in was verified against Kick again on 31 October 2026; moderating a viewer still hasn't been seen working, because a second Kick account couldn't be finished for the test (Kick never sent its sign-up code). The post and moderation calls are covered by tests. Kick chat is read from Kick's public feed, whose key Kick changes now and then; CrossChat asks Kick for the current one. Kick alerts come from that feed and haven't been checked against a real Kick stream yet.
 - **Facebook Live** (new in 1.6) is read from Live Producer, so a redesign by Facebook can break it until CrossChat is updated. It was built and tested on a real "Only me" Facebook live.
 - **Instagram Live** (new) is read from Instagram's Live producer, so a redesign by Instagram can break it until CrossChat is updated. Reading comments was built against a real "Practice" Instagram live; replies are typed into the same comment box and were tested on a copy of that page, not yet on a real live. The extension recognises the live, the viewer count and your own comments by Instagram's English labels.
@@ -481,7 +515,7 @@ More detail, and how to report a problem privately: [SECURITY.md](SECURITY.md).
 
 ## Uninstall
 
-Start menu → CrossChat → **Uninstall CrossChat**, or *Settings → Apps → CrossChat → Uninstall* (on a Mac: Applications → CrossChat → **Uninstall CrossChat**). It offers to keep your settings and themes in `Documents\CrossChat backup`.
+Start menu → CrossChat → **Uninstall CrossChat**, or *Settings → Apps → CrossChat → Uninstall* (on a Mac: Applications → CrossChat → **Uninstall CrossChat**; on Linux: **Uninstall CrossChat** in your app menu). It offers to keep your settings and themes in `Documents\CrossChat backup`.
 
 Then remove the two pieces it can't:
 - the script in OBS (*Tools → Scripts*, select it, **−**);
@@ -498,11 +532,14 @@ node --test "tests/js/*.test.mjs"                        # 35 tests: theme engin
 python scripts/obs_e2e.py --obs <portable OBS folder>    # end to end against a real OBS (see the file); on a Mac: python3 scripts/obs_e2e.py
 pwsh scripts/package.ps1                                 # builds dist\CrossChat-<version>-windows.zip
 python scripts/package_mac.py                            # builds dist/CrossChat-<version>-mac.zip (any system)
+python scripts/package_linux.py                          # builds dist/CrossChat-<version>-linux.tar.gz (any system)
 ```
 
-`pip install lupa` (on a Mac: `brew install luajit`) adds the OBS script tests (`tests/test_obs_script.py`): they run `obs/crosschat.lua` in LuaJIT with a stand-in for OBS and check that it starts the hub and restarts a crashed one, on Windows and on a Mac. On a Mac, `bash scripts/install.sh` installs from a checkout.
+`pip install lupa` (on a Mac: `brew install luajit`) adds the OBS script tests (`tests/test_obs_script.py`): they run `obs/crosschat.lua` in LuaJIT with a stand-in for OBS and check that it starts the hub and restarts a crashed one, on Windows, on a Mac and on Linux. On a Mac or Linux, `bash scripts/install.sh` installs from a checkout.
 
-`scripts/obs_e2e.py` sets up a throwaway OBS profile with the script, the four widgets and the chat docked in OBS. It streams to an RTMP receiver on your computer (ffmpeg) and checks 23 things (24 on a Mac), from the script starting the hub, through the widgets and the dock inside OBS's own browser, to OBS's WebSocket port being free and the hub leaving once OBS closes. It never touches your own OBS: on Windows it uses a portable OBS; on a Mac it runs `/Applications/OBS.app` with a stand-in home folder (`CFFIXED_USER_HOME`) and only OBS's own plugins. `--crosschat <folder>` tests an installed copy instead of the checkout. Version 1.0.0 passed all 19 checks of that time on OBS 33.0.1 on Windows; this version passed all 24 on OBS 33.0.1 on macOS 15.7.4 and 15.7.9.
+On Linux, the tests that keep a secret need a desktop keyring and are skipped where none answers. To run them without touching your own keyring, give them one of their own: `dbus-run-session -- bash -c 'printf test | gnome-keyring-daemon --unlock --components=secrets >/dev/null; python -m pytest'`. `CROSSCHAT_WINDOW_TESTS=1 xvfb-run python -m pytest tests/test_linux.py` adds a check with a real browser window (a throwaway Chrome or Chromium profile).
+
+`scripts/obs_e2e.py` sets up a throwaway OBS profile with the script, the four widgets and the chat docked in OBS. It streams to an RTMP receiver on your computer (ffmpeg) and checks 26 things (27 on a Mac), from the script starting the hub, through the widgets and the dock inside OBS's own browser, to OBS's WebSocket port being free and the hub leaving once OBS closes. It never touches your own OBS: on Windows it uses a portable OBS; on a Mac it runs `/Applications/OBS.app` with a stand-in home folder (`CFFIXED_USER_HOME`) and only OBS's own plugins; on Linux it runs `obs` with its settings in a throwaway folder (`XDG_CONFIG_HOME`), or with `--obs flatpak` OBS from Flathub (whose own settings folder it sets aside and puts back), on an Xvfb display of its own when there's no desktop. `--crosschat <folder>` tests an installed copy instead of the checkout. Version 1.0.0 passed all 19 checks of that time on OBS 33.0.1 on Windows; 1.7.2's 24 passed on OBS 33.0.1 on macOS 15.7.4 and 15.7.9. Three more came with Linux (an OBS started again 3 s after closing has its WebSocket server, starts the hub again, and that hub leaves with it); on Ubuntu 25.10 every check passed with Ubuntu's OBS 30.2.3 (without the browser ones: it has no Browser Source) and with OBS 33.0.1 from Flathub (without the docked chat: the dock the test writes into OBS's settings stays hidden on Linux).
 
 ## Code signing policy
 

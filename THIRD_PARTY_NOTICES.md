@@ -19,7 +19,7 @@ The platform names and logos are trademarks of their owners and are used only to
 | The Python packages below, the same pinned and checksum-checked versions `Install.cmd` installs | As listed below (their licence files ship with them) |
 | [NSIS](https://nsis.sourceforge.io) 3.13, which builds the setup program and its uninstaller | zlib/libpng licence |
 
-## Installed by `Install.cmd` and `Install.command` (downloaded from PyPI, checked against `hub/requirements.lock`)
+## Installed by `Install.cmd`, `Install.command` and, on Linux, `scripts/install.sh` (downloaded from PyPI, checked against `hub/requirements.lock`)
 
 | Package | Licence |
 |---|---|
@@ -29,6 +29,14 @@ The platform names and logos are trademarks of their owners and are used only to
 | [idna](https://github.com/kjd/idna) 3.20 (requests) | BSD-3-Clause |
 | [charset-normalizer](https://github.com/jawah/charset_normalizer) 3.5.2 (requests) | MIT |
 | [certifi](https://github.com/certifi/python-certifi) 2026.10.23 (requests) | MPL-2.0 |
+
+## Used from your own system on Linux (not shipped with CrossChat)
+
+| What | For | Licence |
+|---|---|---|
+| [libsecret](https://gnome.pages.gitlab.gnome.org/libsecret/)'s `secret-tool` | Keeping CrossChat's key in your desktop keyring | LGPL-2.1-or-later |
+| [OpenSSL](https://www.openssl.org)'s libcrypto, the one Python uses | AES-256 for saved sign-ins | Apache-2.0 (3.x) |
+| libX11 ([X.Org](https://www.x.org)) | Placing and closing the chat window | MIT/X11 |
 
 ## Loaded at run time only when a theme asks for it
 

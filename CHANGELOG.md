@@ -4,7 +4,20 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+- **Linux (beta):** a Linux download, `CrossChat-<version>-linux.tar.gz`, installed with `bash scripts/install.sh` into `~/.local/share/CrossChat` (readable by your account only), with app-menu entries and an uninstaller. Checked on Ubuntu 25.10 with Ubuntu's OBS 30.2.3 and OBS 33.0.1 from Flathub (see the README's Linux section for exactly what, and what isn't checked yet).
+  - **Sign-ins** are encrypted as on a Mac (AES-256 and HMAC-SHA256) under a key kept in your desktop keyring (Secret Service: GNOME Keyring, KWallet and others), through `secret-tool`, which gets the key on its standard input, never on a command line. **With no keyring, CrossChat keeps no sign-ins at all and says why**: Twitch and Kick drop a sign-in they couldn't encrypt, and Rumble and Discord say the keyring's reason instead of "Could not save it".
+  - **OBS from Flathub** works: the OBS script starts the hub outside OBS's sandbox with `flatpak-spawn`, and the hub leaves when OBS does. The installer finds Ubuntu's (or any) `obs` and OBS from Flathub, switches on their WebSocket servers, and says when an OBS has no Browser Source (Ubuntu's and Debian's own package leaves it out, so the widgets need OBS from Flathub or the OBS Project's PPA).
+  - **The chat window** opens in Chrome, Edge, Chromium or Brave and is placed, moved and closed through X11. On Wayland, CrossChat can move and close it only when the browser runs through XWayland; otherwise the window opens where the desktop puts it, and "Open chat" doesn't open a second one.
+  - **Tailscale** for the companion away from home: only the address of Tailscale's own `tailscale0` interface counts, while it's up.
+  - The real-OBS check (`scripts/obs_e2e.py`) runs on Linux with the installed `obs` (settings in a throwaway folder) or `--obs flatpak`, on an Xvfb display of its own when there's no desktop. On every change, GitHub's Ubuntu machines run the tests with a real keyring, real browser windows, an install and uninstall from the download, and OBS end to end from the OBS Project's PPA and from Flathub.
+- The real-OBS check also starts OBS again 3 seconds after closing it, and checks its WebSocket server works and its script starts the hub again (every system).
+
 ### Fixed
+
+- **Linux:** the OBS script hands the hub only standard input, output and error. Without that, posix_spawn passes every file and socket OBS has open, as on a Mac (see below); on Linux it's closed with one file action (glibc 2.34 and newer), or one per open file on older systems.
+- The tests no longer close a real CrossChat window on the computer running them (the hub closes its chat window when OBS goes away, and some tests make OBS go away).
 
 - **Mac:** the hub no longer gets a copy of everything OBS has open. The OBS script started it with all of OBS's files and sockets, OBS's WebSocket server among them, so after OBS closed the hub kept OBS's WebSocket port taken (about 20 seconds in our tests), and an OBS opened again in that time couldn't start its WebSocket server (CrossChat then couldn't follow it). Found with OBS 33.0.1 on macOS 15.
 - **Mac:** the chat window's notice said "Start menu → CrossChat → Open chat"; on a Mac it now names Applications → CrossChat in the home folder. The Paired-devices hint about Windows' network question no longer shows on a Mac, and the Theme Studio's look button says "follows this device", not "follows Windows".
