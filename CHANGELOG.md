@@ -38,6 +38,11 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 - TikTok chat lines could be missed when TikTok reused a row on the page, or when more than 50 short lines arrived at once.
 - In a checkout, git now ignores every `.bin` file in the folder, so an encrypted sign-in like `rumble.bin` can't be committed by accident.
 
+### Security
+
+- requests 2.34.2 (was 2.32.5), for GHSA-gc5v-m9x4-r6x2: an insecure temporary file in requests' `extract_zipped_paths()`. CrossChat doesn't call it; updated anyway.
+- The update notice's link is rebuilt from CrossChat's own GitHub address and the version's numbers, so no text from the hub's message reaches the link (found by CodeQL; the address was already checked exactly).
+
 ### Changed
 
 - The OBS script runs CrossChat with the setup program's Python when it's there, then the one `Install.cmd` made, then the Python launcher. The script's own Python field still comes first. Its start-and-restart code is now tested in LuaJIT on Windows and macOS.

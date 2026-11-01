@@ -365,7 +365,12 @@
 
   // ---- the update notice, Discord ------------------------------------------------------------------------------------
   // The only link the update notice may open: a CrossChat release page on GitHub ('' for anything else).
-  const releaseLink = (url) => (/^https:\/\/github\.com\/RandyNorthrup\/crosschat-obs\/releases\/tag\/v\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(url || '') ? url : '');
+  // The link is rebuilt from CrossChat's own address and the version's numbers, so nothing from the message reaches the page.
+  const RELEASES = 'https://github.com/RandyNorthrup/crosschat-obs/releases/tag/v';
+  const releaseLink = (url) => {
+    const m = /^https:\/\/github\.com\/RandyNorthrup\/crosschat-obs\/releases\/tag\/v(\d{1,4})\.(\d{1,4})\.(\d{1,4})$/.exec(typeof url === 'string' ? url : '');
+    return m ? RELEASES + [m[1], m[2], m[3]].map(Number).join('.') : '';
+  };
   // A Discord webhook URL, the way Discord's "Copy Webhook URL" gives it (the hub checks it again, and with Discord).
   const discordWebhook = (url) => /^https:\/\/(discord\.com|discordapp\.com|ptb\.discord\.com|canary\.discord\.com)\/api\/webhooks\/\d{15,22}\/[\w-]{30,100}$/.test(clean(url));
 

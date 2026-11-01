@@ -233,7 +233,7 @@ test('the update notice only ever links to a CrossChat release page on GitHub', 
   const page = 'https://github.com/RandyNorthrup/crosschat-obs/releases/tag/v1.7.0';
   assert.equal(A.releaseLink(page), page);
   for (const bad of ['https://evil.example/', 'http://github.com/RandyNorthrup/crosschat-obs/releases/tag/v1.7.0', page + '?x=1', page + '/../../evil',
-    'https://github.com/someone/else/releases/tag/v1.7.0', 'javascript:alert(1)', '', null, undefined]) assert.equal(A.releaseLink(bad), '', String(bad));
+    'https://github.com/someone/else/releases/tag/v1.7.0', 'javascript:alert(1)', page + '\n', '', null, undefined, {}, ['x']]) assert.equal(A.releaseLink(bad), '', String(bad));
 });
 
 test('a Discord webhook URL is recognised before it goes to the hub', () => {

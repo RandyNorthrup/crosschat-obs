@@ -23,7 +23,7 @@ The platform names and logos are trademarks of their owners and are used only to
 
 | Package | Licence |
 |---|---|
-| [requests](https://github.com/psf/requests) 2.32.5 | Apache-2.0 |
+| [requests](https://github.com/psf/requests) 2.34.2 | Apache-2.0 |
 | [websockets](https://github.com/python-websockets/websockets) 16.0 | BSD-3-Clause |
 | [urllib3](https://github.com/urllib3/urllib3) 2.8.0 (requests) | MIT |
 | [idna](https://github.com/kjd/idna) 3.20 (requests) | BSD-3-Clause |
