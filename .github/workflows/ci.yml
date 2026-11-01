@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -116,3 +117,42 @@ jobs:
           print("opened:", handle, "| list after:", after.returncode, after.stdout.strip(), after.stderr.strip())
           macos.close(handle)
           EOF
+
+  # Real OBS on an Apple-silicon Mac: the same end-to-end check as on the Intel Macs (scripts/obs_e2e.py), with OBS from
+  # Homebrew (its cask checks the download's checksum) and CrossChat installed from the Mac download, as a streamer has it.
+  obs-mac:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: OBS Studio and ffmpeg (Homebrew)
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: |
+          brew install --cask obs
+          brew install ffmpeg
+          xattr -dr com.apple.quarantine /Applications/OBS.app || true   # (no "downloaded from the internet" question)
+          echo "OBS $(defaults read /Applications/OBS.app/Contents/Info CFBundleShortVersionString), $(uname -m), macOS $(sw_vers -productVersion)"
+      - name: Install CrossChat from the Mac download
+        run: |
+          python scripts/package_mac.py
+          mkdir "$RUNNER_TEMP/download"
+          ditto -x -k dist/CrossChat-*-mac.zip "$RUNNER_TEMP/download"
+          bash "$RUNNER_TEMP/download"/CrossChat-*-mac/scripts/install.sh --quiet
+          python -m pip install --require-hashes -r hub/requirements.lock
+      - name: End to end with real OBS (scripts/obs_e2e.py)
+        timeout-minutes: 10
+        run: python scripts/obs_e2e.py --crosschat "$HOME/Library/Application Support/CrossChat"
+      - name: The hub's and OBS's logs, when it failed
+        if: failure()
+        run: |
+          for home in "$(python -c 'import tempfile; print(tempfile.gettempdir())')"/crosschat-e2e-*; do
+            tail -n 80 "$home/crosschat.log" || true
+            for f in "$home"/home/Library/Application\ Support/obs-studio/logs/*.txt; do echo "== $f"; tail -n 150 "$f"; done
+          done
