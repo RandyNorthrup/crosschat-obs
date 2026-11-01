@@ -1,5 +1,6 @@
 #!/bin/bash
-# CrossChat installer for macOS. Run Install.command (it starts this), or: bash scripts/install.sh
+# CrossChat installer for macOS and Linux (beta). On a Mac, run Install.command (it starts this), or:
+# bash scripts/install.sh. On Linux, open a terminal in the unpacked folder and run: bash scripts/install.sh
 # Safe to run again: it updates CrossChat and keeps your settings and themes.
 #
 #   --quiet   ask nothing: keep the existing settings, or start from the defaults
@@ -9,8 +10,25 @@ QUIET=0
 if [ "${1:-}" = "--quiet" ]; then QUIET=1; fi
 
 SOURCE="$(cd "$(dirname "$0")/.." && pwd)"
-APP="$HOME/Library/Application Support/CrossChat"
-SHORTCUTS="$HOME/Applications/CrossChat"
+LINUX=0
+if [ "$(uname -s)" = Linux ]; then LINUX=1; fi
+if [ "$LINUX" = 1 ]; then
+    # the XDG folders (only when they are full paths, as the standard says)
+    DATA="${XDG_DATA_HOME:-}"
+    case "$DATA" in /*) ;; *) DATA="$HOME/.local/share" ;; esac
+    CONFIG_HOME="${XDG_CONFIG_HOME:-}"
+    case "$CONFIG_HOME" in /*) ;; *) CONFIG_HOME="$HOME/.config" ;; esac
+    APP="$DATA/CrossChat"
+    SHORTCUTS="$DATA/applications"          # the desktop's app menu: crosschat-*.desktop
+    FLATPAK_OBS="$HOME/.var/app/com.obsproject.Studio/config/obs-studio"
+    SYSTEM='Linux (beta)'
+    MACHINE='computer'
+else
+    APP="$HOME/Library/Application Support/CrossChat"
+    SHORTCUTS="$HOME/Applications/CrossChat"
+    SYSTEM='macOS'
+    MACHINE='Mac'
+fi
 VERSION="$(sed -n 's/^VERSION = "\(.*\)"$/\1/p' "$SOURCE/hub/hub.py")"
 
 say() { printf '%s\n' "$1"; }
@@ -33,6 +51,9 @@ confirm() {      # confirm QUESTION [y|n]: success for yes
 applescript_text() {   # a value made safe inside an AppleScript "string"
     printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
+desktop_arg() {        # a value made safe as one argument on a .desktop file's Exec line (and % kept literal)
+    printf '"%s"' "$(printf '%s' "$1" | sed 's/\\/\\\\\\\\/g; s/"/\\\\"/g; s/`/\\\\`/g; s/\$/\\\\$/g; s/%/%%/g')"
+}
 
 # A Python 3.10 or newer: its full path, or nothing. Apple's /usr/bin/python3 counts only when the developer tools are
 # there (otherwise just asking it makes macOS offer to install them).
@@ -42,7 +63,7 @@ find_python() {
                      /Library/Frameworks/Python.framework/Versions/Current/bin/python3 python3; do
         found="$(command -v "$candidate" 2>/dev/null || true)"
         [ -n "$found" ] || continue
-        if [ "$found" = /usr/bin/python3 ] && ! xcode-select -p >/dev/null 2>&1; then continue; fi
+        if [ "$LINUX" != 1 ] && [ "$found" = /usr/bin/python3 ] && ! xcode-select -p >/dev/null 2>&1; then continue; fi
         if "$found" -c 'import sys; sys.exit(sys.version_info < (3, 10))' >/dev/null 2>&1; then
             printf '%s' "$found"
             return 0
@@ -51,14 +72,20 @@ find_python() {
     return 1
 }
 
-printf '\n  CrossChat %s installer for macOS\n' "$VERSION"
+printf '\n  CrossChat %s installer for %s\n' "$VERSION" "$SYSTEM"
 say '  Every stream chat in one window, on-stream chat widgets, and X Live started with OBS.'
 say "  Installs to $APP"
 
 # ---- Python -----------------------------------------------------------------------------------------------
 step 'Python'
 PYTHON="$(find_python || true)"
-if [ -z "$PYTHON" ]; then
+if [ -z "$PYTHON" ] && [ "$LINUX" = 1 ]; then
+    note 'CrossChat needs Python 3.10 or newer, and this computer has none.'
+    say 'Install it with your package manager, for example:'
+    say '  Ubuntu, Debian: sudo apt install python3 python3-venv'
+    say '  Fedora: sudo dnf install python3      Arch: sudo pacman -S python'
+    fail 'Then run bash scripts/install.sh again.'
+elif [ -z "$PYTHON" ]; then
     note 'CrossChat needs Python 3.10 or newer, and this Mac has none.'
     say 'Install it from https://www.python.org/downloads/macos/ (the "macOS 64-bit universal2 installer"),'
     say 'or with Homebrew (https://brew.sh): brew install python@3.13'
@@ -80,32 +107,59 @@ while IFS= read -r line; do
     kill "$pid" 2>/dev/null || true
 done < <(ps -axo pid=,command= | sed 's/^ *//')
 mkdir -p "$APP"
+if [ "$LINUX" = 1 ]; then
+    chmod 700 "$APP"            # your settings, chat history and encrypted sign-ins: for your account only
+fi
 for folder in extension hub obs; do
-    rsync -a --delete --exclude '__pycache__' "$SOURCE/$folder/" "$APP/$folder/" || fail "Copying $folder failed."
+    if command -v rsync >/dev/null 2>&1; then
+        rsync -a --delete --exclude '__pycache__' "$SOURCE/$folder/" "$APP/$folder/" || fail "Copying $folder failed."
+    else                        # (some Linux systems come without rsync)
+        rm -rf "${APP:?}/$folder" && cp -R "$SOURCE/$folder" "$APP/$folder" && rm -rf "$APP/$folder/__pycache__" || fail "Copying $folder failed."
+    fi
 done
 for file in config.example.json README.md CHANGELOG.md LICENSE THIRD_PARTY_NOTICES.md Uninstall.command; do
+    if [ "$LINUX" = 1 ] && [ "$file" = Uninstall.command ]; then continue; fi
     if [ -f "$SOURCE/$file" ]; then cp -f "$SOURCE/$file" "$APP/"; fi
 done
 mkdir -p "$APP/scripts"
 cp -f "$SOURCE/scripts/uninstall.sh" "$APP/scripts/"
 chmod +x "$APP/Uninstall.command" "$APP/scripts/uninstall.sh" 2>/dev/null || true
-xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true      # the download's "from the internet" mark
+if [ "$LINUX" != 1 ]; then
+    xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true      # the download's "from the internet" mark
+fi
 say 'Done.'
 
 # ---- private Python environment ---------------------------------------------------------------------------
 step "Setting up CrossChat's Python packages"
 VENV_PY="$APP/.venv/bin/python3"
 if ! "$VENV_PY" -c 'import sys' >/dev/null 2>&1; then
-    "$PYTHON" -m venv --clear "$APP/.venv" || fail 'Could not create the Python environment.'
+    if ! "$PYTHON" -m venv --clear "$APP/.venv"; then
+        if [ "$LINUX" = 1 ]; then
+            note "Python's venv module is missing. On Ubuntu and Debian: sudo apt install python3-venv"
+        fi
+        fail 'Could not create the Python environment.'
+    fi
 fi
 # exact versions with their checksums: pip refuses anything that doesn't match what was tested
 "$VENV_PY" -m pip install --disable-pip-version-check --no-warn-script-location -q --require-hashes -r "$APP/hub/requirements.lock" ||
-    fail 'Installing the Python packages failed (see above). Check the internet connection and run Install.command again.'
+    fail 'Installing the Python packages failed (see above). Check the internet connection and run the installer again.'
 say 'Done.'
+
+# ---- Linux: where sign-ins are kept -------------------------------------------------------------------------
+if [ "$LINUX" = 1 ]; then
+    step 'Keyring'
+    if command -v secret-tool >/dev/null 2>&1; then
+        say 'Sign-ins (Twitch, Kick, Rumble, Discord) are kept encrypted, under a key in your desktop keyring.'
+    else
+        note 'Sign-ins (Twitch, Kick, Rumble, Discord) are kept under a key in your desktop keyring, through secret-tool,'
+        note 'which is not installed. Everything else works without it; CrossChat just keeps no sign-ins. To add it:'
+        say '  Ubuntu, Debian: sudo apt install libsecret-tools    Fedora: sudo dnf install libsecret    Arch: sudo pacman -S libsecret'
+    fi
+fi
 
 # ---- privacy ----------------------------------------------------------------------------------------------
 step 'Privacy'
-say 'CrossChat runs only on this Mac. It has no server, no account and no telemetry.'
+say "CrossChat runs only on this $MACHINE. It has no server, no account and no telemetry."
 say 'It connects only to the chat platforms you set up, and, unless you turn them off, to 7TV, BetterTTV and'
 say "FrankerFaceZ for emote pictures (they get your Twitch channel's public id)."
 say 'Every connection and what it sends: https://github.com/RandyNorthrup/crosschat-obs/blob/main/SECURITY.md#what-leaves-your-pc'
@@ -142,57 +196,108 @@ fi
 
 # ---- OBS ----------------------------------------------------------------------------------------------------
 step 'OBS Studio'
-if [ -d /Applications/OBS.app ]; then
-    say "OBS Studio $(defaults read /Applications/OBS.app/Contents/Info CFBundleShortVersionString 2>/dev/null || true) found."
-else
-    note 'OBS Studio was not found in Applications.'
-fi
+websocket_step() {     # websocket_step CONFIG.JSON: that OBS's WebSocket server is on, or how to switch it on
+    local ws="$1" ws_on=0
+    if [ -f "$ws" ] && "$VENV_PY" -c 'import json, sys; sys.exit(0 if json.load(open(sys.argv[1], encoding="utf-8-sig")).get("server_enabled") else 1)' \
+            "$ws" 2>/dev/null; then
+        ws_on=1
+    fi
+    if [ "$ws_on" = 1 ]; then
+        say "OBS's WebSocket server is on. CrossChat reads its port and password from OBS by itself."
+    elif [ "$obs_running" = 1 ]; then
+        note "OBS's WebSocket server is off. In OBS: Tools > WebSocket Server Settings > tick \"Enable WebSocket server\" > OK."
+    elif confirm 'CrossChat follows OBS through its WebSocket server, which is off. Turn it on now?'; then
+        "$VENV_PY" "$APP/hub/setup_config.py" websocket "$ws"
+        say 'Turned on (with a password; CrossChat reads it from OBS).'
+    else
+        note 'Later, in OBS: Tools > WebSocket Server Settings > tick "Enable WebSocket server".'
+    fi
+}
 obs_running=0
-if pgrep -xq OBS; then obs_running=1; fi
-WS="$HOME/Library/Application Support/obs-studio/plugin_config/obs-websocket/config.json"
-ws_on=0
-if [ -f "$WS" ] && "$VENV_PY" -c 'import json, sys; sys.exit(0 if json.load(open(sys.argv[1], encoding="utf-8-sig")).get("server_enabled") else 1)' \
-        "$WS" 2>/dev/null; then
-    ws_on=1
-fi
-if [ "$ws_on" = 1 ]; then
-    say "OBS's WebSocket server is on. CrossChat reads its port and password from OBS by itself."
-elif [ "$obs_running" = 1 ]; then
-    note "OBS's WebSocket server is off. In OBS: Tools > WebSocket Server Settings > tick \"Enable WebSocket server\" > OK."
-elif confirm 'CrossChat follows OBS through its WebSocket server, which is off. Turn it on now?'; then
-    "$VENV_PY" "$APP/hub/setup_config.py" websocket "$WS"
-    say 'Turned on (with a password; CrossChat reads it from OBS).'
+if [ "$LINUX" = 1 ]; then
+    if pgrep -x obs >/dev/null 2>&1; then obs_running=1; fi
+    obs_found=0
+    if command -v obs >/dev/null 2>&1; then
+        obs_found=1
+        say "OBS Studio $(obs --version 2>/dev/null | sed -n 's/^OBS Studio - \([0-9][0-9.]*\).*/\1/p' | head -1) found ($(command -v obs))."
+        if ! ls /usr/lib/obs-plugins/obs-browser.so /usr/lib/*/obs-plugins/obs-browser.so /usr/lib64/obs-plugins/obs-browser.so \
+                /usr/local/lib/obs-plugins/obs-browser.so >/dev/null 2>&1; then
+            note "This OBS has no Browser Source (Ubuntu's and Debian's own OBS package leaves it out), so the on-stream widgets"
+            note "can't show in it. OBS from Flathub, or from the OBS Project's PPA on Ubuntu, has it."
+        fi
+        websocket_step "$CONFIG_HOME/obs-studio/plugin_config/obs-websocket/config.json"
+    fi
+    if command -v flatpak >/dev/null 2>&1 && flatpak info com.obsproject.Studio >/dev/null 2>&1; then
+        obs_found=1
+        say 'OBS Studio from Flathub found. CrossChat runs outside its sandbox; the OBS script starts it there.'
+        websocket_step "$FLATPAK_OBS/plugin_config/obs-websocket/config.json"
+    fi
+    if [ "$obs_found" = 0 ]; then
+        note 'OBS Studio was not found (neither an obs program nor OBS from Flathub).'
+        websocket_step "$CONFIG_HOME/obs-studio/plugin_config/obs-websocket/config.json"
+    fi
 else
-    note 'Later, in OBS: Tools > WebSocket Server Settings > tick "Enable WebSocket server".'
+    if [ -d /Applications/OBS.app ]; then
+        say "OBS Studio $(defaults read /Applications/OBS.app/Contents/Info CFBundleShortVersionString 2>/dev/null || true) found."
+    else
+        note 'OBS Studio was not found in Applications.'
+    fi
+    if pgrep -xq OBS; then obs_running=1; fi
+    websocket_step "$HOME/Library/Application Support/obs-studio/plugin_config/obs-websocket/config.json"
 fi
 
-# ---- Applications > CrossChat: small apps for what the Start menu has on Windows -------------------------
-step 'Applications'
-mkdir -p "$SHORTCUTS"
-rm -rf "$SHORTCUTS"/*.app
-PY_Q="$(applescript_text "$VENV_PY")"
-CONTROL_Q="$(applescript_text "$APP/hub/control.py")"
-APP_Q="$(applescript_text "$APP")"
-shortcut() {     # shortcut NAME APPLESCRIPT
-    osacompile -o "$SHORTCUTS/$1.app" -e "$2" >/dev/null 2>&1 || note "Could not make the \"$1\" app."
-}
-control_app() {  # control_app NAME COMMAND: runs hub/control.py COMMAND
-    shortcut "$1" "do shell script quoted form of \"$PY_Q\" & \" \" & quoted form of \"$CONTROL_Q\" & \" $2 > /dev/null 2>&1 &\""
-}
-control_app 'Open chat' show
-control_app 'Try the demo' demo
-control_app 'Theme Studio' studio
-control_app 'Go live on X' x-live
-control_app 'Test X (never goes live)' x-dry
-control_app 'Hide featured message' unfeature
-shortcut 'CrossChat folder' "do shell script \"open \" & quoted form of \"$APP_Q\""
-shortcut 'Uninstall CrossChat' "do shell script \"open \" & quoted form of \"$APP_Q/Uninstall.command\""
-say "Applications > CrossChat in your home folder ($SHORTCUTS): in Finder, Go > Home, then Applications > CrossChat."
+# ---- Applications > CrossChat (Mac) or the app menu (Linux): what the Start menu has on Windows ----------
+if [ "$LINUX" = 1 ]; then
+    step 'App menu'
+    mkdir -p "$SHORTCUTS"
+    rm -f "$SHORTCUTS"/crosschat-*.desktop
+    entry() {        # entry FILE NAME TERMINAL EXEC: a crosschat-FILE.desktop in the app menu
+        printf '[Desktop Entry]\nType=Application\nName=%s\nIcon=%s\nExec=%s\nTerminal=%s\nCategories=AudioVideo;\n' \
+            "$2" "$APP/extension/icons/icon-128.png" "$4" "$3" > "$SHORTCUTS/crosschat-$1.desktop" || note "Could not add \"$2\"."
+    }
+    control_entry() {  # control_entry FILE NAME COMMAND: runs hub/control.py COMMAND
+        entry "$1" "$2" false "$(desktop_arg "$VENV_PY") $(desktop_arg "$APP/hub/control.py") $3"
+    }
+    control_entry open-chat 'CrossChat: Open chat' show
+    control_entry demo 'CrossChat: Try the demo' demo
+    control_entry theme-studio 'CrossChat: Theme Studio' studio
+    control_entry x-live 'CrossChat: Go live on X' x-live
+    control_entry x-dry 'CrossChat: Test X (never goes live)' x-dry
+    control_entry unfeature 'CrossChat: Hide featured message' unfeature
+    entry folder 'CrossChat folder' false "xdg-open $(desktop_arg "$APP")"
+    entry uninstall 'Uninstall CrossChat' true "bash $(desktop_arg "$APP/scripts/uninstall.sh")"
+    if command -v update-desktop-database >/dev/null 2>&1; then update-desktop-database "$SHORTCUTS" >/dev/null 2>&1 || true; fi
+    say "Your app menu has CrossChat: Open chat, Theme Studio, Try the demo, Go live on X, and Uninstall CrossChat."
+else
+    step 'Applications'
+    mkdir -p "$SHORTCUTS"
+    rm -rf "$SHORTCUTS"/*.app
+    PY_Q="$(applescript_text "$VENV_PY")"
+    CONTROL_Q="$(applescript_text "$APP/hub/control.py")"
+    APP_Q="$(applescript_text "$APP")"
+    shortcut() {     # shortcut NAME APPLESCRIPT
+        osacompile -o "$SHORTCUTS/$1.app" -e "$2" >/dev/null 2>&1 || note "Could not make the \"$1\" app."
+    }
+    control_app() {  # control_app NAME COMMAND: runs hub/control.py COMMAND
+        shortcut "$1" "do shell script quoted form of \"$PY_Q\" & \" \" & quoted form of \"$CONTROL_Q\" & \" $2 > /dev/null 2>&1 &\""
+    }
+    control_app 'Open chat' show
+    control_app 'Try the demo' demo
+    control_app 'Theme Studio' studio
+    control_app 'Go live on X' x-live
+    control_app 'Test X (never goes live)' x-dry
+    control_app 'Hide featured message' unfeature
+    shortcut 'CrossChat folder' "do shell script \"open \" & quoted form of \"$APP_Q\""
+    shortcut 'Uninstall CrossChat' "do shell script \"open \" & quoted form of \"$APP_Q/Uninstall.command\""
+    say "Applications > CrossChat in your home folder ($SHORTCUTS): in Finder, Go > Home, then Applications > CrossChat."
+fi
 
 # ---- the hub that was running for an open OBS: start the updated one in its place ------------------------
+# (OBS from Flathub holds its hub's input instead: there the OBS script's watchdog starts the updated hub by itself)
 if [ -n "$restart_for" ]; then
     obs_pid="$(printf '%s' "$restart_for" | sed -n 's/.*--obs-pid \([0-9][0-9]*\).*/\1/p')"
     obs_config="$(printf '%s' "$restart_for" | sed -n 's/.*--obs-config \(.*\)$/\1/p')"
+    if [ -z "$obs_config" ] && [ "$LINUX" = 1 ]; then obs_config="$CONFIG_HOME/obs-studio"; fi
     if [ -z "$obs_config" ]; then obs_config="$HOME/Library/Application Support/obs-studio"; fi
     if [ -n "$obs_pid" ] && kill -0 "$obs_pid" 2>/dev/null; then
         (cd "$APP/hub" && nohup "$VENV_PY" "$APP/hub/hub.py" --obs-pid "$obs_pid" --obs-config "$obs_config" >/dev/null 2>&1 &)
@@ -203,27 +308,64 @@ fi
 # ---- the two steps that need you --------------------------------------------------------------------------
 LUA="$APP/obs/crosschat.lua"
 EXTENSION="$APP/extension"
-printf '%s' "$LUA" | pbcopy 2>/dev/null || true
-printf '\n\033[32m  Two steps left, about a minute:\033[0m\n\n'
-say '  1. OBS: Tools > Scripts > + and pick this file. Its path is on your clipboard: in the file window press'
-say '     Cmd+Shift+G, paste, Return.'
-say "       $LUA"
-say '  2. Chrome (or Edge): open chrome://extensions (edge://extensions), switch on Developer mode, press'
-say '     "Load unpacked" and pick this folder (Cmd+Shift+G works there too):'
-say "       $EXTENSION"
-say '     (Needed for replying from the chat window and for X. Reading chat and the on-stream widgets work without it.)'
-say ''
-say '  On-stream widgets: in OBS add a Browser Source with one of these addresses:'
-say '       http://127.0.0.1:4466/overlay/chat       450 x 800'
-say '       http://127.0.0.1:4466/overlay/featured   900 x 260'
-say '       http://127.0.0.1:4466/overlay/viewers    600 x 120'
-say '       http://127.0.0.1:4466/overlay/alerts     800 x 300'
-say '  Restyle them in Applications > CrossChat > Theme Studio.'
-say ''
-say '  Tell us what works on your Mac and what doesn'"'"'t at'
-say '  https://github.com/RandyNorthrup/crosschat-obs/issues'
-if [ "$obs_running" = 1 ]; then
-    note '  OBS is open: after adding the script, it starts by itself. Already added? Press "Start the hub again" in Tools > Scripts.'
+if [ "$LINUX" = 1 ]; then
+    copied=0                    # the script's path on the clipboard, with whichever tool this desktop has
+    if [ -n "${WAYLAND_DISPLAY:-}" ] && command -v wl-copy >/dev/null 2>&1 && printf '%s' "$LUA" | wl-copy 2>/dev/null; then copied=1
+    elif [ -n "${DISPLAY:-}" ] && command -v xclip >/dev/null 2>&1 && printf '%s' "$LUA" | xclip -selection clipboard 2>/dev/null; then copied=1
+    elif [ -n "${DISPLAY:-}" ] && command -v xsel >/dev/null 2>&1 && printf '%s' "$LUA" | xsel --clipboard --input 2>/dev/null; then copied=1
+    fi
+    printf '\n\033[32m  Two steps left, about a minute:\033[0m\n\n'
+    if [ "$copied" = 1 ]; then
+        say '  1. OBS: Tools > Scripts > + and pick this file. Its path is on your clipboard: in the file window press'
+        say '     Ctrl+L, paste, Enter.'
+    else
+        say '  1. OBS: Tools > Scripts > + and pick this file (in the file window, Ctrl+L lets you type or paste a path):'
+    fi
+    say "       $LUA"
+    say '     OBS from Flathub sees this folder too: the same path works there.'
+    say '  2. Chrome, Chromium, Edge or Brave: open chrome://extensions, switch on Developer mode, press'
+    say '     "Load unpacked" and pick this folder (Ctrl+L works there too):'
+    say "       $EXTENSION"
+    say '     (Needed for replying from the chat window and for X. Reading chat and the on-stream widgets work without it.)'
+    say ''
+    say '  On-stream widgets: in OBS add a Browser Source with one of these addresses:'
+    say '       http://127.0.0.1:4466/overlay/chat       450 x 800'
+    say '       http://127.0.0.1:4466/overlay/featured   900 x 260'
+    say '       http://127.0.0.1:4466/overlay/viewers    600 x 120'
+    say '       http://127.0.0.1:4466/overlay/alerts     800 x 300'
+    say '  Restyle them with "CrossChat: Theme Studio" in your app menu.'
+    say ''
+    say '  CrossChat on Linux is a beta: tell us what works and what doesn'"'"'t at'
+    say '  https://github.com/RandyNorthrup/crosschat-obs/issues'
+    if [ "$obs_running" = 1 ]; then
+        note '  OBS is open: after adding the script, it starts by itself. Already added? Press "Start the hub again" in Tools > Scripts.'
+    fi
+    if [ "$QUIET" != 1 ] && { [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; } && confirm 'Open the extension folder now?'; then
+        xdg-open "$EXTENSION" >/dev/null 2>&1 || true
+    fi
+else
+    printf '%s' "$LUA" | pbcopy 2>/dev/null || true
+    printf '\n\033[32m  Two steps left, about a minute:\033[0m\n\n'
+    say '  1. OBS: Tools > Scripts > + and pick this file. Its path is on your clipboard: in the file window press'
+    say '     Cmd+Shift+G, paste, Return.'
+    say "       $LUA"
+    say '  2. Chrome (or Edge): open chrome://extensions (edge://extensions), switch on Developer mode, press'
+    say '     "Load unpacked" and pick this folder (Cmd+Shift+G works there too):'
+    say "       $EXTENSION"
+    say '     (Needed for replying from the chat window and for X. Reading chat and the on-stream widgets work without it.)'
+    say ''
+    say '  On-stream widgets: in OBS add a Browser Source with one of these addresses:'
+    say '       http://127.0.0.1:4466/overlay/chat       450 x 800'
+    say '       http://127.0.0.1:4466/overlay/featured   900 x 260'
+    say '       http://127.0.0.1:4466/overlay/viewers    600 x 120'
+    say '       http://127.0.0.1:4466/overlay/alerts     800 x 300'
+    say '  Restyle them in Applications > CrossChat > Theme Studio.'
+    say ''
+    say '  Tell us what works on your Mac and what doesn'"'"'t at'
+    say '  https://github.com/RandyNorthrup/crosschat-obs/issues'
+    if [ "$obs_running" = 1 ]; then
+        note '  OBS is open: after adding the script, it starts by itself. Already added? Press "Start the hub again" in Tools > Scripts.'
+    fi
+    if [ "$QUIET" != 1 ] && confirm 'Show the extension folder in Finder now?'; then open -R "$EXTENSION"; fi
 fi
-if [ "$QUIET" != 1 ] && confirm 'Show the extension folder in Finder now?'; then open -R "$EXTENSION"; fi
 printf '\033[32mCrossChat %s is installed.\033[0m\n' "$VERSION"

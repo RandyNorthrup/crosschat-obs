@@ -3,7 +3,7 @@
 Sign-in is Kick's OAuth 2.1 code flow with PKCE: CrossChat opens Kick's authorize page in the browser, Kick sends the
 browser back to the hub (http://localhost:<port>/kick/callback) with a one-time code, and the hub trades it for a
 token. The tokens are kept in kick.bin, encrypted for the current Windows user (DPAPI; on a Mac, under a key in the login
-Keychain), like Twitch's.
+Keychain; on Linux, under a key in the desktop keyring), like Twitch's, and not kept at all when they can't be.
 """
 import base64
 import hashlib
@@ -15,7 +15,7 @@ import urllib.parse
 
 import requests
 
-from twitch_api import protect, unprotect
+from twitch_api import protect, refusal, unprotect
 
 ID = "https://id.kick.com/oauth"
 API = "https://api.kick.com/public/v1"
@@ -54,7 +54,11 @@ class Kick:
         return bool(self.client_id and self.tokens.get("access_token"))
 
     def save(self):
-        data = protect(json.dumps({"tokens": self.tokens, "user": self.user}).encode())
+        try:
+            data = protect(json.dumps({"tokens": self.tokens, "user": self.user}).encode())
+        except OSError as error:                 # not kept safely: not kept at all, not even until CrossChat closes
+            self.tokens, self.user, self.why = {}, {}, refusal(error)
+            raise KickError(self.why) from None
         with open(self.path + ".tmp", "wb") as f:
             f.write(data)
         os.replace(self.path + ".tmp", self.path)

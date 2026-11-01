@@ -1,5 +1,5 @@
 """Ask the running CrossChat hub to do something. The OBS script's buttons and hotkeys and the Start-menu shortcuts (on a
-Mac, the apps in ~/Applications/CrossChat) use this.
+Mac, the apps in ~/Applications/CrossChat; on Linux, the CrossChat entries in the desktop's app menu) use this.
 
   pythonw control.py show        bring up the chat window (starts the hub first if OBS has not)
   pythonw control.py studio      open the Theme Studio in the browser
@@ -30,7 +30,7 @@ def port():
 
 
 def start_hub():
-    if sys.platform == "darwin":
+    if sys.platform != "win32":
         return background([])
     pythonw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
     subprocess.Popen([pythonw if os.path.exists(pythonw) else sys.executable, os.path.join(HERE, "hub.py")], cwd=HERE,
@@ -38,15 +38,17 @@ def start_hub():
 
 
 def background(arguments):
-    """macOS: run hub.py on its own, detached from this short-lived helper."""
+    """macOS and Linux: run hub.py on its own, detached from this short-lived helper."""
     subprocess.Popen([sys.executable, os.path.join(HERE, "hub.py"), *arguments], cwd=HERE, start_new_session=True,
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def show(address):
-    """Open a page or folder the way the system does (os.startfile on Windows, `open` on a Mac)."""
+    """Open a page or folder the way the system does (os.startfile on Windows, `open` on a Mac, xdg-open on Linux)."""
     if sys.platform == "darwin":
         subprocess.run(["open", address], check=False)
+    elif sys.platform != "win32":
+        subprocess.run(["xdg-open", address], check=False, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     else:
         os.startfile(address)
 
@@ -61,7 +63,7 @@ def main(command):
         try:
             urllib.request.urlopen(demo + "version", timeout=2).read()
         except OSError:
-            if sys.platform == "darwin":
+            if sys.platform != "win32":
                 background(["--demo", "--quiet", "--no-window", "--port", str(DEMO_PORT)])
             else:
                 pythonw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")

@@ -28,7 +28,7 @@ jobs:
           python -m pytest -q
           node --test "tests/js/*.test.mjs"
 
-  # The Mac download (beta) is tested on a Mac, read-only too.
+  # The Mac download is tested on a Mac, read-only too.
   test-mac:
     runs-on: macos-latest
     steps:
@@ -49,11 +49,33 @@ jobs:
           python -m pytest -q
           node --test "tests/js/*.test.mjs"
 
+  # The Linux download (beta) is tested on Linux, read-only too, with a desktop keyring of its own.
+  test-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: 22
+      - name: Tests
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends gnome-keyring libsecret-tools dbus-x11
+          python -m pip install --require-hashes -r hub/requirements.lock
+          python -m pip install pytest lupa
+          dbus-run-session -- bash -eo pipefail -c 'printf ci-keyring | gnome-keyring-daemon --unlock --components=secrets > /dev/null; python -m pytest -q'
+          node --test "tests/js/*.test.mjs"
+
   # The downloads are built from a fresh checkout by a job that installs nothing on the runner, then signed and
   # published. The setup program's build only downloads pinned files and checks each against its SHA-256 (python.org's
   # embeddable Python, NSIS, and CrossChat's packages from hub/requirements.lock via pip --require-hashes --target).
   release:
-    needs: [test, test-mac]
+    needs: [test, test-mac, test-linux]
     runs-on: windows-latest
     # Azure trusts GitHub's sign-in token only from this environment, which only v* tags can use.
     environment: release
@@ -73,6 +95,7 @@ jobs:
         run: |
           ./scripts/package.ps1
           python scripts/package_mac.py
+          python scripts/package_linux.py
       - name: Build the setup program
         shell: pwsh
         run: ./installer/build.ps1
@@ -116,6 +139,7 @@ jobs:
             dist/CrossChat-*-windows.zip
             dist/CrossChat-Setup-*.exe
             dist/CrossChat-*-mac.zip
+            dist/CrossChat-*-linux.tar.gz
       - name: Release notes from CHANGELOG.md
         shell: pwsh
         run: |
@@ -136,4 +160,5 @@ jobs:
           gh release create '${{ github.ref_name }}' "dist/CrossChat-Setup-$version.exe" "dist/CrossChat-Setup-$version.exe.sha256" `
             "dist/CrossChat-$version-windows.zip" "dist/CrossChat-$version-windows.zip.sha256" `
             "dist/CrossChat-$version-mac.zip" "dist/CrossChat-$version-mac.zip.sha256" `
+            "dist/CrossChat-$version-linux.tar.gz" "dist/CrossChat-$version-linux.tar.gz.sha256" `
             --title "CrossChat $version" --notes-file notes.md --latest

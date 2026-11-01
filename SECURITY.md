@@ -61,7 +61,7 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 - It listens on your PC's home-network address only, not on every network adapter.
 - **It refuses to start on a network Windows calls Public**, such as café or hotel Wi-Fi, where other people could listen in, or when Windows can't say. If your home network shows as Public, set it to Private: Settings > Network & internet > your network.
 - If your PC moves to another network (a laptop taken out), or the network is switched to Public, the companion closes and starts again only on a Private network.
-- **On a Mac (beta)** there is no such Private/Public setting for apps to ask, so the companion never starts by itself: it listens only on the address you put in `"remote": {"bind": ...}`.
+- **On a Mac or Linux** there is no such Private/Public setting for apps to ask, so the companion never starts by itself: it listens only on the address you put in `"remote": {"bind": ...}`.
 - It closes when no device is paired and no pairing is in progress.
 - Oversized or slow requests are dropped, and it takes at most 64 connections at once, so nobody on the network can tie it up.
 - It answers only requests addressed to a plain IP address, so a website can't reach it under its own name (DNS rebinding).
@@ -82,7 +82,7 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
   - make the PC say anything that isn't a message from the chat.
 - It is plain `http` on your local network. Don't forward the port.
 - **Away from home, with Tailscale** (off until you switch it on in Settings → Paired devices): the companion also listens on your PC's own Tailscale address, a private, encrypted network between your own devices.
-  - The address counts only when Windows has it on Tailscale's own network adapter and that adapter is up. An address in Tailscale's range alone isn't trusted: internet providers hand out that range too.
+  - The address counts only when Windows has it on Tailscale's own network adapter and that adapter is up (on Linux: the address of Tailscale's own interface, `tailscale0`, asked of the kernel, while it's up and running). An address in Tailscale's range alone isn't trusted: internet providers hand out that range too.
   - Pairing is still needed. Anyone else on your tailnet (a shared node, say) reaches only the pairing page.
   - It closes when Tailscale stops or the switch goes off, and opens again when Tailscale is back.
 
@@ -90,20 +90,20 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 
 - CrossChat signs in with Twitch's device code flow as a public app. There is no client secret to leak.
 - It asks for three permissions only: `user:write:chat`, `moderator:manage:chat_messages`, `moderator:manage:banned_users`.
-- The tokens are encrypted for your Windows account with DPAPI (`twitch.bin`), so a copy of the file is useless elsewhere. On a Mac, they're encrypted with AES-256 and sealed with HMAC-SHA256 under a random key CrossChat keeps in your login Keychain; the same goes for `kick.bin` and `rumble.bin`, and the uninstaller removes the key.
+- The tokens are encrypted for your Windows account with DPAPI (`twitch.bin`), so a copy of the file is useless elsewhere. On a Mac, they're encrypted with AES-256 and sealed with HMAC-SHA256 under a random key CrossChat keeps in your login Keychain; the same goes for `kick.bin`, `rumble.bin` and `discord.bin`, and the uninstaller removes the key. On Linux, see **Linux (beta): sign-ins in the desktop keyring** below.
 - **Disconnect** deletes the file and revokes the token at Twitch. If Twitch doesn't confirm, CrossChat says so, and you can remove it at twitch.tv → Settings → Connections.
 - The sign-in page CrossChat opens is always on `https://www.twitch.tv/`.
 
 **Rumble:**
 
-- CrossChat reads Rumble through its official Live Stream API: a private URL you paste in Settings. It works like a password, so it's kept encrypted for your Windows account (`rumble.bin`), never logged, never put in an error message and never handed to a page or device.
+- CrossChat reads Rumble through its official Live Stream API: a private URL you paste in Settings. It works like a password, so it's kept encrypted for your Windows account (`rumble.bin`; on a Mac or Linux, like the Twitch tokens), never logged, never put in an error message and never handed to a page or device.
 - Rumble's answer also holds your stream key; CrossChat uses only the chat, Rants, subs and viewer count from it.
 - **Disconnect** deletes the file. To cancel the URL itself, reset it at rumble.com/account/livestream-api.
 
 **Discord:**
 
 - CrossChat only posts, through a webhook you make in your server's settings. There is no bot, no Discord sign-in, and nothing is read from Discord. A webhook can post in its one channel and nothing else.
-- The webhook URL works like a password, so it's kept encrypted for your Windows account (`discord.bin`), never logged, never put in an error message and never shown again or handed to a page or device. Connecting checks it with Discord first.
+- The webhook URL works like a password, so it's kept encrypted for your Windows account (`discord.bin`; on a Mac or Linux, like the Twitch tokens), never logged, never put in an error message and never shown again or handed to a page or device. Connecting checks it with Discord first.
 - Chat can't ping anyone: every post says no mentions are allowed, and every `@` is broken up. Discord formatting in chat is shown as typed, and links in chat are shown as code, which can't be clicked or previewed.
 - Only what viewers already see on stream is posted: never messages your filters hid, notes, tests or anything about your PC. Nothing is posted during a test stream to this PC.
 - Posts are spaced at least 2 seconds apart, and CrossChat waits as long as Discord asks. If the webhook is deleted, CrossChat stops and says so.
@@ -116,7 +116,7 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 - CrossChat signs in with Kick's OAuth 2.1 code flow with PKCE. Kick sends your browser back to `http://localhost:4466/kick/callback` on your own PC, and nowhere else.
 - The sign-in is accepted only with the one-time random `state` CrossChat made when you pressed **Connect Kick**, so another site can't slip its own sign-in in.
 - It asks for: `user:read`, `channel:read`, `chat:write`, `moderation:ban`, `moderation:chat_message:manage`.
-- The tokens are encrypted for your Windows account with DPAPI (`kick.bin`). **Disconnect** deletes the file and revokes both tokens at Kick, and says so if Kick doesn't confirm.
+- The tokens are encrypted for your Windows account with DPAPI (`kick.bin`; on a Mac or Linux, like the Twitch tokens). **Disconnect** deletes the file and revokes both tokens at Kick, and says so if Kick doesn't confirm.
 - **About the Kick app secret.** Kick requires an app secret even for apps installed on people's PCs, so CrossChat's ships inside it, like every desktop app that signs in to Kick. It can't be used to get anyone's tokens: Kick only ever sends a sign-in back to the `localhost` address registered for the app, which is each person's own PC, and the PKCE code only works with the one-time key the hub made. If you'd rather use your own Kick app, register one at kick.com and set `"kick_client_id"` and `"kick_client_secret"` in `config.json`.
 
 **The extension reads no logins.**
@@ -149,21 +149,31 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 
 **OBS:** the hub reads OBS's WebSocket port and password from OBS's own settings file each time it connects. It never writes them anywhere and never logs them.
 
-**Your files** are in `%LOCALAPPDATA%\CrossChat`:
+**Linux (beta): sign-ins in the desktop keyring.**
+
+- `twitch.bin`, `kick.bin`, `rumble.bin` and `discord.bin` are encrypted as on a Mac: AES-256-CBC (from OpenSSL's libcrypto, which Python itself uses) and sealed with HMAC-SHA256, under a random 64-byte key. A changed file is refused before anything is decrypted.
+- The key lives in your desktop keyring (GNOME Keyring, KWallet or another Secret Service), as the item "CrossChat: key for saved sign-ins", through libsecret's `secret-tool`. It's handed to `secret-tool` on its standard input and read back from its output, never put on a command line, where other users of the computer could see it.
+- **With no keyring, nothing is kept.** If no Secret Service answers (no desktop session, no keyring installed, `secret-tool` missing), CrossChat refuses to save the sign-in, drops it, and says why. It never falls back to plain text. A locked keyring asks you to unlock it.
+- As on Windows, other programs running as you can reach your unlocked keyring; other accounts on the computer can't. A copied file is useless without the key.
+- The CrossChat folder (`~/.local/share/CrossChat`) is made readable by your account only (0700).
+- The uninstaller removes the key from the keyring.
+- The OBS script hands the hub only standard input, output and error, never OBS's own open files and sockets.
+
+**Your files** are in `%LOCALAPPDATA%\CrossChat` (on a Mac `~/Library/Application Support/CrossChat`, on Linux `~/.local/share/CrossChat`):
 
 - `config.json`, your channels;
 - `themes\`;
 - `quick.json`, your quick replies;
 - `filters.json` and `tts.json`, your filter and text-to-speech settings;
 - `devices.json`, hashes of paired devices' keys;
-- `twitch.bin` and `kick.bin`, the tokens, `rumble.bin`, your Rumble API URL, and `discord.bin`, your Discord webhook, all encrypted for your Windows account;
+- `twitch.bin` and `kick.bin`, the tokens, `rumble.bin`, your Rumble API URL, and `discord.bin`, your Discord webhook, all encrypted for your Windows account (on a Mac or Linux, under CrossChat's key in your Keychain or keyring);
 - `update-check.json`, when the update notice last asked GitHub and what it found;
 - `logs\`, chat history;
 - `crosschat.log`. The log has no passwords, keys, tokens or cookies.
 
 ## Checking a download
 
-Every release zip comes with a `.sha256` file and a signed build provenance attestation. The attestation proves the zip was built by this repository's release workflow from the tagged source. With the GitHub CLI:
+Every release zip (and the Linux `.tar.gz`) comes with a `.sha256` file and a signed build provenance attestation. The attestation proves the download was built by this repository's release workflow from the tagged source. With the GitHub CLI:
 
 ```powershell
 gh attestation verify CrossChat-1.4.0-windows.zip --repo RandyNorthrup/crosschat-obs

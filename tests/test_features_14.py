@@ -292,7 +292,8 @@ def test_companion_stays_off_when_windows_cannot_say(fresh, monkeypatch):
     monkeypatch.setattr(hub, "remote_why", "")
     hub.DEV.start_pairing()
     run(hub.remote_on())
-    assert hub.remote_server is None and ("macOS doesn't tell apps" if hub.MAC else "couldn't ask Windows") in hub.remote_why
+    said = "macOS doesn't tell apps" if hub.MAC else "Linux doesn't tell apps" if hub.LINUX else "couldn't ask Windows"
+    assert hub.remote_server is None and said in hub.remote_why
 
 
 def test_removing_the_last_device_closes_the_companion(fresh, monkeypatch):
@@ -400,6 +401,7 @@ class Answer:
         return self.data
 
 
+@pytest.mark.keyring
 def test_kick_sign_in_needs_the_state_it_started(tmp_path, monkeypatch):
     k = kick_api.Kick("cid", "secret", str(tmp_path / "kick.bin"), "http://localhost:4466/kick/callback")
     asked = []

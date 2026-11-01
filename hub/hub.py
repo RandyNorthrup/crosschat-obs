@@ -13,6 +13,7 @@ Settings are in config.json in the folder above this one (see config.example.jso
   python hub.py --config PATH      another settings file
   python hub.py --obs-config DIR   OBS's settings folder (the OBS script passes it, so portable OBS works too)
   python hub.py --obs-pid PID      stay until that OBS closes (the OBS script passes it)
+  python hub.py --obs-stdin        stay until standard input ends (the OBS script, in OBS from Flathub, holds its other end)
   python hub.py --quiet            no message boxes, only the log
 """
 import asyncio
@@ -46,6 +47,7 @@ import emotes as emote_sources
 import settings_ui
 import tailscale
 import updates
+import vault
 import viewers as viewer_cards
 from chatlog import ChatLog
 from devices import Devices, device_name
@@ -54,9 +56,12 @@ from kick_api import Kick, KickError
 from rumble_api import Rumble, RumbleError
 from twitch_api import Twitch, TwitchError
 
-MAC = sys.platform == "darwin"               # macOS (beta): the few Windows-only jobs are done the Mac way, in macos.py
+MAC = sys.platform == "darwin"               # macOS: the few Windows-only jobs are done the Mac way, in macos.py
+LINUX = sys.platform.startswith("linux")     # Linux: the same jobs done the Linux way, in linux.py
 if MAC:
     import macos
+elif LINUX:
+    import linux
 else:
     from ctypes import wintypes
 
@@ -306,6 +311,12 @@ def note(text):
     publish("system", "", text, kind="note")
 
 
+def not_saved(error):
+    """Why a secret (Rumble's API URL, the Discord webhook) wasn't kept: on Linux without a keyring, the keyring's
+    story (vault.Unavailable), else the folder's."""
+    return str(error) if isinstance(error, vault.Unavailable) else "Could not save it in your CrossChat folder."
+
+
 def warn(text):
     """Tell the person at the PC: in the log, in the chat window and once in a plain Windows message box (the hub has
     no window of its own, so a problem would otherwise go unseen)."""
@@ -313,6 +324,8 @@ def warn(text):
     note(text)
     if "--quiet" not in ARGV and MAC:
         threading.Thread(target=macos.message_box, args=(text,), daemon=True).start()
+    elif "--quiet" not in ARGV and LINUX:
+        threading.Thread(target=linux.message_box, args=(text,), daemon=True).start()
     elif "--quiet" not in ARGV:
         threading.Thread(target=user32.MessageBoxW, args=(None, text, "CrossChat", 0x30 | 0x10000 | 0x40000), daemon=True).start()
 
@@ -749,7 +762,7 @@ async def audience():
 
 
 # ---- the windows: plain browser windows parked at the edge of the screen ---------------------------
-if not MAC:
+if not (MAC or LINUX):
     user32 = ctypes.WinDLL("user32", use_last_error=True)
     user32.GetForegroundWindow.restype = wintypes.HWND
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -763,6 +776,8 @@ if not MAC:
 def browser_windows(prefix=None):
     if MAC:
         return macos.windows(browser_exe(), prefix) or []
+    if LINUX:
+        return linux.windows(browser_exe(), prefix) or []
     out = []
 
     def each(hwnd, _):
@@ -783,6 +798,8 @@ def place(hwnd, x, y, width, height):
     """Put the visible edges of a window exactly on a rectangle, without giving it the keyboard."""
     if MAC:
         return macos.place(hwnd, x, y, width, height)
+    if LINUX:
+        return linux.place(hwnd, x, y, width, height)
     outer, frame = wintypes.RECT(), wintypes.RECT()
     user32.ShowWindow(wintypes.HWND(hwnd), 4)
     user32.GetWindowRect(wintypes.HWND(hwnd), ctypes.byref(outer))
@@ -797,6 +814,8 @@ def work_area():
     """The main screen without the taskbar: (left, top, right, bottom)."""
     if MAC:
         return macos.work_area()
+    if LINUX:
+        return linux.work_area()
     area = wintypes.RECT()
     user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(area), 0)      # SPI_GETWORKAREA
     return area.left, area.top, area.right, area.bottom
@@ -826,6 +845,8 @@ def browser_exe():
     want = str(CFG.get("browser") or "auto")
     if MAC:
         return macos.browser(want)
+    if LINUX:
+        return linux.browser(want)
     if os.path.isfile(want):
         return want
     places = {"chrome": [r"%ProgramFiles%\Google\Chrome\Application\chrome.exe", r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe",
@@ -847,6 +868,8 @@ async def open_app(url, where):
         return None
     if MAC:
         return await macos.open_app(exe, url, where)
+    if LINUX:
+        return await linux.open_app(exe, url, where)
     before, front = set(browser_windows()), user32.GetForegroundWindow()
     cmd = [exe, "--app=" + url, "--window-position=%d,%d" % where[:2], "--window-size=%d,%d" % where[2:]]
     subprocess.Popen(cmd, creationflags=NO_WINDOW, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -863,7 +886,12 @@ async def open_app(url, where):
 
 async def show_window():
     where = box(CFG["window"], "chat")
-    found = await asyncio.to_thread(browser_windows, TITLE) if MAC else browser_windows(TITLE)     # (a Mac asks the browser)
+    if LINUX:
+        found = await asyncio.to_thread(linux.windows, browser_exe(), TITLE)
+        if found is None and roles["speaker"]:   # open already, where X can't see it (a Wayland browser): not a second one
+            return
+    else:
+        found = await asyncio.to_thread(browser_windows, TITLE) if MAC else browser_windows(TITLE)     # (a Mac asks the browser)
     if found:
         place(found[0], *where)
     else:
@@ -873,6 +901,8 @@ async def show_window():
 def close_window():
     if MAC:
         return macos.close_titled(browser_exe(), TITLE)
+    if LINUX:
+        return linux.close_titled(browser_exe(), TITLE)
     for hwnd in browser_windows(TITLE):
         close_handle(hwnd)
 
@@ -881,6 +911,8 @@ def close_handle(hwnd):
     """Close a browser window CrossChat opened, if it is still there."""
     if MAC:
         macos.close(hwnd)
+    elif LINUX:
+        linux.close(hwnd)
     elif hwnd and user32.IsWindow(wintypes.HWND(hwnd)):
         user32.PostMessageW(wintypes.HWND(hwnd), 0x0010, 0, 0)
 
@@ -1406,8 +1438,8 @@ async def stream_stopped():
 def obs_settings():
     """Where OBS's WebSocket server listens and its password: config.json's "obs" section first, else OBS's own
     settings (in the folder the OBS script passes with --obs-config, or the usual one under %APPDATA%, or
-    ~/Library/Application Support on a Mac)."""
-    folder = arg("--obs-config", "") or (macos.OBS_SETTINGS if MAC else os.path.expandvars(r"%APPDATA%\obs-studio"))
+    ~/Library/Application Support on a Mac, or ~/.config on Linux)."""
+    folder = arg("--obs-config", "") or (macos.OBS_SETTINGS if MAC else linux.OBS_SETTINGS if LINUX else os.path.expandvars(r"%APPDATA%\obs-studio"))
     try:
         with open(os.path.join(folder, "plugin_config", "obs-websocket", "config.json"), encoding="utf-8-sig") as f:
             theirs = json.load(f)
@@ -1426,6 +1458,8 @@ def obs_open(pid):
     """True while process `pid` (the OBS that started this hub) is running."""
     if MAC:
         return macos.running(pid)
+    if LINUX:
+        return linux.running(pid)
     handle = kernel32.OpenProcess(0x00100000, False, pid)          # SYNCHRONIZE
     if not handle:
         return False
@@ -1471,12 +1505,33 @@ async def obs_session(ws, password):
                 await stream_stopped()
 
 
+obs_gone = threading.Event()                 # --obs-stdin: OBS's end of our input has closed
+OBS_INPUT = 0                                # (standard input; the tests use a pipe of their own)
+
+
+def watch_stdin(fd):
+    """--obs-stdin (OBS from Flathub, whose process id means nothing outside its sandbox): OBS holds the other end of
+    this program's standard input, so it ends exactly when OBS does."""
+    try:
+        while os.read(fd, 4096):
+            pass
+    except OSError:
+        pass
+    obs_gone.set()
+
+
 async def obs_link():
-    """Follow OBS until it closes. With --obs-pid that is the OBS process ending; started by hand, it is the
-    connection ending (or a minute and a half without one)."""
+    """Follow OBS until it closes. With --obs-pid that is the OBS process ending (with --obs-stdin, our input ending);
+    started by hand, it is the connection ending (or a minute and a half without one)."""
     pid = int(arg("--obs-pid", "0") or 0)
+    if "--obs-stdin" in ARGV:
+        obs_gone.clear()
+        threading.Thread(target=watch_stdin, args=(OBS_INPUT,), daemon=True).start()
+        following = lambda: not obs_gone.is_set()
+    else:
+        following = (lambda: obs_open(pid)) if pid else None
     tries, told = 0, set()
-    while obs_open(pid) if pid else tries < 30:
+    while following() if following else tries < 30:
         where = obs_settings()
         try:
             ws = await connect("ws://%s:%d" % (where["host"], where["port"]), open_timeout=5, max_size=2 ** 24)
@@ -1493,10 +1548,10 @@ async def obs_link():
         tries = 0
 
         async def gone(link):                    # hang up as soon as that OBS closes (or another one could be followed)
-            while obs_open(pid):
+            while following():
                 await asyncio.sleep(2)
             await link.close()
-        watcher = asyncio.create_task(gone(ws)) if pid else None
+        watcher = asyncio.create_task(gone(ws)) if following else None
         try:
             async with ws:
                 await obs_session(ws, where["password"])
@@ -1511,7 +1566,7 @@ async def obs_link():
         finally:
             if watcher:
                 watcher.cancel()
-        if not pid:
+        if not following:
             break
         await asyncio.sleep(2)
     log.info("OBS closed")
@@ -2157,8 +2212,8 @@ def lan_url():
 
 def network_category(ip):
     """How Windows rates the network that address is on: "Private", "DomainAuthenticated", "Public", or '' if unknown.
-    A Mac has no such rating, so there it's always unknown (and the companion only listens where "bind" says)."""
-    if MAC:
+    A Mac or Linux has no such rating, so there it's always unknown (and the companion only listens where "bind" says)."""
+    if MAC or LINUX:
         return ""
     try:
         out = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
@@ -2181,6 +2236,9 @@ async def network_refusal(address):
         return PUBLIC_NETWORK
     if MAC:
         return ("The companion stays off: macOS doesn't tell apps whether a network is a private one, so CrossChat won't "
+                "guess. On your home network, set \"remote\": {\"bind\": \"%s\"} in config.json to use it there." % address)
+    if LINUX:
+        return ("The companion stays off: Linux doesn't tell apps whether a network is a private one, so CrossChat won't "
                 "guess. On your home network, set \"remote\": {\"bind\": \"%s\"} in config.json to use it there." % address)
     return ("The companion stays off: CrossChat couldn't ask Windows whether this network is a private one. To use it "
             "anyway, set \"remote\": {\"bind\": \"%s\"} in config.json." % address)
@@ -2874,14 +2932,14 @@ async def serve_post(reader, writer, headers, path, remote=False):
             result = {"ok": False, "why": str(error)}
     elif path == "/rumble/connect" and not remote:
         try:
-            RB.set(body.get("url"))
+            await asyncio.to_thread(RB.set, body.get("url"))         # (a thread: the keyring may ask to be unlocked first)
             result = {"ok": True}
             if streaming.is_set():
                 set_status("rumble", "waiting")
         except RumbleError as error:
             result = {"ok": False, "why": str(error)}
-        except OSError:
-            result = {"ok": False, "why": "Could not save it in your CrossChat folder."}
+        except OSError as error:
+            result = {"ok": False, "why": not_saved(error)}
         send(rumble_event())
     elif path == "/rumble/disconnect" and not remote:
         RB.forget()
@@ -2896,15 +2954,15 @@ async def serve_post(reader, writer, headers, path, remote=False):
             result = {"ok": True}
         except DiscordError as error:
             result = {"ok": False, "why": str(error)}
-        except OSError:
-            result = {"ok": False, "why": "Could not save it in your CrossChat folder."}
+        except OSError as error:
+            result = {"ok": False, "why": not_saved(error)}
         send(discord_event())
     elif path == "/discord/options" and not remote:
         try:
-            DC.choose(body)
+            await asyncio.to_thread(DC.choose, body)
             result = {"ok": True}
-        except OSError:
-            result = {"ok": False, "why": "Could not save it in your CrossChat folder."}
+        except OSError as error:
+            result = {"ok": False, "why": not_saved(error)}
         send(discord_event())
     elif path == "/discord/test" and not remote:
         try:

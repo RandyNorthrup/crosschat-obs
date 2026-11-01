@@ -1,4 +1,4 @@
-"""Builds the macOS (beta) download: dist/CrossChat-<version>-mac.zip and its .sha256 file.
+"""Builds the macOS download: dist/CrossChat-<version>-mac.zip and its .sha256 file.
 
   python scripts/package_mac.py
 
