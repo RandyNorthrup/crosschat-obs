@@ -16,6 +16,7 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 
 ### Fixed
 
+- Facebook comments showed in CrossChat with a stray "·" in front (the separator Facebook puts after the commenter's name).
 - **Linux:** the OBS script hands the hub only standard input, output and error. Without that, posix_spawn passes every file and socket OBS has open, as on a Mac (see below); on Linux it's closed with one file action (glibc 2.34 and newer), or one per open file on older systems.
 - The tests no longer close a real CrossChat window on the computer running them (the hub closes its chat window when OBS goes away, and some tests make OBS go away).
 

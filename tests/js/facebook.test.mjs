@@ -22,6 +22,16 @@ test("the streamer's own comment (the name link first) still works", () => {
   assert.equal(FB.nameLink(article([name])), name);
 });
 
+test("a comment's words lose Facebook's separator dot and its \"Posting…\", nothing else", () => {
+  assert.equal(FB.words(' · hello there '), 'hello there');       // as CrossChat showed a Page's comment on 31 October 2026
+  assert.equal(FB.words('• hi'), 'hi');
+  assert.equal(FB.words('hello Posting…'), 'hello');
+  assert.equal(FB.words('hello Posting...'), 'hello');
+  assert.equal(FB.words('· · twice'), '· twice');                  // only Facebook's one separator goes
+  assert.equal(FB.words('a · b'), 'a · b');                        // a dot inside the comment stays
+  assert.equal(FB.words('-1 for that'), '-1 for that');
+});
+
 test('a comment with no named link yet (still posting) is skipped', () => {
   assert.equal(FB.nameLink(article([link('  ', 'x')])), null);
   assert.equal(FB.nameLink(article([])), null);
