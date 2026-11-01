@@ -120,7 +120,7 @@ jobs:
           macos.close(handle)
           EOF
 
-  # Linux (beta): the same tests on Ubuntu, with a real desktop keyring (GNOME Keyring in a D-Bus session of its own),
+  # Linux: the same tests on Ubuntu, with a real desktop keyring (GNOME Keyring in a D-Bus session of its own),
   # the OBS script in LuaJIT (lupa), real browser windows on an Xvfb display, then a real install and uninstall from
   # the download.
   test-linux:
@@ -195,10 +195,10 @@ jobs:
           echo 'uninstalled: folder, app menu entries and the keyring key are gone'
           EOF
 
-  # Linux (beta) with a real OBS, on an Xvfb display: OBS from the OBS Project's PPA (it has Browser Source) and OBS from
+  # Linux with a real OBS, on an Xvfb display: OBS from the OBS Project's PPA (it has Browser Source) and OBS from
   # Flathub (the CrossChat script runs the hub outside its sandbox). scripts/obs_e2e.py: the script starts the hub, the
-  # widgets load in OBS's browser, a stream to an RTMP receiver here, OBS's WebSocket port free once OBS closes, and a
-  # second start.
+  # widgets and the docked chat window in OBS's browser, a stream to an RTMP receiver here, OBS's WebSocket port free
+  # once OBS closes, and a second start.
   obs-linux:
     runs-on: ubuntu-latest
     timeout-minutes: 30
