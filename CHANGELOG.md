@@ -8,6 +8,7 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 
 - **Mac:** the hub no longer gets a copy of everything OBS has open. The OBS script started it with all of OBS's files and sockets, OBS's WebSocket server among them, so after OBS closed the hub kept OBS's WebSocket port taken (about 20 seconds in our tests), and an OBS opened again in that time couldn't start its WebSocket server (CrossChat then couldn't follow it). Found with OBS 33.0.1 on macOS 15.
 - **Mac:** the chat window's notice said "Start menu → CrossChat → Open chat"; on a Mac it now names Applications → CrossChat in the home folder. The Paired-devices hint about Windows' network question no longer shows on a Mac, and the Theme Studio's look button says "follows this device", not "follows Windows".
+- The chat window styled a first-time chatter's **1ST** flag and line like the Settings "Set up your channels" note (a padded, bordered box), so the flag stood out of the line as a large pill and stretched the **Q** flag beside it. Seen in OBS's dock on a Mac; the same on Windows.
 - **Mac:** the README and the installer say where the Applications → CrossChat folder is (the Applications folder in your home folder, not Finder's main one), and that `Install.command` has to be started from Terminal: macOS 15 refuses to open it with a double-click, because the download isn't signed by Apple.
 
 ### Changed

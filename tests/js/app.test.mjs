@@ -255,6 +255,17 @@ test('the window names the shortcut of its own system: no Start menu on a Mac', 
   }
 });
 
+test('a first-time chatter is not styled as the Settings first-run note', async () => {
+  // A bare `.first` rule (the note's box: padding, border, margin) also hit `.m.first` rows and the `.flag.first` pill,
+  // which then stood out of the line and stretched the Q flag beside it (seen in OBS's dock on a Mac).
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(new URL('../../hub/web/app.css', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../../hub/web/window.html', import.meta.url), 'utf8');
+  assert.doesNotMatch(css, /(^|[\s,}])\.first[\s,{:]/m);
+  assert.doesNotMatch(html, /class="first"/);
+  assert.match(css, /\.flag\.first \{/);
+});
+
 test('a Discord webhook URL is recognised before it goes to the hub', () => {
   const token = 'abcDEF123_-'.repeat(6);
   assert.equal(A.discordWebhook('https://discord.com/api/webhooks/123456789012345678/' + token), true);
