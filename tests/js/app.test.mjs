@@ -73,7 +73,9 @@ test('text-to-speech settings are filled in and kept in range', () => {
   const s = A.ttsSettings({ enabled: true, read: 'nope', max_chars: 9000, rate: '0.1', volume: -3, platforms: ['kick', 'x', 'tiktok', 'myspace'], command: '  ' });
   assert.equal(s.read, 'all'); assert.equal(s.max_chars, 500); assert.equal(s.rate, 0.5); assert.equal(s.volume, 0);
   assert.deepEqual(s.platforms, ['kick', 'x', 'tiktok']); assert.equal(s.command, '!tts');
-  assert.equal(A.ttsSettings({ platforms: ['twitch', 'youtube', 'kick', 'x', 'tiktok', 'facebook', 'rumble'] }).platforms, 'all');
+  assert.equal(A.ttsSettings({ platforms: ['twitch', 'youtube', 'kick', 'x', 'tiktok', 'facebook', 'instagram', 'rumble'] }).platforms, 'all');
+  assert.deepEqual(A.ttsSettings({ platforms: ['twitch', 'youtube', 'kick', 'x', 'tiktok', 'facebook', 'rumble'] }).platforms,
+                   ['twitch', 'youtube', 'kick', 'x', 'tiktok', 'facebook', 'rumble']);
 });
 
 const V = (name, localService, lang = 'en-US') => ({ name, localService, lang });
@@ -194,6 +196,18 @@ test('TikTok, Facebook and Rumble reply through the CrossChat window, like YouTu
   assert.deepEqual(A.tooLong('x'.repeat(151), ['tiktok', 'facebook']), ['tiktok']);
   const mod = A.modMenu(m, { executor: true, states });
   assert.equal(mod.every((e) => !e.ok), true); assert.match(mod[0].why, /Moderate TikTok chat in TikTok/);
+});
+
+test('Instagram comments are answered through the CrossChat window, like Facebook', () => {
+  assert.equal(A.LIMIT.instagram, 2200); assert.equal(A.name('instagram'), 'Instagram'); assert.equal(A.NAMES.instagram[1], 'IG');
+  assert.ok(A.PAGE_PLATFORMS.includes('instagram')); assert.ok(A.TTS_PLATFORMS.includes('instagram'));
+  const states = { instagram: 'on', facebook: 'off' };
+  const m = { p: 'instagram', kind: 'chat', name: 'lena.park', text: 'hi' };
+  assert.equal(A.canReply(m, { executor: true, states }).ok, true);
+  assert.equal(A.canReply(m, { executor: false, states }).ok, false);
+  assert.deepEqual(A.targetsFor(states, null, 'off'), ['instagram']);
+  assert.deepEqual(A.tooLong('x'.repeat(2201), ['instagram']), ['instagram']);
+  assert.match(A.modMenu(m, { executor: true, states })[0].why, /Moderate Instagram chat in Instagram/);
 });
 
 test('a platform CrossChat does not know never breaks anything', () => {

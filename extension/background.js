@@ -1,14 +1,16 @@
 // Background part of the CrossChat extension. Two jobs:
 //   1. carry questions and reports between X's Live Studio page, the streamer's own TikTok LIVE page, Facebook's
-//      Live Producer and the CrossChat hub on this PC (hub/hub.py), which a page script may not call directly;
-//   2. post a reply typed in the CrossChat window to YouTube, X, TikTok, Facebook and Rumble by typing it into those
+//      Live Producer, Instagram's Live producer and the CrossChat hub on this PC (hub/hub.py), which a page script
+//      may not call directly;
+//   2. post a reply typed in the CrossChat window to YouTube, X, TikTok, Facebook, Instagram and Rumble by typing it into those
 //      sites' own chat boxes, as the accounts logged in to this browser. (Twitch and Kick replies go through their official APIs in
 //      the hub; the extension never reads any login, cookie or token.)
 const HUB = 'http://127.0.0.1:4466';
-const LIMIT = { youtube: 200, x: 140, tiktok: 150, facebook: 8000, rumble: 200 };
-const NAME = { youtube: 'YouTube', x: 'X', tiktok: 'TikTok', facebook: 'Facebook', rumble: 'Rumble' };
+const LIMIT = { youtube: 200, x: 140, tiktok: 150, facebook: 8000, instagram: 2200, rumble: 200 };
+const NAME = { youtube: 'YouTube', x: 'X', tiktok: 'TikTok', facebook: 'Facebook', instagram: 'Instagram', rumble: 'Rumble' };
 const RUMBLE_CHAT = 'https://rumble.com/chat/popup/';
 const PRODUCER = 'https://www.facebook.com/live/producer';
+const INSTAGRAM = 'https://www.instagram.com/';
 const hub = (path) => fetch(HUB + path, { cache: 'no-store' }).then((r) => r.json());
 
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
@@ -43,6 +45,15 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       .then((data) => respond({ reached: true, data }), () => respond({ reached: false }));
     return true;
   }
+  if (message.type === 'ig-check' && from.startsWith(INSTAGRAM)) {     // is Instagram switched on, and is OBS live?
+    hub('/targets').then((t) => respond({ instagram: !!t.instagram, live: !!t.live }), () => respond(null));
+    return true;
+  }
+  if (message.type === 'ig-feed' && from.startsWith(INSTAGRAM)) {
+    hub('/instagram/feed?' + new URLSearchParams(message.data || {}))
+      .then((data) => respond({ reached: true, data }), () => respond({ reached: false }));
+    return true;
+  }
   if (['state', 'result', 'feed'].includes(message.type) && from.startsWith('https://studio.x.com/')) {
     hub(message.type === 'state' ? '/x/state' : '/x/' + message.type + '?' + new URLSearchParams(message.data))
       .then((data) => respond({ reached: true, data }), () => respond({ reached: false }));
@@ -59,6 +70,7 @@ async function post(data, tab) {
     x: () => ask(chrome.tabs.query({ url: 'https://studio.x.com/live/*' }), { type: 'x-say', text }, 'the X livestream page is not open'),
     tiktok: () => ask(chrome.tabs.query({ url: 'https://www.tiktok.com/*' }), { type: 'tt-say', text }, 'the TikTok LIVE page is not open'),
     facebook: () => ask(chrome.tabs.query({ url: PRODUCER + '*' }), { type: 'fb-say', text }, 'Facebook Live Producer is not open'),
+    instagram: () => ask(chrome.tabs.query({ url: INSTAGRAM + '*' }), { type: 'ig-say', text }, 'Instagram is not open'),
     rumble: () => ask(chrome.tabs.query({ url: RUMBLE_CHAT + '*' }), { type: 'rm-say', text }, 'the Rumble chat window is not open'),
   };
   const out = {};

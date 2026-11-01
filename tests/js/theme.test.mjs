@@ -70,7 +70,8 @@ test('chat platform filter', () => {
   assert.deepEqual(T.platforms('twitch, YouTube'), ['twitch', 'youtube']);
   assert.deepEqual(T.platforms(['x', 'x', 'kick']), ['x', 'kick']);
   assert.equal(T.platforms(['nothing']), 'all');
-  assert.equal(T.platforms(['twitch', 'youtube', 'kick', 'x', 'tiktok', 'facebook', 'rumble']), 'all');
+  assert.equal(T.platforms(['twitch', 'youtube', 'kick', 'x', 'tiktok', 'facebook', 'instagram', 'rumble']), 'all');
+  assert.deepEqual(T.platforms(['instagram']), ['instagram']);
   assert.deepEqual(T.platforms(['tiktok', 'myspace']), ['tiktok']);
   assert.deepEqual(T.merge({ chat: { platforms: 'twitch' } }).chat.platforms, ['twitch']);
   // the address wins over the theme

@@ -54,7 +54,7 @@ Your own overlay pages get the chat as viewers see it: `msg`, `delete`, `purge`,
 |---|---|
 | `id` | CrossChat's id for the message |
 | `t` | Time, in milliseconds since 1970 |
-| `p` | Platform: `twitch`, `youtube`, `kick`, `x`, `tiktok`, `facebook`, `rumble` or `system` |
+| `p` | Platform: `twitch`, `youtube`, `kick`, `x`, `tiktok`, `facebook`, `instagram`, `rumble` or `system` |
 | `name` | The viewer's display name |
 | `text` | What they wrote |
 | `kind` | `chat`, `event` (a sub, gift, raid, cheer, Super Chat or membership) or `note` (a message from CrossChat itself) |
@@ -238,6 +238,6 @@ Also this PC only:
 - `POST /companion/tailscale` (`{"on": true|false}`) switches the companion on the PC's Tailscale address and saves `remote.tailscale` in `config.json`. The `companion` event (to the window on this PC) says `tailscale` (the switch), `address` (the Tailscale address found, or `""`), `listening` and `why`.
 - `POST /updates` (`{"check": true|false}`) switches the update notice and saves `updates.check`. The `update` event (to the window on this PC) says `check`, and the newer `version` with its release page `url` when there is one (both `""` otherwise).
 
-`GET /tiktok/feed` and `GET /facebook/feed` are how the extension passes on your TikTok LIVE chat and Facebook Live comments. It accepts lines only for your own TikTok name, and only from the extension or a program on this PC.
+`GET /tiktok/feed`, `GET /facebook/feed` and `GET /instagram/feed` are how the extension passes on your TikTok LIVE chat, Facebook Live comments and Instagram Live comments. It accepts lines only for your own TikTok name, and only from the extension or a program on this PC.
 
 `GET /show` opens the chat window. `GET /x/go` goes live on X (`?mode=private` or `?mode=dry` for a test). Both refuse other websites.
