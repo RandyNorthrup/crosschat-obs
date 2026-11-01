@@ -1078,7 +1078,7 @@ def rumble_read(data, told, last):
     chat = live.get("chat") or {}
 
     def new(kind, item, *key):
-        mid = "rm-%s-%s" % (kind, hashlib.sha1("\n".join(str(k) for k in key).encode()).hexdigest()[:16])
+        mid = "rm-%s-%s" % (kind, hashlib.sha256("\n".join(str(k) for k in key).encode()).hexdigest()[:16])
         if mid in told or rumble_time(item.get("created_on") or item.get("subscribed_on")) < since:
             return ""
         told.append(mid)
