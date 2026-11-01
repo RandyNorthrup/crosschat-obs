@@ -69,6 +69,10 @@ local function run_for(seconds, done)
   end
 end
 
+-- OBS has files and sockets of its own open (its log, its WebSocket server): one here too, which the programs the
+-- script starts must not get (test_obs_script.py looks for it in the stand-in hub)
+OBS_HELD = io.open(APP_OBS .. "../obs-held.txt", "w")
+
 script_load(nil)
 if PRESS ~= "" then
   script_properties()
@@ -84,6 +88,7 @@ if ffi.os ~= "Windows" then
   table.insert(REPORT, "CHILDREN " .. (left == -1 and "none" or "left"))
 end
 script_unload()
+OBS_HELD:close()
 for _, line in ipairs(log_lines) do table.insert(REPORT, "LOG " .. line) end
 if arg then
   for _, line in ipairs(REPORT) do print(line) end
