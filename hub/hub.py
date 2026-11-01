@@ -820,7 +820,7 @@ async def open_app(url, where):
 
 async def show_window():
     where = box(CFG["window"], "chat")
-    found = browser_windows(TITLE)
+    found = await asyncio.to_thread(browser_windows, TITLE) if MAC else browser_windows(TITLE)     # (a Mac asks the browser)
     if found:
         place(found[0], *where)
     else:
@@ -828,6 +828,8 @@ async def show_window():
 
 
 def close_window():
+    if MAC:
+        return macos.close_titled(browser_exe(), TITLE)
     for hwnd in browser_windows(TITLE):
         close_handle(hwnd)
 

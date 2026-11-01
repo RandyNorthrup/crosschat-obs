@@ -13,6 +13,7 @@ import asyncio
 import json
 import os
 import subprocess
+import threading
 import time
 
 OBS_SETTINGS = os.path.expanduser("~/Library/Application Support/obs-studio")
@@ -30,6 +31,11 @@ function run(argv) {
     for (var i = 0; i < ids.length; i++) if (String(names[i]).indexOf(argv[2]) === 0) out.push(ids[i]);
     return JSON.stringify(out);
   }
+  if (argv[1] === 'close-titled') {
+    var all = app.windows.id(), titles = app.windows.name();
+    for (var j = 0; j < all.length; j++) if (String(titles[j]).indexOf(argv[2]) === 0) app.windows.byId(all[j]).close();
+    return 'ok';
+  }
   var w = app.windows.byId(Number(argv[2]));
   if (!w.exists()) return 'gone';
   if (argv[1] === 'close') w.close();
@@ -43,6 +49,8 @@ var s = $.NSScreen.screens.objectAtIndex(0), f = s.frame, v = s.visibleFrame;
 JSON.stringify([v.origin.x, f.size.height - v.origin.y - v.size.height, v.origin.x + v.size.width, f.size.height - v.origin.y]);
 """
 _screen = {"at": 0.0, "area": (0, 25, 1440, 900)}   # a common MacBook screen until macOS answers
+_refused = {"until": 0.0}                    # after macOS says no (or its question goes unanswered), leave it alone a while
+BACK_OFF = 60
 
 
 def _script(source, *argv, timeout=10):
@@ -53,6 +61,22 @@ def _script(source, *argv, timeout=10):
     except (OSError, subprocess.SubprocessError):
         return None
     return done.stdout.strip() if done.returncode == 0 else None
+
+
+def _browser(app, *argv):
+    """A window job for the browser at `app`. Apple Events to a browser take a moment at most; one that hangs means
+    macOS is still asking the person (or was told no), so CrossChat stops asking for a minute instead of waiting."""
+    if time.time() < _refused["until"]:
+        return None
+    found = _script(WINDOWS, app, *argv, timeout=3)
+    if found is None:
+        _refused["until"] = time.time() + BACK_OFF
+    return found
+
+
+def _later(job, *argv):
+    """Moving and closing windows needs no answer: done on the side, so the hub never waits for it."""
+    threading.Thread(target=job, args=argv, daemon=True).start()
 
 
 def bundle(path):
@@ -81,7 +105,7 @@ def windows(app, prefix=None):
     """The browser's windows whose title starts with `prefix`, as handles (app, window id); None when macOS refused."""
     if not app:
         return []
-    found = _script(WINDOWS, app, "list", prefix or "")
+    found = _browser(app, "list", prefix or "")
     if found is None:
         return None
     try:
@@ -92,17 +116,23 @@ def windows(app, prefix=None):
 
 def place(handle, x, y, width, height):
     if handle:
-        _script(WINDOWS, handle[0], "place", handle[1], x, y, width, height)
+        _later(_browser, handle[0], "place", handle[1], x, y, width, height)
 
 
 def close(handle):
     if handle:
-        _script(WINDOWS, handle[0], "close", handle[1])
+        _later(_browser, handle[0], "close", handle[1])
+
+
+def close_titled(app, prefix):
+    """Close the browser's windows whose title starts with `prefix` (the chat window)."""
+    if app:
+        _later(_browser, app, "close-titled", prefix)
 
 
 def work_area():
     """The main screen without the menu bar and the Dock: (left, top, right, bottom), top-left origin like the browsers'."""
-    if time.time() - _screen["at"] > 30:
+    if time.time() - _screen["at"] > 300:
         found = _script(SCREEN, timeout=5)
         try:
             area = tuple(int(round(n)) for n in json.loads(found))
@@ -127,9 +157,11 @@ async def open_app(app, url, where):
     for _ in range(40):
         await asyncio.sleep(0.25)
         now = await asyncio.to_thread(windows, app)
-        new = [h for h in now or [] if h not in before]
+        if now is None:                      # macOS is asking the person, or was told no: the window is open all the same
+            return None
+        new = [h for h in now if h not in before]
         if new:
-            await asyncio.to_thread(place, new[0], *where)
+            place(new[0], *where)
             return new[0]
     return None
 

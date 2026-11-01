@@ -193,7 +193,7 @@ You need a recent macOS (tested on macOS 15 with Apple silicon, on GitHub's mach
 What's different on a Mac:
 
 - **Sign-ins** (Twitch, Kick, Rumble) are encrypted under a key CrossChat keeps in your login Keychain, instead of Windows' DPAPI. The uninstaller removes the key.
-- **The chat window** is moved and closed through the browser's own AppleScript. The first time, macOS asks whether CrossChat (or OBS) may control your browser. If you say no, windows still open where they should; CrossChat just can't move or close them afterwards. Opening a window also brings the browser to the front.
+- **The chat window** is moved and closed through the browser's own AppleScript. The first time, macOS asks whether CrossChat (or OBS) may control your browser. If you say no, or macOS doesn't ask, windows still open where they should; CrossChat just can't move or close them afterwards (it tries again a minute later, so allowing it later works too). Opening a window also brings the browser to the front.
 - **The phone companion** stays off until you choose the address. macOS doesn't tell apps whether a network is a private one, so CrossChat won't guess: on your home network, set `"remote": {"bind": "<your Mac's address>"}` in `config.json` (*System Settings → Wi-Fi → Details* shows the address).
 - **Read-aloud** uses the Mac's own voices.
 - **Uninstall:** Applications → CrossChat → **Uninstall CrossChat**. It offers to keep your settings and themes in `Documents/CrossChat backup`.
