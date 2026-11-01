@@ -52,7 +52,7 @@ jobs:
       - name: Mac package builds
         run: python scripts/package_mac.py
 
-  # macOS (beta): the same tests on a Mac, the OBS script in LuaJIT, then a real install and uninstall from the download.
+  # macOS: the same tests on a Mac, the OBS script in LuaJIT, then a real install and uninstall from the download.
   test-mac:
     runs-on: macos-latest
     strategy:

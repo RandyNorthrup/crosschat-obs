@@ -28,7 +28,7 @@ jobs:
           python -m pytest -q
           node --test "tests/js/*.test.mjs"
 
-  # The Mac download (beta) is tested on a Mac, read-only too.
+  # The Mac download is tested on a Mac, read-only too.
   test-mac:
     runs-on: macos-latest
     steps:
