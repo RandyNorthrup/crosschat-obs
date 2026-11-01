@@ -4,6 +4,16 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-10-31
+
+### Added
+
+- The chat window says when the browser is still running an older CrossChat extension, and how to reload it. After an update Chrome and Edge keep the old extension's code until it is reloaded in `chrome://extensions`, so 1.7's Rumble moderation and Instagram didn't work until then.
+
+### Fixed
+
+- docs/INSTALLER.md lists the Discord webhook (`discord.bin`) among what an update keeps, and says to reload the extension afterwards.
+
 ## [1.7.0] - 2026-10-31
 
 ### Added
@@ -237,7 +247,9 @@ First public release.
 - Overlays are served by the hub over `http://127.0.0.1`. OBS 33 blocks local-file overlays from reaching the hub.
 - Fonts are Windows' own: Segoe UI Variable and Cascadia Mono.
 
-[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.7.1...HEAD
+[1.7.1]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.7.0...v1.7.1
+[1.7.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.3.0...v1.4.0

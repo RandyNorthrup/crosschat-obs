@@ -157,7 +157,7 @@ CrossChat doesn't send your video anywhere. OBS does that. To stream to several 
    - turns on OBS's WebSocket server if it's off (it asks first);
    - adds a **CrossChat** folder to the Start menu, and CrossChat to *Settings → Apps*.
 
-   Running a newer one later updates CrossChat and keeps your settings, themes, sign-ins and chat history. Windows may say "Windows protected your PC" until the setup program is code-signed: **More info → Run anyway**. Details, silent install and how it's built: [docs/INSTALLER.md](docs/INSTALLER.md).
+   Running a newer one later updates CrossChat and keeps your settings, themes, sign-ins and chat history. After an update, open `chrome://extensions` (or `edge://extensions`) and press the reload arrow on CrossChat: the browser keeps running the old extension until you do, and the chat window says so. Windows may say "Windows protected your PC" until the setup program is code-signed: **More info → Run anyway**. Details, silent install and how it's built: [docs/INSTALLER.md](docs/INSTALLER.md).
 2. **Set your channels:** Start menu → CrossChat → **Open chat** → **Settings**.
 3. **Add the script to OBS:** *Tools → Scripts → +*, then pick `%LOCALAPPDATA%\CrossChat\obs\crosschat.lua`. Setup puts this path on your clipboard.
 4. **Add the extension** to Chrome or Edge:

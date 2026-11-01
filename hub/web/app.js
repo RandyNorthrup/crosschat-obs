@@ -371,13 +371,23 @@
     const m = /^https:\/\/github\.com\/RandyNorthrup\/crosschat-obs\/releases\/tag\/v(\d{1,4})\.(\d{1,4})\.(\d{1,4})$/.exec(typeof url === 'string' ? url : '');
     return m ? RELEASES + [m[1], m[2], m[3]].map(Number).join('.') : '';
   };
+  // The extension in this browser is older than CrossChat: an unpacked extension keeps its old code after an update
+  // until it is reloaded in chrome://extensions.
+  const versionParts = (v) => (/^(\d{1,4})\.(\d{1,4})\.(\d{1,4})$/.exec(typeof v === 'string' ? v : '') || []).slice(1).map(Number);
+  const extensionBehind = (ext, hub) => {
+    const a = versionParts(ext), b = versionParts(hub);
+    if (a.length !== 3 || b.length !== 3) return false;
+    for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] < b[i];
+    return false;
+  };
   // A Discord webhook URL, the way Discord's "Copy Webhook URL" gives it (the hub checks it again, and with Discord).
   const discordWebhook = (url) => /^https:\/\/(discord\.com|discordapp\.com|ptb\.discord\.com|canary\.discord\.com)\/api\/webhooks\/\d{15,22}\/[\w-]{30,100}$/.test(clean(url));
 
   return { NAMES, LIMIT, PAGE_PLATFORMS, QUICK_MAX, QUICK_LENGTH, LIST_MAX, LIST_LENGTH, TTS_READ, TTS_PLATFORMS, name, takesReplies, openPlatforms, targetsFor,
            tooLong, clean, route, canReply, modMenu, duration, describe, cleanQuick, inView, mention, secondsLeft, readable, pieces, timeoutSeconds,
            ttsSettings, onlineVoice, voiceMaker, voiceGroups, pickVoice, speech, cleanList, filterSettings, span, health, validLog, bytes, logFilter,
-           CONFIG_FIELDS, CONFIG_KEYS, configValue, configChanges, viewerPath, viewerFacts, viewerLatest, alertWord, releaseLink, discordWebhook };
+           CONFIG_FIELDS, CONFIG_KEYS, configValue, configChanges, viewerPath, viewerFacts, viewerLatest, alertWord, releaseLink, extensionBehind,
+           discordWebhook };
 });
 
 // ---- the page ---------------------------------------------------------------------------------------------------------
@@ -1634,7 +1644,10 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     let say_ = '';
     if (ctx.unpaired) say_ = 'This device is no longer paired. Pair it again from Settings on the streaming PC.';
     else if (blocked) say_ = 'Click anywhere in this window once so it can read chat aloud (the browser asks for that).';
-    else if (!DEMO && ctx.executorKnown && !ctx.executor) {
+    else if (!ctx.remote && A.extensionBehind(document.documentElement.dataset.crosschat, ctx.version)) {
+      say_ = 'The CrossChat extension in this browser is still ' + document.documentElement.dataset.crosschat + ' (CrossChat is ' + ctx.version
+        + '). Open chrome://extensions (edge://extensions in Edge) and press the reload arrow on CrossChat, then reload this window (F5).';
+    } else if (!DEMO && ctx.executorKnown && !ctx.executor) {
       say_ = ctx.remote ? 'Replies to YouTube and X need the CrossChat window open on the streaming PC (Chrome or Edge with the extension).'
         : ctx.bridge ? '' : 'Replies to YouTube and X go out through the CrossChat window in Chrome or Edge with the extension: Start menu → CrossChat → Open chat.';
       if (say_ && twitchAuth.state !== 'on' && ctx.states.twitch) say_ += ' Connect Twitch in Settings' + (ctx.remote ? ' on the streaming PC' : '') + ' to reply on Twitch.';

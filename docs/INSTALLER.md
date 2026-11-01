@@ -15,10 +15,12 @@
 **Updating** is running the newer setup program. It keeps everything that's yours:
 
 - `config.json`, `themes\`, `quick.json`, `filters.json`, `tts.json`;
-- the sign-ins `twitch.bin`, `kick.bin` and `rumble.bin`;
+- the sign-ins `twitch.bin`, `kick.bin` and `rumble.bin`, and the Discord webhook `discord.bin`;
 - `logs\`, your chat history.
 
 If OBS is open with CrossChat running, setup stops CrossChat, replaces its files and starts it again for that OBS.
+
+Then reload the extension: `chrome://extensions` (or `edge://extensions`) → the reload arrow on CrossChat. The browser keeps running the old extension until then, and the chat window shows a notice while it does.
 
 ## Uninstalling
 
@@ -29,7 +31,7 @@ Two things only you can remove: the script in OBS (*Tools → Scripts*, select i
 ## Silent install, for scripts
 
 ```powershell
-.\CrossChat-Setup-1.6.0.exe /S                        # installs; switches on OBS's WebSocket server if it's off
+.\CrossChat-Setup-1.7.1.exe /S                        # installs; switches on OBS's WebSocket server if it's off
 & "$env:LOCALAPPDATA\CrossChat\uninstall.exe" /S       # removes; keeps settings and themes in Documents\CrossChat backup
 ```
 

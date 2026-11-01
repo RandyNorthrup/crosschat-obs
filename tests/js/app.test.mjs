@@ -236,6 +236,14 @@ test('the update notice only ever links to a CrossChat release page on GitHub', 
     'https://github.com/someone/else/releases/tag/v1.7.0', 'javascript:alert(1)', page + '\n', '', null, undefined, {}, ['x']]) assert.equal(A.releaseLink(bad), '', String(bad));
 });
 
+test('an extension older than CrossChat is noticed, anything else is not', () => {
+  assert.equal(A.extensionBehind('1.6.0', '1.7.0'), true);
+  assert.equal(A.extensionBehind('1.7.0', '1.7.1'), true);
+  assert.equal(A.extensionBehind('1.9.9', '1.10.0'), true);
+  for (const [ext, hub] of [['1.7.0', '1.7.0'], ['1.8.0', '1.7.0'], ['1.10.0', '1.9.9'], ['', '1.7.0'], [undefined, '1.7.0'], ['1.6.0', ''],
+    ['1.6', '1.7.0'], ['1.6.0<b>', '1.7.0'], [{}, '1.7.0']]) assert.equal(A.extensionBehind(ext, hub), false, String(ext) + ' vs ' + String(hub));
+});
+
 test('a Discord webhook URL is recognised before it goes to the hub', () => {
   const token = 'abcDEF123_-'.repeat(6);
   assert.equal(A.discordWebhook('https://discord.com/api/webhooks/123456789012345678/' + token), true);

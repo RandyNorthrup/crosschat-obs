@@ -40,7 +40,7 @@ local kernel32 = WINDOWS and ffi.load("kernel32") or nil
 local shell32 = WINDOWS and ffi.load("shell32") or nil
 local SEP = WINDOWS and "\\" or "/"
 
-local VERSION = "1.7.0"
+local VERSION = "1.7.1"
 local PORT = 4466
 local python_setting = ""
 local hotkeys = {}
