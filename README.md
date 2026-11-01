@@ -424,7 +424,7 @@ pwsh scripts/package.ps1                                 # builds dist\CrossChat
 python scripts/package_mac.py                            # builds dist/CrossChat-<version>-mac.zip (any system)
 ```
 
-`pip install lupa` adds the OBS script tests (`tests/test_obs_script.py`): they run `obs/crosschat.lua` in LuaJIT with a stand-in for OBS and check that it starts the hub and restarts a crashed one, on Windows and on a Mac. On a Mac, `bash scripts/install.sh` installs from a checkout.
+`pip install lupa` (on a Mac: `brew install luajit`) adds the OBS script tests (`tests/test_obs_script.py`): they run `obs/crosschat.lua` in LuaJIT with a stand-in for OBS and check that it starts the hub and restarts a crashed one, on Windows and on a Mac. On a Mac, `bash scripts/install.sh` installs from a checkout.
 
 `scripts/obs_e2e.py` sets up a throwaway portable OBS with the script and the four widgets. It streams to an RTMP receiver on your PC (ffmpeg) and checks 19 things, from the script starting the hub to the hub leaving when OBS closes. It never touches your own OBS. Version 1.0.0 passed all 19 on OBS 33.0.1.
 

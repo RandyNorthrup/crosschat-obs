@@ -16,4 +16,3 @@ ignore = ["E731"]          # the hub names small one-line lookups with lambda on
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-p no:cacheprovider"
-markers = ["exit_code(code): how the stand-in hub.py ends in test_obs_script.py"]
