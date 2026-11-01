@@ -83,7 +83,7 @@
       const ok = !why;
       return [
         { action: 'delete', label: 'Remove message', ok, why },
-        { action: 'timeout', seconds: 300, label: 'Timeout 5 minutes (YouTube’s fixed length)', ok, why },
+        { action: 'timeout', seconds: 300, label: 'Timeout 5 minutes', ok, why },
         { action: 'ban', label: 'Hide user on this channel', danger: true, ok, why },
       ];
     }
@@ -387,12 +387,15 @@
     : 'Start menu → CrossChat → Open chat');
   // A Discord webhook URL, the way Discord's "Copy Webhook URL" gives it (the hub checks it again, and with Discord).
   const discordWebhook = (url) => /^https:\/\/(discord\.com|discordapp\.com|ptb\.discord\.com|canary\.discord\.com)\/api\/webhooks\/\d{15,22}\/[\w-]{30,100}$/.test(clean(url));
+  // How long to wait for a reply or moderation (ms). YouTube moderation may first have to open YouTube's chat pop-out
+  // (the hub waits as long: YT_MOD_SECONDS).
+  const patience = (job) => (job && job.kind === 'mod' && job.p === 'youtube' ? 75000 : 25000);
 
   return { NAMES, LIMIT, PAGE_PLATFORMS, QUICK_MAX, QUICK_LENGTH, LIST_MAX, LIST_LENGTH, TTS_READ, TTS_PLATFORMS, name, takesReplies, openPlatforms, targetsFor,
            tooLong, clean, route, canReply, modMenu, duration, describe, cleanQuick, inView, mention, secondsLeft, readable, pieces, timeoutSeconds,
            ttsSettings, onlineVoice, voiceMaker, voiceGroups, pickVoice, speech, cleanList, filterSettings, span, health, validLog, bytes, logFilter,
            CONFIG_FIELDS, CONFIG_KEYS, configValue, configChanges, viewerPath, viewerFacts, viewerLatest, alertWord, releaseLink, extensionBehind,
-           discordWebhook, onMac, openChatHow };
+           discordWebhook, onMac, openChatHow, patience };
 });
 
 // ---- the page ---------------------------------------------------------------------------------------------------------
@@ -441,7 +444,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
 
   // Wait for the `sent` event of a job this page started.
   function track(id, job) {
-    job.timer = setTimeout(() => finish(id, null), 25000);
+    job.timer = setTimeout(() => finish(id, null), A.patience(job));
     waiting[id] = job;
     if (early[id]) { const a = early[id]; delete early[id]; finish(id, a); }
   }
@@ -474,7 +477,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
   let jobN = 0;
   function runJob(job) {
     const n = ++jobN;
-    jobs[n] = { job, timer: setTimeout(() => done(n, null), 25000) };
+    jobs[n] = { job, timer: setTimeout(() => done(n, null), A.patience(job)) };
     if (job.kind === 'mod') {
       window.postMessage({ crosschat: 'mod', n, p: job.p, action: job.action, message_id: job.message_id || '', user_id: job.user_id || '',
                            name: job.name || '', text: job.text || '', seconds: job.seconds || 0, reason: job.reason || '' }, location.origin);

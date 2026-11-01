@@ -26,6 +26,9 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 - **Mac:** the README and the installer say where the Applications → CrossChat folder is (the Applications folder in your home folder, not Finder's main one), and that `Install.command` has to be started from Terminal: macOS 15 refuses to open it with a double-click, because the download isn't signed by Apple.
 - **Kick chat stopped arriving.** Kick changed the key of its public chat feed, and Kick's server refused the one CrossChat had built in ("App key ... not in this cluster"), so Kick chat kept reconnecting and showed nothing. CrossChat now asks Kick for the current key the way Kick's own web chat does (signed out, with a random id), and falls back to the new one. When Kick's feed refuses a connection, the log says why.
 - **YouTube moderation clicked the wrong button.** YouTube now shows a top fan's "#1" rank inside the chat line, before the message's own menu, and CrossChat clicked that rank (opening the Top fans list) instead of the menu, so remove, timeout and hide user all failed with "YouTube did not offer that here". The extension now opens only the message's "Chat actions" menu. Reload the extension in `chrome://extensions` after updating.
+- **YouTube moderation still couldn't work from the CrossChat window.** YouTube offers the channel owner Remove, timeout and Hide user only on its own chat page; the chat embedded in the CrossChat window shows just "Go to channel" and "Pin message". The extension now moderates in YouTube's chat pop-out for the live, which it opens in a background tab of the browser (never in front; a minimized window only when no browser window is open). It keeps that one tab for the whole live, closes one left from an earlier live, reloads it if the extension was reloaded since, and the tab closes itself once the live is over or CrossChat has been unreachable twice in a row (half a minute apart). A pop-out you opened yourself is used but never closed.
+- **YouTube timeouts weren't confirmed.** YouTube now asks for the length in a "Timeout duration" dialog; CrossChat picks the length nearest the one asked for (5 minutes from the menu) and only reports the timeout done once Confirm has closed the dialog. The menu says "Timeout 5 minutes", and the window and the hub wait up to 75 seconds for a YouTube job, since the pop-out may have to load first.
+- **Facebook comments stopped reaching CrossChat.** Live Producer now puts a hidden avatar link to the comment before the commenter's name, so the name was read as empty and the comment was dropped. The name now comes from the first comment link with text.
 
 ### Changed
 
@@ -34,10 +37,13 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 - The real-OBS check (`scripts/obs_e2e.py`) runs on a Mac too, with the installed OBS.app and a stand-in home folder, so your own OBS settings are never touched. It also checks that OBS's own browser shows the four widgets and the docked chat (with test chat in it), and that OBS's WebSocket port is free once OBS closes. `--crosschat` tests an installed copy, `--ffmpeg` names the RTMP receiver, and the logs are kept when something fails.
 - The hub's start line in `crosschat.log` names the Python running it.
 - The README says what to do when the CrossChat dock in OBS says "Couldn't load that page!" (OBS opened it before CrossChat was ready: press "Click here to retry"), and that OBS on a Mac needs the Input Monitoring permission for hotkeys while another app is in front.
-- README's Known limits say what moderation was checked live on 31 October 2026, with a second account in the chat:
+- README's Known limits say what moderation was checked live on 31 October 2026, with a second account in the chat, on both sides (the viewer's and the streamer's):
   - Twitch delete, timeout, ban and unban work, from the CrossChat window in Chrome; timeout and unban also from the CrossChat dock inside OBS.
-  - YouTube remove, 5-minute timeout and hide user were tried in an unlisted live and all failed in 1.7.1 (the YouTube fix above). The fix is checked against YouTube's current chat markup but hasn't been re-run on a live.
-  - Kick, Rumble and Facebook moderation of a viewer still haven't been seen working: the test accounts couldn't be made or used.
+  - YouTube remove, 5-minute timeout and hide user work from the CrossChat window (with the fixes above, in an unlisted live), and remove from the CrossChat dock inside OBS. In 1.7.1 all three had failed. The pop-out tab closed itself after CrossChat was closed.
+  - Kick delete, timeout, ban and unban work from the CrossChat window, and timeout from the CrossChat dock inside OBS.
+  - Facebook: deleting another commenter's comment (a Facebook Page's, on a short public test live) works from the CrossChat window.
+  - Rumble moderation of a viewer still hasn't been seen working: Rumble's sign-up for a test account stopped at Cloudflare's "Verify you are human" check ("Verification failed").
+  - A reply typed once in the CrossChat window reached Twitch, YouTube and Kick chat.
 
 ## [1.7.2] - 2026-11-01
 
