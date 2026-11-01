@@ -7,7 +7,7 @@
   <a href="https://github.com/RandyNorthrup/crosschat-obs/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/RandyNorthrup/crosschat-obs/total?label=downloads&color=2b9c9a"></a>
   <a href="https://github.com/RandyNorthrup/crosschat-obs/actions/workflows/ci.yml"><img alt="Checks" src="https://img.shields.io/github/actions/workflow/status/RandyNorthrup/crosschat-obs/ci.yml?branch=main&label=checks"></a>
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4">
-  <img alt="macOS beta" src="https://img.shields.io/badge/macOS-beta-999999">
+  <img alt="macOS 15, tested on Intel Macs" src="https://img.shields.io/badge/macOS-15%20(Intel%20tested)-999999">
   <img alt="Tested with OBS Studio 33.0.1" src="https://img.shields.io/badge/OBS%20Studio-33.0.1-302E31">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-b87045"></a>
   <a href="https://github.com/sponsors/RandyNorthrup"><img alt="Sponsor on GitHub" src="https://img.shields.io/badge/sponsor-GitHub-db61a2"></a>
@@ -139,7 +139,7 @@ Every setting, the CSS hooks and how to share themes are in **[docs/THEMES.md](d
 
 | | |
 |---|---|
-| **PC** | Windows 10 or 11, 64-bit (tested on Windows 11). A Mac works too, as a beta: see [Mac (beta)](#mac-beta). |
+| **PC** | Windows 10 or 11, 64-bit (tested on Windows 11), or a Mac with macOS 15 (tested with OBS on Intel Macs; see [Mac](#mac)). |
 | **OBS Studio** | 28 or newer, with its built-in WebSocket server. Tested with **33.0.1** (obs-websocket 5.7.6). |
 | **Browser** | Google Chrome, or Microsoft Edge. Needed only for replying, and for X and TikTok. |
 | **Python** | Nothing to install: the setup program brings its own (python.org's embeddable Python). The zip's `Install.cmd` needs Python 3.10 or newer, and offers to install it. |
@@ -184,26 +184,45 @@ To check everything without going live, press **Send test to OBS** in the Theme 
 
 **Prefer a zip?** `CrossChat-<version>-windows.zip` is still on every release. Extract it and double-click `Install.cmd`: it uses a Python 3.10+ already on your PC (or offers to install one), sets up its own environment, and asks for your channels in a console window. Then follow steps 3–5 above.
 
-## Mac (beta)
+## Mac
 
-There is a Mac download too. It's a **beta**: on every change, GitHub's Mac machines run the hub's tests, the Keychain storage, the OBS script's start-and-restart code (in LuaJIT, the Lua OBS uses) and a full install, start and uninstall from the download. **It has not yet been run with OBS on a real Mac.** Tell us what works and what doesn't in [Issues](https://github.com/RandyNorthrup/crosschat-obs/issues).
+There is a Mac download too. It was checked on two real Macs with **OBS Studio 33.0.1** (installed from Homebrew, `brew install --cask obs`) in October 2026:
 
-You need a recent macOS (tested on macOS 15 with Apple silicon, on GitHub's machines; Intel Macs are untested), OBS Studio 28 or newer, Chrome, Edge or Chromium, and Python 3.10 or newer from [python.org](https://www.python.org/downloads/macos/) or Homebrew (`brew install python@3.13`). The installer tells you if Python is missing; it doesn't install it for you.
+| Checked | macOS 15.7.4, Intel Mac mini (2018) | macOS 15.7.9, Intel MacBook Pro (2018) |
+|---|:-:|:-:|
+| The 1.7.1 download matches its `.sha256` (its GitHub attestation checks out too); Finder's Archive Utility unpacks it with `Install.command` still runnable | ✅ | ✅ checksum |
+| The installer, with Homebrew's Python | ✅ 3.14, every question answered | ✅ 3.13, `--quiet` |
+| OBS starts the hub with CrossChat's own Python; the hub follows the stream starting and stopping, sees a stream to this Mac as a test, and leaves when OBS closes | ✅ | ✅ |
+| The four widgets in OBS's browser sources; the chat docked in OBS (Custom Browser Dock) showing chat; featuring a message | ✅ | ✅ |
+| The sign-in key in the login Keychain: stored, read back, removed | ✅ | |
+| The extension in Chrome 156: the chat window recognises it, and the hub takes that window as the one that posts replies | ✅ | |
+| The uninstaller removes CrossChat, its Applications folder and its Keychain key | | ✅ |
+| The hub's and the OBS script's tests | ✅ all 158 | ✅ 142; the 11 that use the Keychain can't run over SSH there |
+
+**Still a beta on a Mac**, because no one has seen these working on a real Mac yet:
+- **Apple silicon.** GitHub's Apple-silicon Macs run the tests and a full install, start and uninstall on every change, but not OBS.
+- **Moving and closing the chat window.** That goes through the browser's AppleScript, and macOS first asks you whether OBS may control your browser. That question needs a person at the Mac, so it hasn't been answered in a test yet. Windows open where they should either way.
+- **Read-aloud** with the Mac's voices, and **the phone companion** on a Mac.
+
+Tell us what works and what doesn't in [Issues](https://github.com/RandyNorthrup/crosschat-obs/issues).
+
+You need macOS 15 (or a recent macOS), OBS Studio 28 or newer, Chrome, Edge or Chromium, and Python 3.10 or newer from [python.org](https://www.python.org/downloads/macos/) or Homebrew (`brew install python@3.13`). The `python3` that comes with macOS is 3.9, too old. The installer tells you if Python is missing; it doesn't install it for you.
 
 1. **Download** `CrossChat-<version>-mac.zip` from **[Releases](https://github.com/RandyNorthrup/crosschat-obs/releases/latest)** and double-click it to unpack it.
-2. **Double-click `Install.command`.** If macOS says it can't check the developer (the download isn't signed by Apple), open Terminal, type `bash ` with a space, drag `Install.command` into the window and press Return.
-   It installs to `~/Library/Application Support/CrossChat`, sets up its own Python environment with checksum-verified packages, asks the same questions as on Windows, and adds an **Applications → CrossChat** folder (Open chat, Theme Studio, Try the demo, Go live on X, Uninstall).
+2. **Run `Install.command` from Terminal.** macOS won't open it with a double-click, because the download isn't signed by Apple. Open Terminal (*Applications → Utilities → Terminal*), type `bash ` with a space after it, drag `Install.command` from the unpacked folder into the Terminal window and press Return.
+   It installs to `~/Library/Application Support/CrossChat`, sets up its own Python environment with checksum-verified packages, asks the same questions as on Windows, and makes a **CrossChat** folder of small apps (Open chat, Theme Studio, Try the demo, Go live on X, Uninstall) in the Applications folder *of your home folder*: in Finder, **Go → Home**, then **Applications → CrossChat**.
 3. **Add the script to OBS:** *Tools → Scripts → +*, press **Cmd+Shift+G**, paste the path the installer put on your clipboard (`~/Library/Application Support/CrossChat/obs/crosschat.lua`) and press Return.
 4. **Add the extension:** `chrome://extensions` → **Developer mode** → **Load unpacked** → **Cmd+Shift+G** → `~/Library/Application Support/CrossChat/extension`.
 5. **Widgets:** the same Browser Source addresses as on Windows.
 
 What's different on a Mac:
 
-- **Sign-ins** (Twitch, Kick, Rumble) are encrypted under a key CrossChat keeps in your login Keychain, instead of Windows' DPAPI. The uninstaller removes the key.
-- **The chat window** is moved and closed through the browser's own AppleScript. The first time, macOS asks whether CrossChat (or OBS) may control your browser. If you say no, or macOS doesn't ask, windows still open where they should; CrossChat just can't move or close them afterwards (it tries again a minute later, so allowing it later works too). Opening a window also brings the browser to the front.
+- **Sign-ins** (Twitch, Kick, Rumble) are encrypted under a key CrossChat keeps in your login Keychain, instead of Windows' DPAPI. The uninstaller removes the key. macOS lets only programs started in your own session at the Mac use that Keychain (OBS is one): a hub started over SSH can't save sign-ins.
+- **The chat window** is moved and closed through the browser's own AppleScript. The first time, macOS asks whether OBS may control your browser. If you say no, or macOS doesn't ask, windows still open where they should; CrossChat just can't move or close them afterwards (it tries again a minute later, so allowing it later works too). Opening a window also brings the browser to the front.
+- **Hotkeys** (OBS's, the CrossChat ones included) work while another app is in front only once OBS has the *Input Monitoring* permission (*System Settings → Privacy & Security*). Without it, OBS's log says "No event permissions, could not add global hotkeys".
 - **The phone companion** stays off until you choose the address. macOS doesn't tell apps whether a network is a private one, so CrossChat won't guess: on your home network, set `"remote": {"bind": "<your Mac's address>"}` in `config.json` (*System Settings → Wi-Fi → Details* shows the address).
 - **Read-aloud** uses the Mac's own voices.
-- **Uninstall:** Applications → CrossChat → **Uninstall CrossChat**. It offers to keep your settings and themes in `Documents/CrossChat backup`.
+- **Uninstall:** Applications (in your home folder) → CrossChat → **Uninstall CrossChat**. It offers to keep your settings and themes in `Documents/CrossChat backup`.
 
 ## Try it without going live
 
@@ -234,7 +253,7 @@ A Stream Deck can trigger them with a *Hotkey* action, or open the Start-menu sh
 
 **The OBS script panel** (*Tools → Scripts → crosschat.lua*) has buttons for all of the above, plus a dry run for X and **Start the hub again**.
 
-**Dock the chat inside OBS.** In OBS: *Docks → Custom Browser Docks*, name it `CrossChat`, URL `http://127.0.0.1:4466/` (4466 is the `port` setting), then **Apply** and drag the dock where you want it. Use `127.0.0.1`, not `localhost`: `localhost` is the overlays' address and only serves the widgets. The dock reads chat, replies, puts messages on stream and moderates Twitch and Kick. Keep the CrossChat window in Chrome or Edge open as well (it opens by itself when you go live): it does the work on the YouTube, X, TikTok, Facebook, Instagram and Rumble pages, and it is the one that reads chat aloud.
+**Dock the chat inside OBS.** In OBS: *Docks → Custom Browser Docks*, name it `CrossChat`, URL `http://127.0.0.1:4466/` (4466 is the `port` setting), then **Apply** and drag the dock where you want it. Use `127.0.0.1`, not `localhost`: `localhost` is the overlays' address and only serves the widgets. The dock reads chat, replies, puts messages on stream and moderates Twitch and Kick. Keep the CrossChat window in Chrome or Edge open as well (it opens by itself when you go live): it does the work on the YouTube, X, TikTok, Facebook, Instagram and Rumble pages, and it is the one that reads chat aloud. OBS opens the dock a moment after it starts CrossChat and doesn't try again by itself: if CrossChat wasn't ready yet (it happened once in our tests, at the first start after installing), the dock says "Couldn't load that page!", and **Click here to retry** in it brings the chat.
 
 ### What each platform supports
 
@@ -438,6 +457,7 @@ More detail, and how to report a problem privately: [SECURITY.md](SECURITY.md).
 |---|---|
 | A message box says CrossChat can't reach OBS's WebSocket server | OBS → *Tools → WebSocket Server Settings* → tick **Enable WebSocket server**. CrossChat connects by itself once it's on. |
 | Widgets show nothing | Is OBS open with `crosschat.lua` loaded? Press **Start the hub again** in *Tools → Scripts*. Use the `http://127.0.0.1:4466/...` address, not a local file. |
+| The CrossChat dock in OBS says "Couldn't load that page!" | OBS opened it before CrossChat was ready. Press **Click here to retry** in the dock. |
 | "Replies go out through the CrossChat extension, and it is not active" | Load the extension (Install step 4), then close the chat window and open it again. |
 | A reply to one platform failed | The chat window says why (not signed in, message too long, chat not open). YouTube replies need you signed in to YouTube in the same browser. |
 | X stopped at a step | The X page banner and the chat window name the step. Finish by hand; if it keeps happening, X may have changed its page, so [open an issue](https://github.com/RandyNorthrup/crosschat-obs/issues). |
@@ -445,7 +465,7 @@ More detail, and how to report a problem privately: [SECURITY.md](SECURITY.md).
 
 ## Known limits
 
-- **Mac is a beta.** Everything but OBS itself is tested on macOS by GitHub's Mac machines; it hasn't been run with OBS on a real Mac yet. See [Mac (beta)](#mac-beta) for what differs.
+- **Mac:** checked with OBS 33.0.1 on macOS 15.7.4 and 15.7.9, on Intel Macs (see [Mac](#mac) for exactly what). Still a beta there: Apple-silicon Macs with OBS, moving and closing the chat window (it needs macOS's permission to control the browser, which only a person at the Mac can give), read-aloud and the phone companion.
 - **Kick** replies and moderation use Kick's documented API. Sign-in was verified against Kick; the post and moderation calls are covered by tests, not yet by a live Kick stream. Kick alerts come from Kick's public feed and haven't been checked against a real Kick stream yet.
 - **Facebook Live** (new in 1.6) is read from Live Producer, so a redesign by Facebook can break it until CrossChat is updated. It was built and tested on a real "Only me" Facebook live.
 - **Instagram Live** (new) is read from Instagram's Live producer, so a redesign by Instagram can break it until CrossChat is updated. Reading comments was built against a real "Practice" Instagram live; replies are typed into the same comment box and were tested on a copy of that page, not yet on a real live. The extension recognises the live, the viewer count and your own comments by Instagram's English labels.
@@ -475,14 +495,14 @@ python hub/hub.py --test --twitch <any live channel>     # run the hub without O
 ruff check hub scripts tests
 python -m pytest                                         # 63 tests: config, platforms, web server, obs-websocket, companion, 1.4 features and safety rules
 node --test "tests/js/*.test.mjs"                        # 35 tests: theme engine, chat app, emotes and chat delay
-python scripts/obs_e2e.py --obs <portable OBS folder>    # end to end against a real OBS (see the file)
+python scripts/obs_e2e.py --obs <portable OBS folder>    # end to end against a real OBS (see the file); on a Mac: python3 scripts/obs_e2e.py
 pwsh scripts/package.ps1                                 # builds dist\CrossChat-<version>-windows.zip
 python scripts/package_mac.py                            # builds dist/CrossChat-<version>-mac.zip (any system)
 ```
 
 `pip install lupa` (on a Mac: `brew install luajit`) adds the OBS script tests (`tests/test_obs_script.py`): they run `obs/crosschat.lua` in LuaJIT with a stand-in for OBS and check that it starts the hub and restarts a crashed one, on Windows and on a Mac. On a Mac, `bash scripts/install.sh` installs from a checkout.
 
-`scripts/obs_e2e.py` sets up a throwaway portable OBS with the script and the four widgets. It streams to an RTMP receiver on your PC (ffmpeg) and checks 19 things, from the script starting the hub to the hub leaving when OBS closes. It never touches your own OBS. Version 1.0.0 passed all 19 on OBS 33.0.1.
+`scripts/obs_e2e.py` sets up a throwaway OBS profile with the script, the four widgets and the chat docked in OBS. It streams to an RTMP receiver on your computer (ffmpeg) and checks 23 things (24 on a Mac), from the script starting the hub, through the widgets and the dock inside OBS's own browser, to OBS's WebSocket port being free and the hub leaving once OBS closes. It never touches your own OBS: on Windows it uses a portable OBS; on a Mac it runs `/Applications/OBS.app` with a stand-in home folder (`CFFIXED_USER_HOME`) and only OBS's own plugins. `--crosschat <folder>` tests an installed copy instead of the checkout. Version 1.0.0 passed all 19 checks of that time on OBS 33.0.1 on Windows; this version passed all 24 on OBS 33.0.1 on macOS 15.7.4 and 15.7.9.
 
 ## Code signing policy
 
