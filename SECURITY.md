@@ -169,8 +169,11 @@ Every release zip comes with a `.sha256` file and a signed build provenance atte
 gh attestation verify CrossChat-1.4.0-windows.zip --repo RandyNorthrup/crosschat-obs
 ```
 
+From 1.7.2 the Windows setup program also carries an Authenticode signature by **Randy Northrup** (Azure Artifact Signing), timestamped. To check it: right-click the file → Properties → Digital Signatures, or in PowerShell `Get-AuthenticodeSignature .\CrossChat-Setup-1.7.2.exe` (Status should be `Valid`, the signer `CN=Randy Northrup, …`).
+
 How releases are made:
 
 - The release is built from a fresh checkout by a job that installs nothing. Tests run in a separate job with read-only access.
 - GitHub Actions are pinned to exact commits.
+- Code signing runs in the release job from a GitHub environment only `v*` tags can use. No signing secret is stored: Azure trusts GitHub's short-lived OIDC token from that environment only, and the identity it gets can only sign with CrossChat's certificate profile. The job checks the signature, signer and timestamp before publishing.
 - The installer installs CrossChat's two Python packages and their dependencies at the exact versions it was tested with, checked against their SHA-256 hashes (`hub/requirements.lock`). pip refuses anything that doesn't match.

@@ -4,6 +4,16 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.7.2] - 2026-11-01
+
+### Security
+
+- The Windows setup program is code-signed by Randy Northrup with Azure Artifact Signing, timestamped. The release workflow signs it with no stored secret (GitHub's OIDC token, trusted only from a tag-only "release" environment) and checks the signature before publishing. This replaces the planned SignPath Foundation signing.
+
+### Fixed
+
+- The README's privacy list said CrossChat makes no update checks; since 1.7 it makes one a day if you switch it on.
+
 ## [1.7.1] - 2026-10-31
 
 ### Added
@@ -247,7 +257,8 @@ First public release.
 - Overlays are served by the hub over `http://127.0.0.1`. OBS 33 blocks local-file overlays from reaching the hub.
 - Fonts are Windows' own: Segoe UI Variable and Cascadia Mono.
 
-[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.7.1...HEAD
+[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.7.2...HEAD
+[1.7.2]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.5.0...v1.6.0

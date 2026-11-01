@@ -43,7 +43,7 @@ Each setup program comes with a `.sha256` file and a signed build provenance att
 gh attestation verify CrossChat-Setup-1.6.0.exe --repo RandyNorthrup/crosschat-obs
 ```
 
-The setup program isn't code-signed yet, so Windows may say "Windows protected your PC". Choose **More info → Run anyway**. CrossChat has applied to [SignPath Foundation](https://signpath.org) for free code signing (see the README's code signing policy). The bundled `python.exe` and `pythonw.exe` are signed by the Python Software Foundation.
+From 1.7.2 the setup program is code-signed by Randy Northrup through Azure Artifact Signing (see the README's code signing policy). A newly signed program can still get a "Windows protected your PC" notice until Windows has seen enough downloads of it: choose **More info**, check the publisher says Randy Northrup, then **Run anyway**. Earlier setup programs (1.7.1 and before) aren't signed. The bundled `python.exe` and `pythonw.exe` are signed by the Python Software Foundation.
 
 ## How it's built
 

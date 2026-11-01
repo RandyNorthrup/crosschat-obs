@@ -1,6 +1,6 @@
 [project]
 name = "crosschat"
-version = "1.7.1"
+version = "1.7.2"
 description = "Every stream chat in one window, themeable on-stream chat widgets, and X Live started with OBS."
 requires-python = ">=3.10"
 license = "MIT"

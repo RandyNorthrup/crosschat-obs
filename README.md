@@ -157,7 +157,7 @@ CrossChat doesn't send your video anywhere. OBS does that. To stream to several 
    - turns on OBS's WebSocket server if it's off (it asks first);
    - adds a **CrossChat** folder to the Start menu, and CrossChat to *Settings → Apps*.
 
-   Running a newer one later updates CrossChat and keeps your settings, themes, sign-ins and chat history. After an update, open `chrome://extensions` (or `edge://extensions`) and press the reload arrow on CrossChat: the browser keeps running the old extension until you do, and the chat window says so. Windows may say "Windows protected your PC" until the setup program is code-signed: **More info → Run anyway**. Details, silent install and how it's built: [docs/INSTALLER.md](docs/INSTALLER.md).
+   Running a newer one later updates CrossChat and keeps your settings, themes, sign-ins and chat history. After an update, open `chrome://extensions` (or `edge://extensions`) and press the reload arrow on CrossChat: the browser keeps running the old extension until you do, and the chat window says so. From 1.7.2 the setup program is code-signed by **Randy Northrup** (Azure Artifact Signing). A newly signed program can still get a "Windows protected your PC" notice until Windows has seen enough downloads of it: choose **More info**, check the publisher says Randy Northrup, then **Run anyway**. Details, silent install and how it's built: [docs/INSTALLER.md](docs/INSTALLER.md).
 2. **Set your channels:** Start menu → CrossChat → **Open chat** → **Settings**.
 3. **Add the script to OBS:** *Tools → Scripts → +*, then pick `%LOCALAPPDATA%\CrossChat\obs\crosschat.lua`. Setup puts this path on your clipboard.
 4. **Add the extension** to Chrome or Edge:
@@ -486,11 +486,12 @@ python scripts/package_mac.py                            # builds dist/CrossChat
 
 ## Code signing policy
 
-CrossChat is applying for free code signing from [SignPath Foundation](https://signpath.org) so that Windows recognises its installer: free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org). Until that is in place, every download can be verified with its GitHub build provenance attestation (see [SECURITY.md](SECURITY.md#checking-a-download)).
+From 1.7.2, the Windows setup program is signed with [Azure Artifact Signing](https://learn.microsoft.com/azure/artifact-signing/) under the maintainer's Microsoft-verified identity (publisher **Randy Northrup**). Every download, signed or not, can also be checked with its GitHub build provenance attestation (see [SECURITY.md](SECURITY.md#checking-a-download)).
 
 - **Committers and reviewers:** [Randy Northrup](https://github.com/RandyNorthrup)
 - **Approvers:** [Randy Northrup](https://github.com/RandyNorthrup)
 - Every release is built by GitHub Actions from this repository's source. Nobody signs anything built elsewhere.
+- Signing happens inside the release workflow, from a GitHub environment only `v*` tags can use. No signing password or key is stored anywhere: Azure accepts GitHub's short-lived sign-in token from that environment only, and that identity can do nothing but sign. The workflow checks the signature and its timestamp before publishing.
 
 **Privacy policy:** CrossChat will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. It talks only to the chat platforms you set up, to decapi.me as a fallback for the Twitch viewer count (with your channel name) and, unless you turn them off in the installer or `config.json`, to 7TV, BetterTTV and FrankerFaceZ for emote pictures. Only if you switch them on: Discord, through the webhook you connect, and GitHub, once a day, for the update notice. The full list of connections and what each one sends is in [SECURITY.md](SECURITY.md#what-leaves-your-pc).
 
