@@ -471,7 +471,7 @@
     };
     window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
 
-    const modes = { auto: ['◐', 'Studio look: follows Windows'], light: ['☀', 'Studio look: light'], dark: ['☾', 'Studio look: dark'] };
+    const modes = { auto: ['◐', 'Studio look: follows this device'], light: ['☀', 'Studio look: light'], dark: ['☾', 'Studio look: dark'] };
     const showMode = () => { const m = doc.documentElement.dataset.theme || 'auto'; $('mode').textContent = modes[m][0]; $('mode').title = modes[m][1]; $('mode').setAttribute('aria-label', modes[m][1] + ' (change)'); };
     $('mode').onclick = () => {
       const order = ['auto', 'light', 'dark'], next = order[(order.indexOf(doc.documentElement.dataset.theme || 'auto') + 1) % 3];

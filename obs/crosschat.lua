@@ -32,6 +32,9 @@ if WINDOWS then pcall(ffi.cdef, [[
   int posix_spawn_file_actions_init(void** actions);
   int posix_spawn_file_actions_addopen(void** actions, int fd, const char* path, int flags, unsigned short mode);
   int posix_spawn_file_actions_destroy(void** actions);
+  int posix_spawnattr_init(void** attributes);
+  int posix_spawnattr_setflags(void** attributes, short flags);
+  int posix_spawnattr_destroy(void** attributes);
   int waitpid(int pid, int* status, int options);
   int getpid(void);
   int access(const char* path, int mode);
@@ -52,7 +55,7 @@ local kernel32 = WINDOWS and ffi.load("kernel32") or nil
 local shell32 = WINDOWS and ffi.load("shell32") or nil
 local SEP = WINDOWS and "\\" or "/"
 
-local VERSION = "1.7.1"
+local VERSION = "1.7.2"
 local PORT = 4466
 local python_setting = ""
 local hotkeys = {}
@@ -134,9 +137,21 @@ local function spawn(argv, stdin)
   if LINUX then
     close_the_rest(actions)
   end
+  -- The program gets only those three (stdin, stdout, stderr): without POSIX_SPAWN_CLOEXEC_DEFAULT it would also get
+  -- every file and socket OBS has open, and a hub holding OBS's WebSocket server socket keeps OBS's port taken after
+  -- OBS has closed.
+  local attributes = nil
+  if ffi.os == "OSX" then
+    attributes = ffi.new("void*[1]")
+    ffi.C.posix_spawnattr_init(attributes)
+    ffi.C.posix_spawnattr_setflags(attributes, 0x4000)  -- POSIX_SPAWN_CLOEXEC_DEFAULT
+  end
   local pid = ffi.new("int[1]")
-  local failed = ffi.C.posix_spawnp(pid, argv[1], actions, nil, args, LINUX and ffi.C.environ or ffi.C._NSGetEnviron()[0])
+  local failed = ffi.C.posix_spawnp(pid, argv[1], actions, attributes, args, LINUX and ffi.C.environ or ffi.C._NSGetEnviron()[0])
   ffi.C.posix_spawn_file_actions_destroy(actions)
+  if attributes ~= nil then
+    ffi.C.posix_spawnattr_destroy(attributes)
+  end
   if failed ~= 0 then
     return nil
   end

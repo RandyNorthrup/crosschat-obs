@@ -33,7 +33,7 @@ BrandingText "${APP} ${VERSION}"
 ShowInstDetails nevershow
 ShowUninstDetails nevershow
 
-; Version information on the setup program (SignPath checks product name and version)
+; Version information on the setup program (Windows shows it in the file's Properties)
 VIProductVersion "${VERSION}.0"
 VIAddVersionKey "ProductName" "${APP}"
 VIAddVersionKey "ProductVersion" "${VERSION}"

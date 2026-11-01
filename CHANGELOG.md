@@ -4,6 +4,36 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Fixed
+
+- **Mac:** the hub no longer gets a copy of everything OBS has open. The OBS script started it with all of OBS's files and sockets, OBS's WebSocket server among them, so after OBS closed the hub kept OBS's WebSocket port taken (about 20 seconds in our tests), and an OBS opened again in that time couldn't start its WebSocket server (CrossChat then couldn't follow it). Found with OBS 33.0.1 on macOS 15.
+- **Mac:** the chat window's notice said "Start menu → CrossChat → Open chat"; on a Mac it now names Applications → CrossChat in the home folder. The Paired-devices hint about Windows' network question no longer shows on a Mac, and the Theme Studio's look button says "follows this device", not "follows Windows".
+- The chat window styled a first-time chatter's **1ST** flag and line like the Settings "Set up your channels" note (a padded, bordered box), so the flag stood out of the line as a large pill and stretched the **Q** flag beside it. Seen in OBS's dock on a Mac; the same on Windows.
+- **Mac:** the README and the installer say where the Applications → CrossChat folder is (the Applications folder in your home folder, not Finder's main one), and that `Install.command` has to be started from Terminal: macOS 15 refuses to open it with a double-click, because the download isn't signed by Apple.
+- **Kick chat stopped arriving.** Kick changed the key of its public chat feed, and Kick's server refused the one CrossChat had built in ("App key ... not in this cluster"), so Kick chat kept reconnecting and showed nothing. CrossChat now asks Kick for the current key the way Kick's own web chat does (signed out, with a random id), and falls back to the new one. When Kick's feed refuses a connection, the log says why.
+- **YouTube moderation clicked the wrong button.** YouTube now shows a top fan's "#1" rank inside the chat line, before the message's own menu, and CrossChat clicked that rank (opening the Top fans list) instead of the menu, so remove, timeout and hide user all failed with "YouTube did not offer that here". The extension now opens only the message's "Chat actions" menu. Reload the extension in `chrome://extensions` after updating.
+
+### Changed
+
+- **Mac is checked with real OBS.** CrossChat 1.7.1 and this version were run with OBS 33.0.1 on macOS 15.7.4 (Intel Mac mini) and 15.7.9 (Intel MacBook Pro): download and checksum, installer, the OBS script and the hub following OBS, the four widgets and the chat docked inside OBS, the login Keychain, the extension in Chrome 156, and the uninstaller. The README's Mac section lists exactly what; Apple silicon with OBS, moving and closing windows through the browser, read-aloud and the companion are still a beta there.
+- The real-OBS check (`scripts/obs_e2e.py`) runs on a Mac too, with the installed OBS.app and a stand-in home folder, so your own OBS settings are never touched. It also checks that OBS's own browser shows the four widgets and the docked chat (with test chat in it), and that OBS's WebSocket port is free once OBS closes. `--crosschat` tests an installed copy, `--ffmpeg` names the RTMP receiver, and the logs are kept when something fails.
+- The hub's start line in `crosschat.log` names the Python running it.
+- The README says what to do when the CrossChat dock in OBS says "Couldn't load that page!" (OBS opened it before CrossChat was ready: press "Click here to retry"), and that OBS on a Mac needs the Input Monitoring permission for hotkeys while another app is in front.
+- README's Known limits say what moderation was checked live on 31 October 2026, with a second account in the chat:
+  - Twitch delete, timeout, ban and unban work, from the CrossChat window in Chrome; timeout and unban also from the CrossChat dock inside OBS.
+  - YouTube remove, 5-minute timeout and hide user were tried in an unlisted live and all failed in 1.7.1 (the YouTube fix above). The fix is checked against YouTube's current chat markup but hasn't been re-run on a live.
+  - Kick, Rumble and Facebook moderation of a viewer still haven't been seen working: the test accounts couldn't be made or used.
+
+## [1.7.2] - 2026-11-01
+
+### Security
+
+- The Windows setup program is code-signed by Randy Northrup with Azure Artifact Signing, timestamped. The release workflow signs it with no stored secret (GitHub's OIDC token, trusted only from a tag-only "release" environment) and checks the signature before publishing. This replaces the planned SignPath Foundation signing.
+
+### Fixed
+
+- The README's privacy list said CrossChat makes no update checks; since 1.7 it makes one a day if you switch it on.
+
 ## [1.7.1] - 2026-10-31
 
 ### Added
@@ -247,7 +277,8 @@ First public release.
 - Overlays are served by the hub over `http://127.0.0.1`. OBS 33 blocks local-file overlays from reaching the hub.
 - Fonts are Windows' own: Segoe UI Variable and Cascadia Mono.
 
-[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.7.1...HEAD
+[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.7.2...HEAD
+[1.7.2]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.5.0...v1.6.0

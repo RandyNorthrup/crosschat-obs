@@ -25,11 +25,23 @@ LUAJIT = shutil.which("luajit")
 pytestmark = pytest.mark.skipif(not (luajit21 or LUAJIT), reason="needs LuaJIT: pip install lupa, or brew install luajit")
 FAKE = """import json, os, sys
 app = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if os.path.isdir("/dev/fd"):                        # the files it was handed (the listing itself adds one)
-    fds = sorted(int(n) for n in os.listdir("/dev/fd"))
-    with open(os.path.join(app, "%s.fds"), "w", encoding="utf-8") as f:
-        f.write(json.dumps(fds))
-with open(os.path.join(app, "%s.jsonl"), "a", encoding="utf-8") as f:
+held = []                                       # the files this program was handed open (a Mac or Linux can name them)
+if sys.platform == "darwin":
+    import fcntl
+    for fd in range(3, 256):
+        try:
+            held.append(fcntl.fcntl(fd, fcntl.F_GETPATH, bytes(1024)).rstrip(b"\\0").decode())
+        except OSError:
+            pass
+elif sys.platform.startswith("linux"):
+    for fd in range(3, 256):
+        try:
+            held.append(os.readlink("/proc/self/fd/%d" % fd))
+        except OSError:
+            pass
+with open(os.path.join(app, "NAME.held.jsonl"), "a", encoding="utf-8") as f:
+    f.write(json.dumps(held) + "\\n")
+with open(os.path.join(app, "NAME.jsonl"), "a", encoding="utf-8") as f:
     f.write(json.dumps(sys.argv[1:]) + "\\n")
 with open(os.path.join(app, "exit_code.txt"), encoding="utf-8") as f:
     sys.exit(int(f.read()))
@@ -44,7 +56,7 @@ def obs(tmp_path):
     (app / "hub").mkdir(parents=True)
     (app / "obs").mkdir()
     for name in ("hub", "control"):
-        (app / "hub" / (name + ".py")).write_text(FAKE % (name, name), encoding="utf-8")
+        (app / "hub" / (name + ".py")).write_text(FAKE.replace("NAME", name), encoding="utf-8")
     python = ""
     if sys.platform == "win32":
         windowless = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
@@ -56,8 +68,7 @@ def obs(tmp_path):
     class Obs:
         report, log = [], []
 
-        def run(self, exit_code=0, press="", wait_for="", runs=1, seconds=20, extra=0, inherit=()):
-            """`inherit`: open files "OBS" has that a program it starts could inherit (none should get them)."""
+        def run(self, exit_code=0, press="", wait_for="", runs=1, seconds=20, extra=0):
             (app / "exit_code.txt").write_text(str(exit_code), encoding="utf-8")
             given = [SCRIPT, str(app / "obs").replace("\\", "/") + "/", python, press, wait_for, str(runs), str(seconds), str(extra)]
             if luajit21:
@@ -68,14 +79,10 @@ def obs(tmp_path):
                     lua.execute(f.read())
                 self.report = list(lua.eval("REPORT").values())
             else:
-                done = subprocess.run([LUAJIT, DRIVER, *given], capture_output=True, text=True, timeout=seconds + extra + 60, pass_fds=inherit)
+                done = subprocess.run([LUAJIT, DRIVER, *given], capture_output=True, text=True, timeout=seconds + extra + 60)
                 assert done.returncode == 0, done.stderr
                 self.report = done.stdout.splitlines()
             self.log = [line[4:] for line in self.report if line.startswith("LOG ")]
-
-        def fds(self, name="hub"):
-            with open(app / (name + ".fds"), encoding="utf-8") as f:
-                return json.load(f)
 
         def runs(self, name="hub"):
             try:
@@ -83,6 +90,10 @@ def obs(tmp_path):
                     return [json.loads(line) for line in f]
             except FileNotFoundError:
                 return []
+
+        def held(self, name="hub"):
+            """For each run of `name`: the files it was handed open."""
+            return self.runs(name + ".held")
 
     return Obs()
 
@@ -130,20 +141,14 @@ def test_buttons_run_control_py(obs):
     assert obs.runs("control") == [["show"]]
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="ShellExecute hands nothing over; posix_spawn would, unless told not to")
-def test_the_hub_gets_none_of_obss_open_files(obs):
-    """OBS's own files and sockets (its WebSocket port among them) must not go to the hub, or after OBS closes the hub
-    would keep the port from an OBS started again. Here "OBS" holds a pipe any started program could inherit."""
-    reader, writer = os.pipe()
-    os.set_inheritable(writer, True)
-    try:
-        obs.run(press="show", inherit=(writer,))
-    finally:
-        os.close(reader)
-        os.close(writer)
+@pytest.mark.skipif(sys.platform == "win32", reason="a Mac and Linux matter: on Windows the hub is started without OBS's handles")
+def test_the_hub_gets_none_of_obs_own_files_or_sockets(obs):
+    # A hub holding OBS's WebSocket server socket kept OBS's port taken after OBS closed (found with OBS 33 on macOS 15;
+    # on Linux, posix_spawn passes them too unless the script closes them)
+    obs.run(press="show")
     for name in ("hub", "control"):
-        fds = obs.fds(name)
-        assert fds[:3] == [0, 1, 2] and len(fds) == 4, (name, fds)     # standard input, output, error, and the listing
+        held = obs.held(name)
+        assert held and not any(path.endswith("obs-held.txt") for paths in held for path in paths), held
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="zombie processes are a Unix matter")

@@ -1,6 +1,6 @@
 #!/bin/bash
-# CrossChat installer for macOS and Linux (beta). On a Mac, run Install.command (it starts this); on Linux, open a
-# terminal in the unpacked folder and run: bash scripts/install.sh
+# CrossChat installer for macOS and Linux (beta). On a Mac, run Install.command (it starts this), or:
+# bash scripts/install.sh. On Linux, open a terminal in the unpacked folder and run: bash scripts/install.sh
 # Safe to run again: it updates CrossChat and keeps your settings and themes.
 #
 #   --quiet   ask nothing: keep the existing settings, or start from the defaults
@@ -21,7 +21,7 @@ if [ "$LINUX" = 1 ]; then
     APP="$DATA/CrossChat"
     SHORTCUTS="$DATA/applications"          # the desktop's app menu: crosschat-*.desktop
     FLATPAK_OBS="$HOME/.var/app/com.obsproject.Studio/config/obs-studio"
-    SYSTEM='Linux'
+    SYSTEM='Linux (beta)'
     MACHINE='computer'
 else
     APP="$HOME/Library/Application Support/CrossChat"
@@ -72,7 +72,7 @@ find_python() {
     return 1
 }
 
-printf '\n  CrossChat %s installer for %s (beta)\n' "$VERSION" "$SYSTEM"
+printf '\n  CrossChat %s installer for %s\n' "$VERSION" "$SYSTEM"
 say '  Every stream chat in one window, on-stream chat widgets, and X Live started with OBS.'
 say "  Installs to $APP"
 
@@ -289,7 +289,7 @@ else
     control_app 'Hide featured message' unfeature
     shortcut 'CrossChat folder' "do shell script \"open \" & quoted form of \"$APP_Q\""
     shortcut 'Uninstall CrossChat' "do shell script \"open \" & quoted form of \"$APP_Q/Uninstall.command\""
-    say "Applications > CrossChat ($SHORTCUTS)"
+    say "Applications > CrossChat in your home folder ($SHORTCUTS): in Finder, Go > Home, then Applications > CrossChat."
 fi
 
 # ---- the hub that was running for an open OBS: start the updated one in its place ------------------------
@@ -361,7 +361,7 @@ else
     say '       http://127.0.0.1:4466/overlay/alerts     800 x 300'
     say '  Restyle them in Applications > CrossChat > Theme Studio.'
     say ''
-    say '  CrossChat on a Mac is a beta: tell us what works and what doesn'"'"'t at'
+    say '  Tell us what works on your Mac and what doesn'"'"'t at'
     say '  https://github.com/RandyNorthrup/crosschat-obs/issues'
     if [ "$obs_running" = 1 ]; then
         note '  OBS is open: after adding the script, it starts by itself. Already added? Press "Start the hub again" in Tools > Scripts.'

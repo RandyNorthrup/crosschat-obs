@@ -329,9 +329,9 @@ button.name:hover { text-decoration: underline; text-underline-offset: 3px; }
 .cfg .field > .switch { font-size: 14.5px; }
 .section .cfg p.hint { margin: 0; font-size: 12.5px; line-height: 1.4; }
 .cfg input.num { width: 130px; min-height: 40px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); padding: 6px 10px; }
-.first { margin: 2px 0 10px; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 10px; background: var(--flash); }
-.first b { font: 700 15px var(--display); color: var(--strong); }
-.first p { margin: 4px 0 0; }
+.first-run { margin: 2px 0 10px; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 10px; background: var(--flash); }
+.first-run b { font: 700 15px var(--display); color: var(--strong); }
+.first-run p { margin: 4px 0 0; }
 .saved.good { color: var(--ok); }
 .saved.warn, .saved.bad { color: var(--warn); }
 #channels-saved { flex: 1 1 200px; line-height: 1.4; }

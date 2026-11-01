@@ -380,6 +380,11 @@
     for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] < b[i];
     return false;
   };
+  // The streaming computer is a Mac (navigator.platform there): it has no Start menu, and the installer puts the
+  // shortcuts in Applications → CrossChat in the home folder.
+  const onMac = (platform) => /^Mac/.test(typeof platform === 'string' ? platform : '');
+  const openChatHow = (platform) => (onMac(platform) ? 'Applications → CrossChat → Open chat (the Applications folder in your home folder)'
+    : 'Start menu → CrossChat → Open chat');
   // A Discord webhook URL, the way Discord's "Copy Webhook URL" gives it (the hub checks it again, and with Discord).
   const discordWebhook = (url) => /^https:\/\/(discord\.com|discordapp\.com|ptb\.discord\.com|canary\.discord\.com)\/api\/webhooks\/\d{15,22}\/[\w-]{30,100}$/.test(clean(url));
 
@@ -387,7 +392,7 @@
            tooLong, clean, route, canReply, modMenu, duration, describe, cleanQuick, inView, mention, secondsLeft, readable, pieces, timeoutSeconds,
            ttsSettings, onlineVoice, voiceMaker, voiceGroups, pickVoice, speech, cleanList, filterSettings, span, health, validLog, bytes, logFilter,
            CONFIG_FIELDS, CONFIG_KEYS, configValue, configChanges, viewerPath, viewerFacts, viewerLatest, alertWord, releaseLink, extensionBehind,
-           discordWebhook };
+           discordWebhook, onMac, openChatHow };
 });
 
 // ---- the page ---------------------------------------------------------------------------------------------------------
@@ -1630,6 +1635,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     $('channels-first').hidden = true; savedSay('');
     if (!ctx.remote) { drawChannels(); loadConfig().then(drawChannels); }
     $('devices-section').hidden = ctx.remote;
+    $('firewall-hint').hidden = A.onMac(navigator.platform);       // (a Mac: the Pair button says what it needs)
     $('update-row').hidden = ctx.remote;
     $('filters-section').hidden = ctx.remote;
     $('history-section').hidden = ctx.remote;
@@ -1649,7 +1655,8 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
         + '). Open chrome://extensions (edge://extensions in Edge) and press the reload arrow on CrossChat, then reload this window (F5).';
     } else if (!DEMO && ctx.executorKnown && !ctx.executor) {
       say_ = ctx.remote ? 'Replies to YouTube and X need the CrossChat window open on the streaming PC (Chrome or Edge with the extension).'
-        : ctx.bridge ? '' : 'Replies to YouTube and X go out through the CrossChat window in Chrome or Edge with the extension: Start menu → CrossChat → Open chat.';
+        : ctx.bridge ? '' : 'Replies to YouTube and X go out through the CrossChat window in Chrome or Edge with the extension: '
+          + A.openChatHow(navigator.platform) + '.';
       if (say_ && twitchAuth.state !== 'on' && ctx.states.twitch) say_ += ' Connect Twitch in Settings' + (ctx.remote ? ' on the streaming PC' : '') + ' to reply on Twitch.';
     }
     n.hidden = !say_;

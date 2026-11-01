@@ -36,6 +36,23 @@
   const MENU = { delete: /^(remove|delete)$/i, timeout: /^put user in timeout$/i, ban: /^hide user on this channel$/i };
   const CONFIRM = /^(hide|hide user|remove|delete|put in timeout|confirm|yes)$/i;
 
+  // The message's own "Chat actions" menu button. A row can hold other buttons before it (YouTube shows a top fan's
+  // "#1" rank there), and one selector list returns whichever match comes first in the row, so each is asked in turn
+  // and no other button is ever clicked.
+  const MENU_BUTTONS = ['#menu-button button', '#menu button', 'button[aria-label="Chat actions"]'];
+  function menuButton(item) {
+    for (const selector of MENU_BUTTONS) {
+      const found = item.querySelector(selector);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  if (typeof module === 'object' && module.exports) {      // Node (the tests): the parts above, nothing else
+    module.exports = { menuButton, MENU, CONFIRM };
+    return;
+  }
+
   async function moderate(action, messageId) {
     if (!MENU[action]) return { ok: false, why: 'YouTube has no ' + action + ' in its chat menu' };
     const item = [...document.querySelectorAll('yt-live-chat-text-message-renderer, yt-live-chat-paid-message-renderer')]
@@ -44,7 +61,7 @@
     item.scrollIntoView({ block: 'center' });
     item.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
     await sleep(200);
-    const opener = item.querySelector('#menu-button button, #menu button, button[aria-label]');
+    const opener = menuButton(item);
     if (!opener) return { ok: false, why: "YouTube's message menu did not appear" };
     opener.click();
     let choice = null;

@@ -16,7 +16,7 @@ CrossChat has no server of its own. It makes no analytics or crash-report connec
 | Twitch (`gql.twitch.tv`, fallback `decapi.me`) | Your channel name, to get the viewer count | A Twitch channel is set and you're live |
 | Twitch API (`id.twitch.tv`, `api.twitch.tv`) | Your Twitch token, your replies, your moderation actions | You pressed **Connect Twitch** |
 | YouTube (`www.youtube.com`) | Your channel or video id, signed out, to read chat | A YouTube channel is set |
-| Kick (`kick.com`, Pusher) | Your channel name, signed out, to read chat | A Kick channel is set |
+| Kick (`kick.com`, `web.kick.com`, Pusher) | Your channel name and its public channel number, signed out, to read chat; to `web.kick.com` also a random id made for that request, to get the address of Kick's chat feed | A Kick channel is set |
 | Kick API (`id.kick.com`, `api.kick.com`) | Your Kick token, your replies, your moderation actions | You pressed **Connect Kick** |
 | X, YouTube and TikTok, in your browser | The reply you typed, typed into the site's own chat box by the extension | You reply or moderate there |
 | TikTok (`www.tiktok.com`), in your browser | Nothing beyond what your browser already does: CrossChat reads chat, gifts, follows, shares, likes (and joins, if you turn them on) from your own TikTok LIVE page there | A TikTok name is set and you're live |
@@ -90,7 +90,7 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 
 - CrossChat signs in with Twitch's device code flow as a public app. There is no client secret to leak.
 - It asks for three permissions only: `user:write:chat`, `moderator:manage:chat_messages`, `moderator:manage:banned_users`.
-- The tokens are encrypted for your Windows account with DPAPI (`twitch.bin`), so a copy of the file is useless elsewhere. On a Mac (beta), they're encrypted with AES-256 and sealed with HMAC-SHA256 under a random key CrossChat keeps in your login Keychain; the same goes for `kick.bin` and `rumble.bin`, and the uninstaller removes the key.
+- The tokens are encrypted for your Windows account with DPAPI (`twitch.bin`), so a copy of the file is useless elsewhere. On a Mac, they're encrypted with AES-256 and sealed with HMAC-SHA256 under a random key CrossChat keeps in your login Keychain; the same goes for `kick.bin` and `rumble.bin`, and the uninstaller removes the key.
 - **Disconnect** deletes the file and revokes the token at Twitch. If Twitch doesn't confirm, CrossChat says so, and you can remove it at twitch.tv → Settings → Connections.
 - The sign-in page CrossChat opens is always on `https://www.twitch.tv/`.
 
@@ -169,8 +169,11 @@ Every release zip comes with a `.sha256` file and a signed build provenance atte
 gh attestation verify CrossChat-1.4.0-windows.zip --repo RandyNorthrup/crosschat-obs
 ```
 
+From 1.7.2 the Windows setup program also carries an Authenticode signature by **Randy Northrup** (Azure Artifact Signing), timestamped. To check it: right-click the file → Properties → Digital Signatures, or in PowerShell `Get-AuthenticodeSignature .\CrossChat-Setup-1.7.2.exe` (Status should be `Valid`, the signer `CN=Randy Northrup, …`).
+
 How releases are made:
 
 - The release is built from a fresh checkout by a job that installs nothing. Tests run in a separate job with read-only access.
 - GitHub Actions are pinned to exact commits.
+- Code signing runs in the release job from a GitHub environment only `v*` tags can use. No signing secret is stored: Azure trusts GitHub's short-lived OIDC token from that environment only, and the identity it gets can only sign with CrossChat's certificate profile. The job checks the signature, signer and timestamp before publishing.
 - The installer installs CrossChat's two Python packages and their dependencies at the exact versions it was tested with, checked against their SHA-256 hashes (`hub/requirements.lock`). pip refuses anything that doesn't match.
