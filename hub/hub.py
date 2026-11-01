@@ -34,7 +34,6 @@ import sys
 import threading
 import time
 import urllib.parse
-from ctypes import wintypes
 
 import requests
 from websockets.asyncio.client import connect
@@ -46,6 +45,12 @@ from devices import Devices, device_name
 from kick_api import Kick, KickError
 from rumble_api import Rumble, RumbleError
 from twitch_api import Twitch, TwitchError
+
+MAC = sys.platform == "darwin"               # macOS (beta): the few Windows-only jobs are done the Mac way, in macos.py
+if MAC:
+    import macos
+else:
+    from ctypes import wintypes
 
 VERSION = "1.6.0"
 # CrossChat's public Twitch app (Client ID only: public apps have no secret). "twitch_client_id" in config.json overrides it.
@@ -291,7 +296,9 @@ def warn(text):
     no window of its own, so a problem would otherwise go unseen)."""
     log.warning(text)
     note(text)
-    if "--quiet" not in ARGV:
+    if "--quiet" not in ARGV and MAC:
+        threading.Thread(target=macos.message_box, args=(text,), daemon=True).start()
+    elif "--quiet" not in ARGV:
         threading.Thread(target=user32.MessageBoxW, args=(None, text, "CrossChat", 0x30 | 0x10000 | 0x40000), daemon=True).start()
 
 
@@ -700,17 +707,20 @@ async def audience():
 
 
 # ---- the windows: plain browser windows parked at the edge of the screen ---------------------------
-user32 = ctypes.WinDLL("user32", use_last_error=True)
-user32.GetForegroundWindow.restype = wintypes.HWND
-kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-kernel32.OpenProcess.restype = wintypes.HANDLE
-try:
-    ctypes.windll.shcore.SetProcessDpiAwareness(2)
-except (AttributeError, OSError):
-    pass
+if not MAC:
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    user32.GetForegroundWindow.restype = wintypes.HWND
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except (AttributeError, OSError):
+        pass
 
 
 def browser_windows(prefix=None):
+    if MAC:
+        return macos.windows(browser_exe(), prefix) or []
     out = []
 
     def each(hwnd, _):
@@ -729,6 +739,8 @@ def browser_windows(prefix=None):
 
 def place(hwnd, x, y, width, height):
     """Put the visible edges of a window exactly on a rectangle, without giving it the keyboard."""
+    if MAC:
+        return macos.place(hwnd, x, y, width, height)
     outer, frame = wintypes.RECT(), wintypes.RECT()
     user32.ShowWindow(wintypes.HWND(hwnd), 4)
     user32.GetWindowRect(wintypes.HWND(hwnd), ctypes.byref(outer))
@@ -741,6 +753,8 @@ def place(hwnd, x, y, width, height):
 
 def work_area():
     """The main screen without the taskbar: (left, top, right, bottom)."""
+    if MAC:
+        return macos.work_area()
     area = wintypes.RECT()
     user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(area), 0)      # SPI_GETWORKAREA
     return area.left, area.top, area.right, area.bottom
@@ -767,6 +781,8 @@ def browser_exe():
     It has to be the everyday browser, because that is where the logins and the CrossChat extension live.
     """
     want = str(CFG.get("browser") or "auto")
+    if MAC:
+        return macos.browser(want)
     if os.path.isfile(want):
         return want
     places = {"chrome": [r"%ProgramFiles%\Google\Chrome\Application\chrome.exe", r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe",
@@ -786,6 +802,8 @@ async def open_app(url, where):
     if not exe:
         warn("CrossChat could not find Chrome or Edge. Set \"browser\" in config.json to the full path of your browser.")
         return None
+    if MAC:
+        return await macos.open_app(exe, url, where)
     before, front = set(browser_windows()), user32.GetForegroundWindow()
     cmd = [exe, "--app=" + url, "--window-position=%d,%d" % where[:2], "--window-size=%d,%d" % where[2:]]
     subprocess.Popen(cmd, creationflags=NO_WINDOW, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -811,6 +829,14 @@ async def show_window():
 
 def close_window():
     for hwnd in browser_windows(TITLE):
+        close_handle(hwnd)
+
+
+def close_handle(hwnd):
+    """Close a browser window CrossChat opened, if it is still there."""
+    if MAC:
+        macos.close(hwnd)
+    elif hwnd and user32.IsWindow(wintypes.HWND(hwnd)):
         user32.PostMessageW(wintypes.HWND(hwnd), 0x0010, 0, 0)
 
 
@@ -830,9 +856,7 @@ def x_title():
 
 
 def close_x_window():
-    hwnd = state.get("x_window")
-    if hwnd and user32.IsWindow(wintypes.HWND(hwnd)):
-        user32.PostMessageW(wintypes.HWND(hwnd), 0x0010, 0, 0)
+    close_handle(state.get("x_window"))
     state["x_window"] = None
 
 
@@ -925,9 +949,7 @@ def tiktok_page():
 
 
 def close_tiktok_window():
-    hwnd = state.get("tiktok_window")
-    if hwnd and user32.IsWindow(wintypes.HWND(hwnd)):
-        user32.PostMessageW(wintypes.HWND(hwnd), 0x0010, 0, 0)
+    close_handle(state.get("tiktok_window"))
     state["tiktok_window"] = None
 
 
@@ -980,9 +1002,7 @@ facebook_told = collections.deque(maxlen=5000)
 
 
 def close_facebook_window():
-    hwnd = state.get("facebook_window")
-    if hwnd and user32.IsWindow(wintypes.HWND(hwnd)):
-        user32.PostMessageW(wintypes.HWND(hwnd), 0x0010, 0, 0)
+    close_handle(state.get("facebook_window"))
     state["facebook_window"] = None
 
 
@@ -1043,9 +1063,7 @@ def rumble_chat_id(live):
 
 
 def close_rumble_window():
-    hwnd = state.get("rumble_window")
-    if hwnd and user32.IsWindow(wintypes.HWND(hwnd)):
-        user32.PostMessageW(wintypes.HWND(hwnd), 0x0010, 0, 0)
+    close_handle(state.get("rumble_window"))
     state["rumble_window"] = None
 
 
@@ -1217,8 +1235,9 @@ async def stream_stopped():
 # ---- OBS: its WebSocket server tells the hub when the stream starts and stops ----------------------
 def obs_settings():
     """Where OBS's WebSocket server listens and its password: config.json's "obs" section first, else OBS's own
-    settings (in the folder the OBS script passes with --obs-config, or the usual one under %APPDATA%)."""
-    folder = arg("--obs-config", "") or os.path.expandvars(r"%APPDATA%\obs-studio")
+    settings (in the folder the OBS script passes with --obs-config, or the usual one under %APPDATA%, or
+    ~/Library/Application Support on a Mac)."""
+    folder = arg("--obs-config", "") or (macos.OBS_SETTINGS if MAC else os.path.expandvars(r"%APPDATA%\obs-studio"))
     try:
         with open(os.path.join(folder, "plugin_config", "obs-websocket", "config.json"), encoding="utf-8-sig") as f:
             theirs = json.load(f)
@@ -1235,6 +1254,8 @@ RETRY_AFTER_REFUSAL = 10                     # seconds before trying again after
 
 def obs_open(pid):
     """True while process `pid` (the OBS that started this hub) is running."""
+    if MAC:
+        return macos.running(pid)
     handle = kernel32.OpenProcess(0x00100000, False, pid)          # SYNCHRONIZE
     if not handle:
         return False
@@ -1866,7 +1887,10 @@ def lan_url():
 
 
 def network_category(ip):
-    """How Windows rates the network that address is on: "Private", "DomainAuthenticated", "Public", or '' if unknown."""
+    """How Windows rates the network that address is on: "Private", "DomainAuthenticated", "Public", or '' if unknown.
+    A Mac has no such rating, so there it's always unknown (and the companion only listens where "bind" says)."""
+    if MAC:
+        return ""
     try:
         out = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
                               "(Get-NetIPAddress -IPAddress '%s' -ErrorAction Stop | Get-NetConnectionProfile -ErrorAction Stop).NetworkCategory"
@@ -1886,6 +1910,9 @@ async def network_refusal(address):
         return ""
     if category == "Public":
         return PUBLIC_NETWORK
+    if MAC:
+        return ("The companion stays off: macOS doesn't tell apps whether a network is a private one, so CrossChat won't "
+                "guess. On your home network, set \"remote\": {\"bind\": \"%s\"} in config.json to use it there." % address)
     return ("The companion stays off: CrossChat couldn't ask Windows whether this network is a private one. To use it "
             "anyway, set \"remote\": {\"bind\": \"%s\"} in config.json." % address)
 

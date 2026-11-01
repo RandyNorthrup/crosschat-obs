@@ -58,6 +58,7 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 - It listens on your PC's home-network address only, not on every network adapter.
 - **It refuses to start on a network Windows calls Public**, such as café or hotel Wi-Fi, where other people could listen in, or when Windows can't say. If your home network shows as Public, set it to Private: Settings > Network & internet > your network.
 - If your PC moves to another network (a laptop taken out), or the network is switched to Public, the companion closes and starts again only on a Private network.
+- **On a Mac (beta)** there is no such Private/Public setting for apps to ask, so the companion never starts by itself: it listens only on the address you put in `"remote": {"bind": ...}`.
 - It closes when no device is paired and no pairing is in progress.
 - Oversized or slow requests are dropped, and it takes at most 64 connections at once, so nobody on the network can tie it up.
 - It answers only requests addressed to a plain IP address, so a website can't reach it under its own name (DNS rebinding).
@@ -81,7 +82,7 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 
 - CrossChat signs in with Twitch's device code flow as a public app. There is no client secret to leak.
 - It asks for three permissions only: `user:write:chat`, `moderator:manage:chat_messages`, `moderator:manage:banned_users`.
-- The tokens are encrypted for your Windows account with DPAPI (`twitch.bin`), so a copy of the file is useless elsewhere.
+- The tokens are encrypted for your Windows account with DPAPI (`twitch.bin`), so a copy of the file is useless elsewhere. On a Mac (beta), they're encrypted with AES-256 and sealed with HMAC-SHA256 under a random key CrossChat keeps in your login Keychain; the same goes for `kick.bin` and `rumble.bin`, and the uninstaller removes the key.
 - **Disconnect** deletes the file and revokes the token at Twitch. If Twitch doesn't confirm, CrossChat says so, and you can remove it at twitch.tv → Settings → Connections.
 - The sign-in page CrossChat opens is always on `https://www.twitch.tv/`.
 

@@ -2,54 +2,20 @@
 
 Sign-in uses Twitch's device code flow for public apps: CrossChat shows a short code, the streamer enters it at
 twitch.tv/activate, and Twitch hands CrossChat a token. There is no client secret. The tokens are kept in
-twitch.bin, encrypted with Windows' DPAPI for the current Windows user, so the file is useless on another account
-or PC.
+twitch.bin, encrypted with Windows' DPAPI for the current Windows user (on a Mac: under a key in the login Keychain;
+see vault.py), so the file is useless on another account or PC.
 """
-import ctypes
 import json
 import os
 import time
-from ctypes import wintypes
 
 import requests
+
+from vault import protect, unprotect
 
 ID = "https://id.twitch.tv/oauth2"
 API = "https://api.twitch.tv/helix"
 SCOPES = "user:write:chat moderator:manage:banned_users moderator:manage:chat_messages"
-
-
-class _Blob(ctypes.Structure):
-    _fields_ = [("size", wintypes.DWORD), ("data", ctypes.POINTER(ctypes.c_char))]
-
-
-def _blob(data):
-    buffer = ctypes.create_string_buffer(data, len(data))
-    return _Blob(len(data), ctypes.cast(buffer, ctypes.POINTER(ctypes.c_char))), buffer
-
-
-def protect(data):
-    """Encrypt bytes for the current Windows user (DPAPI)."""
-    blob, keep = _blob(data)
-    out = _Blob()
-    if not ctypes.windll.crypt32.CryptProtectData(ctypes.byref(blob), None, None, None, None, 0x1, ctypes.byref(out)):
-        raise OSError("CryptProtectData failed")
-    try:
-        return ctypes.string_at(out.data, out.size)
-    finally:
-        ctypes.windll.kernel32.LocalFree(out.data)
-        del keep
-
-
-def unprotect(data):
-    blob, keep = _blob(data)
-    out = _Blob()
-    if not ctypes.windll.crypt32.CryptUnprotectData(ctypes.byref(blob), None, None, None, None, 0x1, ctypes.byref(out)):
-        raise OSError("CryptUnprotectData failed")
-    try:
-        return ctypes.string_at(out.data, out.size)
-    finally:
-        ctypes.windll.kernel32.LocalFree(out.data)
-        del keep
 
 
 class TwitchError(Exception):

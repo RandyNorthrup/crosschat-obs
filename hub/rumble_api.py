@@ -1,8 +1,8 @@
 """Rumble's official Live Stream API for CrossChat: chat, Rants, subs and the viewer count of the streamer's live.
 
 Rumble gives each streamer a private URL (rumble.com/account/livestream-api) that answers with that data as JSON. The
-URL works like a password, so CrossChat keeps it in rumble.bin, encrypted for the current Windows user (DPAPI), never
-logs it, and never puts it in an error message. Rumble's answer also holds the stream key; only chat, Rants, subs and
+URL works like a password, so CrossChat keeps it in rumble.bin, encrypted for the current Windows user (DPAPI; on a Mac,
+under a key in the login Keychain), never logs it, and never puts it in an error message. Rumble's answer also holds the stream key; only chat, Rants, subs and
 the viewer count are used from it.
 """
 import json

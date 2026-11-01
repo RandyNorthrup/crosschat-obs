@@ -24,13 +24,33 @@ jobs:
       - name: Tests
         run: |
           python -m pip install --require-hashes -r hub/requirements.lock
-          python -m pip install pytest
+          python -m pip install pytest lupa
           python -m pytest -q
           node --test "tests/js/*.test.mjs"
 
-  # The download is built from a fresh checkout by a job that installs nothing, then signed and published.
+  # The Mac download (beta) is tested on a Mac, read-only too.
+  test-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: 22
+      - name: Tests
+        run: |
+          python -m pip install --require-hashes -r hub/requirements.lock
+          python -m pip install pytest lupa
+          python -m pytest -q
+          node --test "tests/js/*.test.mjs"
+
+  # The downloads are built from a fresh checkout by a job that installs nothing, then signed and published.
   release:
-    needs: test
+    needs: [test, test-mac]
     runs-on: windows-latest
     permissions:
       contents: write        # publishes the release
@@ -40,13 +60,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - name: Build the download
+      - name: Build the downloads
         shell: pwsh
-        run: ./scripts/package.ps1
-      - name: Prove where the download was built
+        run: |
+          ./scripts/package.ps1
+          python scripts/package_mac.py
+      - name: Prove where the downloads were built
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6  # v4.2.2
         with:
-          subject-path: dist/CrossChat-*-windows.zip
+          subject-path: |
+            dist/CrossChat-*-windows.zip
+            dist/CrossChat-*-mac.zip
       - name: Release notes from CHANGELOG.md
         shell: pwsh
         run: |
@@ -65,4 +89,5 @@ jobs:
         run: |
           $version = '${{ github.ref_name }}'.TrimStart('v')
           gh release create '${{ github.ref_name }}' "dist/CrossChat-$version-windows.zip" "dist/CrossChat-$version-windows.zip.sha256" `
+            "dist/CrossChat-$version-mac.zip" "dist/CrossChat-$version-mac.zip.sha256" `
             --title "CrossChat $version" --notes-file notes.md --latest

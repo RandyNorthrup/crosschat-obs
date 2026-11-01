@@ -1,4 +1,5 @@
-"""Ask the running CrossChat hub to do something. The OBS script's buttons and hotkeys and the Start-menu shortcuts use this.
+"""Ask the running CrossChat hub to do something. The OBS script's buttons and hotkeys and the Start-menu shortcuts (on a
+Mac, the apps in ~/Applications/CrossChat) use this.
 
   pythonw control.py show        bring up the chat window (starts the hub first if OBS has not)
   pythonw control.py studio      open the Theme Studio in the browser
@@ -29,9 +30,25 @@ def port():
 
 
 def start_hub():
+    if sys.platform == "darwin":
+        return background([])
     pythonw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
     subprocess.Popen([pythonw if os.path.exists(pythonw) else sys.executable, os.path.join(HERE, "hub.py")], cwd=HERE,
                      creationflags=0x08000008, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def background(arguments):
+    """macOS: run hub.py on its own, detached from this short-lived helper."""
+    subprocess.Popen([sys.executable, os.path.join(HERE, "hub.py"), *arguments], cwd=HERE, start_new_session=True,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def show(address):
+    """Open a page or folder the way the system does (os.startfile on Windows, `open` on a Mac)."""
+    if sys.platform == "darwin":
+        subprocess.run(["open", address], check=False)
+    else:
+        os.startfile(address)
 
 
 DEMO_PORT = 4477
@@ -44,15 +61,18 @@ def main(command):
         try:
             urllib.request.urlopen(demo + "version", timeout=2).read()
         except OSError:
-            pythonw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
-            subprocess.Popen([pythonw if os.path.exists(pythonw) else sys.executable, os.path.join(HERE, "hub.py"), "--demo", "--quiet",
-                              "--no-window", "--port", str(DEMO_PORT)], cwd=HERE, creationflags=0x08000008,
-                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if sys.platform == "darwin":
+                background(["--demo", "--quiet", "--no-window", "--port", str(DEMO_PORT)])
+            else:
+                pythonw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
+                subprocess.Popen([pythonw if os.path.exists(pythonw) else sys.executable, os.path.join(HERE, "hub.py"), "--demo", "--quiet",
+                                  "--no-window", "--port", str(DEMO_PORT)], cwd=HERE, creationflags=0x08000008,
+                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             time.sleep(3)
-        os.startfile(demo)
+        show(demo)
         return 0
     if command == "studio":
-        os.startfile(base + "/studio")
+        show(base + "/studio")
         return 0
     if command not in PATHS:
         print(__doc__)
@@ -67,7 +87,7 @@ def main(command):
             start_hub()                         # nothing answered: run the hub without OBS, then ask again
             time.sleep(3)
     if command.startswith("x-"):
-        os.startfile("https://studio.x.com/live")     # no hub: at least show X's page
+        show("https://studio.x.com/live")             # no hub: at least show X's page
     return 1
 
 

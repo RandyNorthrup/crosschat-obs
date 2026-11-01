@@ -6,6 +6,15 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "hub"))
 
 import hub  # noqa: E402
+import vault  # noqa: E402
+
+
+@pytest.fixture(scope="session", autouse=True)
+def keychain():
+    """On a Mac the tests keep their key under a Keychain name of their own, removed at the end (never CrossChat's)."""
+    vault.SERVICE = "CrossChat tests"
+    yield
+    vault.forget_key()
 
 
 @pytest.fixture
