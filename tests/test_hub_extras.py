@@ -2,6 +2,7 @@
 import asyncio
 import json
 import socket
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -140,6 +141,12 @@ class Ran:
         self.stdout, self.returncode = stdout, code
 
 
+def test_tailscale_is_off_on_a_mac_for_now(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "darwin")
+    assert tailscale.address(lambda *a, **k: Ran("100.101.102.103")) == ""             # never asks, never listens there
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Tailscale for the companion is Windows-only for now")
 def test_tailscale_address_only_from_tailscales_own_adapter():
     calls = []
 
