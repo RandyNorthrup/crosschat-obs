@@ -8,7 +8,7 @@ Link: https://github.com/RandyNorthrup/crosschat-obs
 
 **Attach:** `assets/video/overview.mp4` (1920×1080, 48 s).
 
-> Streaming to Twitch, YouTube, Kick and X at once? CrossChat puts every chat in one window, and one reply goes to all of them.
+> Streaming to Twitch, YouTube, Kick, X, TikTok, Facebook or Rumble at once? CrossChat puts every chat in one window, and one reply goes to all of them.
 >
 > Feature questions on stream, alerts, moderation, a phone companion, and X Live that starts with OBS.
 >
@@ -27,7 +27,7 @@ Link: https://github.com/RandyNorthrup/crosschat-obs
 
 > Moderate and answer your whole stream from your phone 📱
 >
-> CrossChat merges Twitch, YouTube, Kick and X chat. Tap a question to put it on stream, send quick replies, time out trolls, from the couch or a second PC.
+> CrossChat merges Twitch, YouTube, Kick, X, TikTok, Facebook and Rumble chat. Tap a question to put it on stream, send quick replies, time out trolls, from the couch or a second PC.
 >
 > Free and open source. Link in bio.
 >
@@ -55,7 +55,7 @@ Link: https://github.com/RandyNorthrup/crosschat-obs
 
 **Attach:** `assets/video/overview.mp4`.
 
-> CrossChat: every stream chat (Twitch, YouTube, Kick, X) in one window for OBS. Reply to all at once, put questions on stream, moderate from your phone. Free and open source.
+> CrossChat: every stream chat (Twitch, YouTube, Kick, X, TikTok, Facebook, Rumble) in one window for OBS. Reply to all at once, put questions on stream, moderate from your phone. Free and open source.
 > github.com/RandyNorthrup/crosschat-obs
 
 ## Reddit (r/obs, r/Twitch, r/streaming)
