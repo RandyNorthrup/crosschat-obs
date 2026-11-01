@@ -121,7 +121,7 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 
 **The extension reads no logins.**
 
-- It has no Chrome permissions at all: no cookies, no tabs, no storage.
+- It has no Chrome permissions at all: no cookies, no tabs, no storage. (Placing and closing CrossChat's own windows needs none either: see **CrossChat's windows** below.)
 - It may only touch these pages:
   - `127.0.0.1:4466`, the CrossChat window;
   - `studio.x.com`, for X Live;
@@ -133,6 +133,13 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 - TikTok has no public chat API. Tools that connect to TikTok LIVE chat directly usually go through an outside "signing" service, which learns which live you're reading (and gets your TikTok session too if you sign in through it to send messages). CrossChat uses no outside service: it reads chat only from your own LIVE page, in your own browser.
 - On YouTube and X it types your reply into the site's own chat box, as the account already signed in there. YouTube moderation goes through YouTube's own message menu.
 - Twitch and Kick replies don't use the extension at all: they go through those platforms' official APIs, from the hub.
+
+**CrossChat's windows.** The extension places, moves and closes the windows CrossChat opens (the chat window, and the platform pages: X Live Studio, your TikTok LIVE page, Live Producer, Instagram and Rumble's chat), through the browser's own window API (`chrome.windows`). That API needs no extension permission, so the extension still asks for none. The hub does this the system's way (Windows' own window functions, AppleScript on a Mac, X11 on Linux) only when the extension isn't there or can't.
+
+- It acts only when the hub asks, and the hub's jobs reach it only through the CrossChat window (the page at `127.0.0.1:4466`, the one page the extension takes jobs from), never by itself and never for a website. Paired devices can't ask for window jobs.
+- It touches a window only while that window is a bare window of the kind CrossChat opens (`--app`: the browser calls it an "app" window) with a single tab, at that window's own address: the chat page for the chat window, the platform's own address (one the extension may read anyway) for a platform page. A platform page must also be the window the hub recorded when it opened it, or else one that wasn't open before the hub opened it, at the exact address the hub opened.
+- Your ordinary browser windows are never moved or closed, even with the CrossChat chat or one of those platform pages open in a tab, and nor is the Theme Studio. The extension can't read the address of any other site's tab at all.
+- A job names only the window's role, the address CrossChat opened, the place, and window ids. The extension answers with window ids only.
 
 **Chat text is never treated as code.**
 

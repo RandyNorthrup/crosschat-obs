@@ -470,14 +470,19 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
   }
 
   // ---- the executor: the chat window on the streaming PC hands jobs to the extension --------------------------------
+  // Replies, moderation, and window jobs: the extension places and closes CrossChat's own windows for the hub.
   const jobs = {};
   let jobN = 0;
   function runJob(job) {
     const n = ++jobN;
-    jobs[n] = { job, timer: setTimeout(() => done(n, null), 25000) };
+    jobs[n] = { job, timer: setTimeout(() => done(n, null), 25000 + (Number(job.wait) || 0) * 1000) };
     if (job.kind === 'mod') {
       window.postMessage({ crosschat: 'mod', n, p: job.p, action: job.action, message_id: job.message_id || '', user_id: job.user_id || '',
                            name: job.name || '', text: job.text || '', seconds: job.seconds || 0, reason: job.reason || '' }, location.origin);
+    } else if (job.kind === 'window') {
+      if (!document.documentElement.dataset.crosschatWindows) { done(n, { ok: false, why: 'the CrossChat extension here is too old for window jobs' }); return; }
+      window.postMessage({ crosschat: 'window', n, action: job.action, role: job.role, url: job.url || '', box: job.box || null,
+                           window: job.window || 0, known: job.known || [], wait: job.wait || 0 }, location.origin);
     } else {
       window.postMessage({ crosschat: 'send', n, to: job.to || [], text: job.text || '', reply: job.reply || null, dry: !!job.dry }, location.origin);
     }
@@ -487,11 +492,11 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     if (!j) return;
     delete jobs[n]; clearTimeout(j.timer);
     const why = 'the CrossChat extension did not answer';
-    if (!answer) answer = j.job.kind === 'mod' ? { ok: false, why } : Object.fromEntries((j.job.to || []).map((p) => [p, { ok: false, why }]));
+    if (!answer) answer = j.job.kind === 'send' ? Object.fromEntries((j.job.to || []).map((p) => [p, { ok: false, why }])) : { ok: false, why };
     api('/outbox/result', { job_id: j.job.id, answer });
   }
   window.addEventListener('message', (e) => {
-    if (e.source !== window || !e.data || (e.data.crosschat !== 'sent' && e.data.crosschat !== 'modded')) return;
+    if (e.source !== window || !e.data || !['sent', 'modded', 'windowed'].includes(e.data.crosschat)) return;
     done(e.data.n, e.data.answer);
   });
 

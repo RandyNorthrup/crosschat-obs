@@ -1,10 +1,10 @@
 """Linux (beta): the few jobs the hub does with Windows' own tools, done the Linux way.
 
-  windows / place / close   X11 (libX11, through ctypes): the browser's windows are found by their class and title,
-                            moved with an ordinary configure request and closed with WM_DELETE_WINDOW, as a window
-                            manager does. On Wayland this reaches the browser only when it runs through XWayland; a
-                            browser running as a Wayland program still opens its windows, CrossChat just can't move or
-                            close them
+  windows / place / close   X11 (libX11, through ctypes), for when the CrossChat extension isn't there to do it (it does
+                            it with the browser's own window API, see extension/windows.js): the browser's windows are
+                            found by their class and title, moved with an ordinary configure request and closed with
+                            WM_DELETE_WINDOW, as a window manager does. On Wayland this reaches the browser only when it
+                            runs through XWayland
   work_area                 the desktop's work area (_NET_WORKAREA: the screen without its panels), else the screen
   message_box               zenity or kdialog, whichever the desktop has
   running                   whether a process (OBS) is still there
@@ -19,6 +19,7 @@ import os
 import shutil
 import subprocess
 import threading
+import time
 
 
 def _config_home():
@@ -281,8 +282,11 @@ def work_area():
         return 0, 0, lib.XDisplayWidth(display, screen), lib.XDisplayHeight(display, screen)
 
 
-async def open_app(app, url, where):
-    """A bare window of the browser on `url` at `where` (x, y, width, height); its handle when CrossChat may manage it."""
+async def open_app(app, url, where, place_it=True, wait=30):
+    """A bare window of the browser on `url` at `where` (x, y, width, height); its handle when CrossChat may manage it.
+    A running browser opens it where it likes (it takes --window-position and --window-size only when it starts with
+    that window): with `place_it` it is then moved to `where`. A browser starting cold took about 10 seconds to show
+    its first window in our tests (GitHub's Ubuntu machines, a new profile), so it is looked for for up to `wait`."""
     before = await asyncio.to_thread(windows, app)
     command = [app, "--app=" + url, "--window-position=%d,%d" % where[:2], "--window-size=%d,%d" % where[2:]]
     try:
@@ -292,14 +296,16 @@ async def open_app(app, url, where):
     threading.Thread(target=started.wait, daemon=True).start()     # collected when it hands over to a running browser
     if before is None:                       # no X display to manage windows on: it opened where the desktop put it
         return None
-    for _ in range(40):
+    deadline = time.monotonic() + wait
+    while time.monotonic() < deadline:
         await asyncio.sleep(0.25)
         now = await asyncio.to_thread(windows, app)
         if now is None:
             return None
         new = [h for h in now if h not in before]
         if new:
-            place(new[0], *where)
+            if place_it:
+                place(new[0], *where)
             return new[0]
     return None
 
