@@ -50,6 +50,8 @@ jobs:
         run: ./installer/build.ps1
       - name: Mac package builds
         run: python scripts/package_mac.py
+      - name: Linux package builds
+        run: python scripts/package_linux.py
 
   # macOS (beta): the same tests on a Mac, the OBS script in LuaJIT, then a real install and uninstall from the download.
   test-mac:
@@ -116,3 +118,123 @@ jobs:
           print("opened:", handle, "| list after:", after.returncode, after.stdout.strip(), after.stderr.strip())
           macos.close(handle)
           EOF
+
+  # Linux (beta): the same tests on Ubuntu, with a real desktop keyring (GNOME Keyring in a D-Bus session of its own),
+  # the OBS script in LuaJIT (lupa), real browser windows on an Xvfb display, then a real install and uninstall from
+  # the download.
+  test-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.14"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: 22
+      - name: System packages (a keyring, an X display, a window manager)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends gnome-keyring libsecret-tools dbus-x11 xvfb openbox
+      - name: Python packages, and LuaJIT (lupa) for the OBS script tests
+        run: |
+          python -m pip install --require-hashes -r hub/requirements.lock
+          python -m pip install pytest ruff lupa
+      - name: Lint (ruff)
+        run: ruff check hub scripts tests
+      - name: Python tests (desktop keyring, OBS script in LuaJIT, hub)
+        run: |
+          dbus-run-session -- bash -eo pipefail <<'EOF'
+          printf ci-keyring | gnome-keyring-daemon --unlock --components=secrets > /dev/null
+          python -m pytest -q -rs
+          EOF
+      - name: Real browser windows under X, without and with a window manager
+        run: |
+          xvfb-run -a -s "-screen 0 1920x1080x24" env CROSSCHAT_WINDOW_TESTS=1 python -m pytest -q -rs tests/test_linux.py -k real_browser
+          xvfb-run -a -s "-screen 0 1920x1080x24" bash -c 'openbox --sm-disable & sleep 2; CROSSCHAT_WINDOW_TESTS=1 python -m pytest -q -rs tests/test_linux.py -k real_browser'
+      - name: JavaScript tests
+        run: node --test "tests/js/*.test.mjs"
+      - name: Install from the Linux download, run the hub, keep a secret, uninstall
+        run: |
+          python scripts/package_linux.py
+          mkdir "$RUNNER_TEMP/download"
+          tar -xzf dist/CrossChat-*-linux.tar.gz -C "$RUNNER_TEMP/download"
+          cd "$RUNNER_TEMP/download"/CrossChat-*-linux
+          test -x scripts/install.sh
+          dbus-run-session -- bash -eo pipefail <<'EOF'
+          printf ci-keyring | gnome-keyring-daemon --unlock --components=secrets > /dev/null
+          bash scripts/install.sh --quiet
+          app="$HOME/.local/share/CrossChat"
+          "$app/.venv/bin/python3" -c "import requests, websockets; print('packages ok')"
+          test -f "$app/config.json" && test -f "$app/hub/linux.py" && test "$(stat -c %a "$app")" = 700
+          ls "$HOME/.local/share/applications"/crosschat-*.desktop
+          "$app/.venv/bin/python3" "$app/hub/hub.py" --demo --port 4477 --no-window --quiet &
+          hub=$!
+          for i in $(seq 30); do curl -fs http://127.0.0.1:4477/version && break; sleep 1; done
+          curl -fs http://127.0.0.1:4477/version
+          kill "$hub"
+          "$app/.venv/bin/python3" - "$app/hub" <<'PY'
+          import sys
+          sys.path.insert(0, sys.argv[1])
+          import vault
+          sealed = vault.protect(b"a made-up secret")
+          assert b"made-up" not in sealed and vault.unprotect(sealed) == b"a made-up secret" and len(vault._read_key()) == 64
+          print("secret kept under a key in the keyring")
+          PY
+          bash "$app/scripts/uninstall.sh" --quiet
+          test ! -e "$app" && test -f "$HOME/Documents/CrossChat backup/config.json"
+          test -z "$(ls "$HOME/.local/share/applications"/crosschat-*.desktop 2> /dev/null)"
+          test -z "$(secret-tool lookup service CrossChat account 'file key')"
+          echo 'uninstalled: folder, app menu entries and the keyring key are gone'
+          EOF
+
+  # Linux (beta) with a real OBS, on an Xvfb display: OBS from the OBS Project's PPA (it has Browser Source) and OBS from
+  # Flathub (the CrossChat script runs the hub outside its sandbox). scripts/obs_e2e.py: the script starts the hub, the
+  # widgets load in OBS's browser, a stream to an RTMP receiver here, OBS's WebSocket port free once OBS closes, and a
+  # second start.
+  obs-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        obs: [ppa, flatpak]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: OBS from the OBS Project's PPA, ffmpeg, Xvfb
+        if: matrix.obs == 'ppa'
+        run: |
+          sudo add-apt-repository -y ppa:obsproject/obs-studio
+          sudo apt-get install -y -q obs-studio ffmpeg xvfb
+          obs --version
+      - name: OBS from Flathub, ffmpeg, Xvfb
+        if: matrix.obs == 'flatpak'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q flatpak ffmpeg xvfb
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub com.obsproject.Studio
+          flatpak info com.obsproject.Studio
+      - name: CrossChat's own Python environment, as the installer makes it
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --require-hashes -r hub/requirements.lock
+      - name: Real OBS, end to end
+        env:
+          WHICH: ${{ matrix.obs }}
+        run: |
+          export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-$RUNNER_TEMP/runtime}"
+          mkdir -p -m 700 "$XDG_RUNTIME_DIR"
+          if [ "$WHICH" = flatpak ]; then set -- --obs flatpak; fi
+          dbus-run-session -- xvfb-run -a -s "-screen 0 1920x1080x24" .venv/bin/python scripts/obs_e2e.py "$@"
