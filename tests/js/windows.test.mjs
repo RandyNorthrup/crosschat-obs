@@ -186,6 +186,13 @@ test('a recorded window is closed only while it is still that page in a window o
   assert.deepEqual(b.did, [['remove', 9]]);
 });
 
+test('finding a page the hub just opened remembers it and moves nothing', async () => {
+  const b = browser([{ id: 3, type: 'app', tabs: [tab(30, TIKTOK)] }, { id: 9, type: 'app', tabs: [tab(90, TIKTOK)] }]);
+  assert.deepEqual(await W.job({ action: 'find', role: 'tiktok', url: TIKTOK, known: [3], wait: 30 }, null, b, now), { ok: true, window: 9 });
+  assert.deepEqual(b.did, []);
+  assert.equal((await W.job({ action: 'find', role: 'chat' }, null, b, now)).ok, false);   // (the chat window isn't found this way)
+});
+
 test('without a recorded window, closing takes the window at the exact address the hub opened', async () => {
   const b = browser([
     { id: 9, type: 'app', tabs: [tab(90, 'https://rumble.com/chat/popup/42')] },

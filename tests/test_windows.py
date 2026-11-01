@@ -1,6 +1,7 @@
-"""CrossChat's windows (the chat window and the platform pages): the hub hands placing, moving and closing them to the
-extension through the chat window that has it (window jobs in the outbox), and does it the system's way only when no
-such window is connected or the extension can't. extension/windows.js has the extension's side (tests/js/windows.test.mjs);
+"""CrossChat's windows (the chat window and the platform pages): the hub hands closing them to the extension through
+the chat window that has it (window jobs in the outbox), and placing and moving them too on a Mac and on Linux; on
+Windows the system's own way places a window it can see. The system's way does the rest when no such window is
+connected or the extension can't. extension/windows.js has the extension's side (tests/js/windows.test.mjs);
 scripts/window_e2e.py runs the whole thing with a real browser."""
 import asyncio
 
@@ -61,8 +62,17 @@ def jobs(seen):
     return [(j["action"], j["role"]) for j in seen]
 
 
+def on_mac_or_linux(monkeypatch, sees=None):
+    """The hub as on a Mac or Linux, where the extension places the windows: here Linux, whose system's way finds the
+    browser windows `sees` (None: it can't see them, as on Wayland)."""
+    monkeypatch.setattr(hub, "LINUX", True)
+    monkeypatch.setattr(hub, "linux", type("Linux", (), {"windows": staticmethod(lambda app, prefix=None: sees)}), raising=False)
+
+
 # ---- the chat window ---------------------------------------------------------------------------------------------
-def test_the_extension_moves_the_open_chat_window(system):
+def test_on_a_mac_or_linux_the_extension_moves_the_open_chat_window(system, monkeypatch):
+    on_mac_or_linux(monkeypatch, sees=[7])
+
     async def test():
         seen = extension(lambda job: {"ok": True, "window": 7})
         await hub.show_window()
@@ -72,8 +82,8 @@ def test_the_extension_moves_the_open_chat_window(system):
     assert system == []                                                # the system's way wasn't needed
 
 
-def test_when_the_extension_cannot_move_it_the_system_does(system, monkeypatch):
-    monkeypatch.setattr(hub, "browser_windows", lambda prefix=None: [7])
+def test_on_a_mac_or_linux_when_the_extension_cannot_move_it_the_system_does(system, monkeypatch):
+    on_mac_or_linux(monkeypatch, sees=[7])
 
     async def test():
         seen = extension(lambda job: {"ok": False, "why": "Invalid value for bounds."})
@@ -83,11 +93,32 @@ def test_when_the_extension_cannot_move_it_the_system_does(system, monkeypatch):
     assert system == [("place", 7, (10, 20, 400, 600))]
 
 
+def test_on_windows_the_system_places_a_chat_window_it_can_see(system, monkeypatch):
+    """Windows' own way puts the visible edges exactly on the place; the browser's bounds include Windows' invisible
+    resize borders (7 px at the left, right and bottom, measured on GitHub's Windows machines)."""
+    monkeypatch.setattr(hub, "browser_windows", lambda prefix=None: system.append(("find", prefix)) or [7])
+
+    async def test():
+        seen = extension(lambda job: {"ok": True})
+        await hub.show_window()
+        return seen
+    assert run(test()) == []                                           # the extension wasn't asked
+    assert system == [("find", hub.TITLE), ("place", 7, (10, 20, 400, 600))]
+
+
+def test_on_windows_the_extension_moves_a_chat_window_the_system_cannot_see(system):
+    async def test():
+        seen = extension(lambda job: {"ok": True, "window": 7})
+        await hub.show_window()
+        return seen
+    assert jobs(run(test())) == [("place", "chat")]
+    assert system == [("find", hub.TITLE)]
+
+
 def test_when_the_extensions_browser_has_no_chat_window_one_opens(system, no_windows, monkeypatch):
     """The extension sees every window of its browser, so its "none" is believed: a chat window opens even where the
     system can't see the browser's windows (Wayland) and a chat page in a tab is connected."""
-    monkeypatch.setattr(hub, "LINUX", True)
-    monkeypatch.setattr(hub, "linux", type("NoX", (), {"windows": staticmethod(lambda app, prefix=None: None)}), raising=False)
+    on_mac_or_linux(monkeypatch, sees=None)
     hub.roles["speaker"].append(object())                              # the chat, open in a tab
 
     async def test():
@@ -97,7 +128,7 @@ def test_when_the_extensions_browser_has_no_chat_window_one_opens(system, no_win
     assert no_windows == ["http://127.0.0.1:%d/" % hub.PORT] and system == []
 
 
-def test_without_the_extension_the_chat_window_opens_and_is_placed_the_system_way(system, no_windows):
+def test_without_the_extension_the_chat_window_opens_the_system_way(system, no_windows):
     run(hub.show_window())
     assert system == [("find", hub.TITLE)] and no_windows == ["http://127.0.0.1:%d/" % hub.PORT]
     assert hub.state["chat_opened"][0] == (10, 20, 400, 600)
@@ -105,8 +136,8 @@ def test_without_the_extension_the_chat_window_opens_and_is_placed_the_system_wa
 
 def test_a_chat_window_crosschat_just_opened_is_placed_by_the_extension_once_it_connects(system, monkeypatch):
     """A running browser opens a new window where it likes (it takes --window-position only when it starts with it):
-    the chat window CrossChat opened is put in its place as soon as it connects with the extension, through the real
-    /events route."""
+    the chat window CrossChat opened, and the system's way didn't place, is put in its place as soon as it connects
+    with the extension, through the real /events route."""
     async def test(port):
         await hub.show_window()                                       # nothing open: one opens (no extension yet)
         status, _, payload = await http(port, "GET", "/events?executor=1", read=1 << 20)
@@ -116,6 +147,21 @@ def test_a_chat_window_crosschat_just_opened_is_placed_by_the_extension_once_it_
     job = outbox[0]["job"]
     assert (job["kind"], job["action"], job["role"], job["box"]) == ("window", "place", "chat", [10, 20, 400, 600])
     assert "chat_opened" not in hub.state                             # once: a reload of that window isn't moved again
+
+
+def test_on_windows_a_chat_window_the_system_placed_is_not_placed_again(system, monkeypatch):
+    async def open_app(url, where, role=None):
+        return 55                                                      # the system found and placed it
+
+    monkeypatch.setattr(hub, "open_app", open_app)
+
+    async def test():
+        seen = extension(lambda job: {"ok": False, "why": "no chat window is open", "none": True})
+        await hub.show_window()
+        await hub.chat_connected()
+        return seen
+    assert jobs(run(test())) == [("place", "chat")]                    # only the first question, before it opened
+    assert "chat_opened" not in hub.state
 
 
 def test_a_window_opened_long_ago_is_not_moved_when_it_connects(system, monkeypatch):
@@ -129,8 +175,9 @@ def test_a_window_opened_long_ago_is_not_moved_when_it_connects(system, monkeypa
 
 
 # ---- the platform pages ------------------------------------------------------------------------------------------
-def test_a_page_is_found_and_placed_by_the_extension(system, monkeypatch):
+def test_on_a_mac_or_linux_a_page_is_found_and_placed_by_the_extension(system, monkeypatch):
     monkeypatch.setattr(hub, "open_app", REAL_OPEN_APP)
+    on_mac_or_linux(monkeypatch)
 
     def answer(job):
         return {"ok": True, "windows": [1, 2]} if job["action"] == "list" else {"ok": True, "window": 9}
@@ -147,8 +194,45 @@ def test_a_page_is_found_and_placed_by_the_extension(system, monkeypatch):
     assert hub.pages["tiktok"] == {"url": TIKTOK, "id": 9, "handle": 55}
 
 
-def test_a_page_the_extension_did_not_find_is_placed_the_system_way(system, monkeypatch):
+def test_on_windows_a_page_is_placed_the_system_way_and_found_by_the_extension(system, monkeypatch):
     monkeypatch.setattr(hub, "open_app", REAL_OPEN_APP)
+
+    def answer(job):
+        return {"ok": True, "windows": [1, 2]} if job["action"] == "list" else {"ok": True, "window": 9}
+
+    async def test():
+        seen = extension(answer)
+        await hub.open_page("tiktok", TIKTOK, (5, 6, 300, 200))
+        return seen
+    seen = run(test())
+    assert jobs(seen) == [("list", ""), ("find", "tiktok")] and seen[1]["known"] == [1, 2] and seen[1]["box"] is None
+    assert system == [("open", TIKTOK, (5, 6, 300, 200), True)]        # launched, found and placed the system's way
+    assert hub.pages["tiktok"] == {"url": TIKTOK, "id": 9, "handle": 55}   # (the extension's id: it closes it later)
+
+
+def test_on_windows_a_page_the_system_cannot_see_is_placed_by_the_extension(system, monkeypatch):
+    monkeypatch.setattr(hub, "open_app", REAL_OPEN_APP)
+
+    async def os_open(exe, url, where, place_it):
+        return None
+
+    monkeypatch.setattr(hub, "os_open", os_open)
+
+    def answer(job):
+        return {"ok": True, "windows": []} if job["action"] == "list" else {"ok": True, "window": 9}
+
+    async def test():
+        seen = extension(answer)
+        await hub.open_page("tiktok", TIKTOK, (5, 6, 300, 200))
+        return seen
+    seen = run(test())
+    assert jobs(seen) == [("list", ""), ("find", "tiktok"), ("place", "tiktok")] and seen[2]["window"] == 9
+    assert hub.pages["tiktok"] == {"url": TIKTOK, "id": 9, "handle": None}
+
+
+def test_on_a_mac_or_linux_a_page_the_extension_did_not_find_is_placed_the_system_way(system, monkeypatch):
+    monkeypatch.setattr(hub, "open_app", REAL_OPEN_APP)
+    on_mac_or_linux(monkeypatch)
 
     def answer(job):
         return {"ok": True, "windows": []} if job["action"] == "list" else {"ok": False, "why": "the window is not open"}
@@ -164,6 +248,7 @@ def test_a_page_the_extension_did_not_find_is_placed_the_system_way(system, monk
 def test_once_the_extension_placed_a_page_the_system_gets_only_a_moment_to_find_it(system, monkeypatch):
     """Where the system can't see the browser's windows, its search would hold up the next window for 30 s."""
     monkeypatch.setattr(hub, "open_app", REAL_OPEN_APP)
+    on_mac_or_linux(monkeypatch)
     monkeypatch.setattr(hub, "HANDLE_WAIT", 0.2)
 
     async def os_open(exe, url, where, place_it):

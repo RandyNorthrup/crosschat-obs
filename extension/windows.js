@@ -115,7 +115,7 @@
     }
   }
 
-  // One job from the hub: { action: "list" | "place" | "close", role, url, box, window, known, wait }. `tab` is the
+  // One job from the hub: { action: "list" | "place" | "find" | "close", role, url, box, window, known, wait }. `tab` is the
   // chat page's tab that passed it on; `windows` is chrome.windows. Answers { ok, window } or { ok: false, why }.
   async function job(data, tab, windows, sleep = pause) {
     const action = String(data.action || ''), role = String(data.role || '');
@@ -130,6 +130,10 @@
         if (!win) return { ok: false, why: 'the window is not open' };
         await put(windows, win, where, sleep);
         return { ok: true, window: win.id };
+      }
+      if (action === 'find' && role !== 'chat') {      // a page the hub just opened, found (and remembered) but not moved
+        const win = await pageWindow(data, role, windows, sleep, true);
+        return win ? { ok: true, window: win.id } : { ok: false, why: 'the window is not open' };
       }
       if (action === 'close') {
         if (role === 'chat') {

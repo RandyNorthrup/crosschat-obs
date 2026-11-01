@@ -863,14 +863,22 @@ def browser_exe():
 # CrossChat's windows are the chat window and the platform pages it works through (PAGES: X Live Studio, your TikTok
 # LIVE page, Live Producer, Instagram, Rumble's chat), opened in the everyday browser with --app. With the CrossChat
 # extension in that browser (a chat window with it is connected: the "executor"), the extension places, moves and
-# closes them with the browser's own window API (extension/windows.js): the same on Windows, macOS and Linux, with no
-# permission from the system. macOS refuses Apple Events to programs OBS starts, and Wayland lets no program move
-# another's windows, so there that is the only way that works. Without the extension, or when it doesn't answer, the
-# system's own way (above, and macos.py or linux.py) is used instead.
+# closes them with the browser's own window API (extension/windows.js), with no permission from the system: macOS
+# refuses Apple Events to programs OBS starts, and Wayland lets no program move another's windows, so on a Mac and on
+# Linux it does the placing. On Windows the system's own way places a window it can see: it puts the window's visible
+# edges exactly on the place, in Windows' own pixels, while the browser's bounds include Windows' invisible resize
+# borders (the visible window was 7 px in from them at the left, right and bottom, on GitHub's Windows machines) and
+# are in the browser's own units. Closing is the extension's everywhere (it never closes an ordinary browser window of
+# yours, even one showing the chat in a tab). Without the extension, or when it can't, the system's way does it all.
 PAGES = ("x", "tiktok", "facebook", "instagram", "rumble")
 WINDOW_WAIT = 30                             # seconds a new window may take to show up (a browser starting cold took 10 s in our tests)
 HANDLE_WAIT = 5                              # once the extension has placed a window: seconds the system may take to find it too
 pages = {}                                   # role -> {"url": address opened, "id": the browser's id for the window, "handle": the system's}
+
+
+def system_places():
+    """Whether the system's own way places a window it can see before the extension is asked (Windows)."""
+    return not (MAC or LINUX)
 
 
 def opening():
@@ -884,9 +892,9 @@ def opening():
 
 async def by_extension(action, role, url="", where=None, window=None, known=None, wait=0):
     """A window job for the CrossChat extension, through the chat window that has it: "list" (the ids of the browser's
-    windows), "place" or "close" one of CrossChat's windows. Its answer, {"ok": True, ...} when it did the job; ok is
-    False when no chat window with the extension is connected, the extension is too old for window jobs, or it couldn't
-    (then the system's way is next)."""
+    windows), "place", "find" (a page just opened, not moved) or "close" one of CrossChat's windows. Its answer,
+    {"ok": True, ...} when it did the job; ok is False when no chat window with the extension is connected, the
+    extension is too old for window jobs, or it couldn't (then the system's way is next)."""
     if state["executor"] is None:
         return {"ok": False, "why": NO_EXECUTOR}
     job = {"id": secrets.token_hex(8), "kind": "window", "action": action, "role": role, "url": url,
@@ -905,9 +913,9 @@ async def by_extension(action, role, url="", where=None, window=None, known=None
 async def open_app(url, where, role=None):
     """Open a bare window of the everyday browser on `url` and put it at `where` (x, y, width, height), without taking the
     keyboard. A browser that is already running opens it where it likes (it takes --window-position and --window-size
-    only when it starts with that window), so the window is moved once it is there: for a platform page (`role`) by the
-    extension when a chat window with it is connected, else the system's way. Returns the system's handle for the window
-    (or None), for closing it the system's way."""
+    only when it starts with that window), so the window is moved once it is there. A platform page (`role`) is found
+    by the extension too, when a chat window with it is connected, so the extension can close it later. Returns the
+    system's handle for the window (or None), for closing it the system's way."""
     exe = browser_exe()
     if not exe:
         warn("CrossChat could not find Chrome or Edge. Set \"browser\" in config.json to the full path of your browser.")
@@ -917,7 +925,13 @@ async def open_app(url, where, role=None):
         found = {}
         if not known["ok"]:
             handle = await os_open(exe, url, where, True)
-        else:                                    # the extension finds the new window by its address, the system by its handle
+        elif system_places():                    # Windows: the system places it; the extension finds it (to close it)
+            native = asyncio.ensure_future(os_open(exe, url, where, True))
+            found = await by_extension("find", role, url=url, known=known.get("windows"), wait=WINDOW_WAIT)
+            handle = await native
+            if not handle and found["ok"]:       # (the system didn't see it: the extension places it)
+                await by_extension("place", role, url=url, where=where, window=found["window"])
+        else:                                    # macOS, Linux: the extension finds and places it; the system finds its handle
             native = asyncio.ensure_future(os_open(exe, url, where, False))
             found = await by_extension("place", role, url=url, where=where, known=known.get("windows"), wait=WINDOW_WAIT)
             if found["ok"]:                      # placed: the system's handle (to close it without the extension) if it's there soon
@@ -959,29 +973,40 @@ async def os_open(exe, url, where, place_it):
 async def show_window():
     """Open the chat window, or put the open one back in its place."""
     where = box(CFG["window"], "chat")
-    moved = await by_extension("place", "chat", where=where)  # with the extension, the chat window is moved by it
+    if system_places():                          # Windows: its own way, when it sees the chat window
+        found = browser_windows(TITLE)
+        if found:
+            place(found[0], *where)
+            return
+    moved = await by_extension("place", "chat", where=where)
     if moved["ok"]:
         return
-    if moved.get("none"):                        # the extension sees every window of its browser: no chat window there
+    if moved.get("none") or system_places():    # (the extension sees every window of its browser: no chat window there)
         found = []
     elif LINUX:
         found = await asyncio.to_thread(linux.windows, browser_exe(), TITLE)
         if found is None and roles["speaker"]:   # open already, where X can't see it (a Wayland browser): not a second one
             return
     else:
-        found = await asyncio.to_thread(browser_windows, TITLE) if MAC else browser_windows(TITLE)     # (a Mac asks the browser)
+        found = await asyncio.to_thread(browser_windows, TITLE)     # (a Mac asks the browser)
     if found:
         place(found[0], *where)
-    else:
-        state["chat_opened"] = (where, time.time())    # the extension puts it in its place once it's up (chat_connected)
-        await open_app("http://127.0.0.1:%d/" % PORT, where)
+        return
+    state["chat_opened"] = (where, time.time())  # the extension puts it in its place once it's up (chat_connected)
+    if await open_app("http://127.0.0.1:%d/" % PORT, where) and system_places():
+        state.pop("chat_opened", None)           # (Windows: placed already, the system's way)
 
 
 async def chat_connected():
-    """A chat window with the extension has connected. If CrossChat has just opened it, the extension puts it in its
-    place (a running browser opens a new window where it likes)."""
-    opened = state.pop("chat_opened", None)
-    if opened and time.time() - opened[1] < 2 * WINDOW_WAIT:
+    """A chat window with the extension has connected. If CrossChat has just opened it and the system's way didn't
+    place it, the extension puts it in its place (a running browser opens a new window where it likes)."""
+    opened = state.get("chat_opened")
+    if not opened or time.time() - opened[1] >= 2 * WINDOW_WAIT:
+        return
+    async with opening():                        # (the system's way may be finding it this moment)
+        pass
+    await asyncio.sleep(0)
+    if state.pop("chat_opened", None):
         await by_extension("place", "chat", where=opened[0])
 
 
