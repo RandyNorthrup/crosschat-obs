@@ -10,6 +10,8 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 - **Mac:** the chat window's notice said "Start menu → CrossChat → Open chat"; on a Mac it now names Applications → CrossChat in the home folder. The Paired-devices hint about Windows' network question no longer shows on a Mac, and the Theme Studio's look button says "follows this device", not "follows Windows".
 - The chat window styled a first-time chatter's **1ST** flag and line like the Settings "Set up your channels" note (a padded, bordered box), so the flag stood out of the line as a large pill and stretched the **Q** flag beside it. Seen in OBS's dock on a Mac; the same on Windows.
 - **Mac:** the README and the installer say where the Applications → CrossChat folder is (the Applications folder in your home folder, not Finder's main one), and that `Install.command` has to be started from Terminal: macOS 15 refuses to open it with a double-click, because the download isn't signed by Apple.
+- **Kick chat stopped arriving.** Kick changed the key of its public chat feed, and Kick's server refused the one CrossChat had built in ("App key ... not in this cluster"), so Kick chat kept reconnecting and showed nothing. CrossChat now asks Kick for the current key the way Kick's own web chat does (signed out, with a random id), and falls back to the new one. When Kick's feed refuses a connection, the log says why.
+- **YouTube moderation clicked the wrong button.** YouTube now shows a top fan's "#1" rank inside the chat line, before the message's own menu, and CrossChat clicked that rank (opening the Top fans list) instead of the menu, so remove, timeout and hide user all failed with "YouTube did not offer that here". The extension now opens only the message's "Chat actions" menu. Reload the extension in `chrome://extensions` after updating.
 
 ### Changed
 
@@ -17,6 +19,10 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 - The real-OBS check (`scripts/obs_e2e.py`) runs on a Mac too, with the installed OBS.app and a stand-in home folder, so your own OBS settings are never touched. It also checks that OBS's own browser shows the four widgets and the docked chat (with test chat in it), and that OBS's WebSocket port is free once OBS closes. `--crosschat` tests an installed copy, `--ffmpeg` names the RTMP receiver, and the logs are kept when something fails.
 - The hub's start line in `crosschat.log` names the Python running it.
 - The README says what to do when the CrossChat dock in OBS says "Couldn't load that page!" (OBS opened it before CrossChat was ready: press "Click here to retry"), and that OBS on a Mac needs the Input Monitoring permission for hotkeys while another app is in front.
+- README's Known limits say what moderation was checked live on 31 October 2026, with a second account in the chat:
+  - Twitch delete, timeout, ban and unban work, from the CrossChat window in Chrome; timeout and unban also from the CrossChat dock inside OBS.
+  - YouTube remove, 5-minute timeout and hide user were tried in an unlisted live and all failed in 1.7.1 (the YouTube fix above). The fix is checked against YouTube's current chat markup but hasn't been re-run on a live.
+  - Kick, Rumble and Facebook moderation of a viewer still haven't been seen working: the test accounts couldn't be made or used.
 
 ## [1.7.2] - 2026-11-01
 
