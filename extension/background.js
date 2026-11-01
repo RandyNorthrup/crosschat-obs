@@ -72,10 +72,13 @@ async function post(data, tab) {
   return out;
 }
 
-// Moderation that has to go through the platform's own page. Only YouTube: the hub moderates Twitch and Kick itself
-// through their APIs, and X offers nothing CrossChat can do.
+// Moderation that has to go through the platform's own page: YouTube, and deleting Facebook comments in Live Producer.
+// The hub moderates Twitch and Kick itself through their APIs, and X offers nothing CrossChat can do.
 async function moderate(data, tab) {
-  if (data.p !== 'youtube') return { ok: false, why: 'only YouTube moderation goes through the extension' };
+  if (data.p === 'facebook') {
+    return ask(chrome.tabs.query({ url: PRODUCER + '*' }), { type: 'fb-mod', action: data.action, message_id: data.message_id }, 'Facebook Live Producer is not open');
+  }
+  if (data.p !== 'youtube') return { ok: false, why: 'only YouTube and Facebook moderation go through the extension' };
   const { youtube_video: video } = await hub('/targets');
   if (!video) return { ok: false, why: 'the stream is not live on YouTube' };
   const tabs = chrome.tabs.query({ url: 'https://www.youtube.com/live_chat*' }).then((found) => (tab ? [tab, ...found] : found));

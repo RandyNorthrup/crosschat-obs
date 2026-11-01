@@ -17,6 +17,7 @@ Settings are in config.json in the folder above this one (see config.example.jso
 """
 import asyncio
 import collections
+import concurrent.futures
 import ctypes
 import base64
 import datetime
@@ -41,6 +42,8 @@ from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed, InvalidHandshake
 
 import emotes as emote_sources
+import settings_ui
+import viewers as viewer_cards
 from chatlog import ChatLog
 from devices import Devices, device_name
 from kick_api import Kick, KickError
@@ -109,6 +112,7 @@ DEFAULTS = {
 
 ARGV, CFG, X = [], {}, {}
 HOME = APP                                   # your folder: config.json, crosschat.log and themes/ (the one config.json is in)
+CONFIG_PATH = os.path.join(APP, "config.json")   # the config.json in use (Settings → Channels & options writes it)
 TEST, PORT = False, DEFAULTS["port"]
 DEMO = False                                 # --demo: a made-up live stream, for trying CrossChat without going live
 TWITCH = YOUTUBE = KICK = TIKTOK = ""
@@ -147,11 +151,11 @@ def channel(value, platform):
 
 def configure(argv):
     """Settings: the defaults, then config.json (or --config PATH, or the file CROSSCHAT_CONFIG names), then the command line."""
-    global ARGV, CFG, X, HOME, TEST, DEMO, PORT, TWITCH, YOUTUBE, KICK, KICK_ROOM, TIKTOK, FACEBOOK
+    global ARGV, CFG, X, HOME, CONFIG_PATH, TEST, DEMO, PORT, TWITCH, YOUTUBE, KICK, KICK_ROOM, TIKTOK, FACEBOOK
     ARGV = list(argv)
     DEMO = "--demo" in ARGV
     path = os.path.abspath(arg("--config", os.environ.get("CROSSCHAT_CONFIG") or os.path.join(APP, "config.json")))
-    HOME = os.path.dirname(path)
+    HOME, CONFIG_PATH = os.path.dirname(path), path
     try:
         with open(path, encoding="utf-8-sig") as f:
             mine = json.load(f)
@@ -1989,7 +1993,7 @@ def pair_device(code, headers):
     return token
 
 
-REMOTE_GET = ("/", "/events", "/whoami", "/version")
+REMOTE_GET = ("/", "/events", "/whoami", "/version", "/viewer")
 REMOTE_POST = ("/send", "/mod", "/feature", "/star", "/quick", "/test", "/tts/say", "/tts/skip")
 
 
@@ -2170,6 +2174,7 @@ def remote_refused(method, headers, path, device):
 HEAD_LIMIT, HEAD_LINES, HEAD_SECONDS = 16 * 1024, 100, 10   # a request's first line and headers
 REMOTE_CONNECTIONS = 64                      # at once on the companion port: more are turned away
 remote_open = 0
+VIEWER_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="viewer")   # viewer cards, one at a time
 
 
 async def read_head(reader):
@@ -2252,6 +2257,18 @@ async def serve(reader, writer, remote=False):
                 types = {"json": TYPES[".json"], "csv": "text/csv; charset=utf-8", "html": TYPES[".html"]}
                 extra = "" if kind == "json" else 'Content-Disposition: attachment; filename="crosschat-%s.%s"\r\n' % (name, kind)
                 await reply(writer, "200 OK", types[kind], body, extra)
+        elif url.path == "/config/editable" and not remote:     # Settings → Channels & options (no tokens or secrets)
+            await reply(writer, "200 OK", TYPES[".json"], json.dumps(settings_ui.editable(CFG)).encode())
+        elif url.path == "/viewer":                    # a viewer card: this PC and paired devices
+            first = lambda k: (query.get(k) or [""])[0]
+            history = LOG and not DEMO                  # the demo never shows your real chat history
+            args = (first("p"), first("name"), first("uid"), first("q"), list(messages), LOG.folder if history else None,
+                    LOG.name if history and LOG.file else None, NAMES)
+            try:                                        # one at a time: each reads up to a fixed amount of history
+                card = await asyncio.get_running_loop().run_in_executor(VIEWER_POOL, viewer_cards.lookup, *args)
+                await reply(writer, "200 OK", TYPES[".json"], json.dumps(card, ensure_ascii=False).encode())
+            except viewer_cards.ViewerError as error:
+                await reply(writer, "400 Bad Request", TYPES[".json"], json.dumps({"ok": False, "why": str(error)}).encode())
         elif url.path == "/kick/callback":            # Kick sends the browser back here after the streamer signs in
             code, got_state = (query.get("code") or [""])[0], (query.get("state") or [""])[0]
             try:
@@ -2424,6 +2441,13 @@ async def serve_post(reader, writer, headers, path, remote=False):
         result = {"ok": False, "why": "The demo never touches your real accounts or devices."}
     elif path == "/pair/start" and DEMO:
         result = {"ok": False, "why": "Pairing is switched off in the demo."}
+    elif path == "/config" and DEMO:
+        result = {"ok": False, "why": "The demo doesn't change your settings."}
+    elif path == "/config" and not remote:              # Settings → Channels & options: checked, saved, applied
+        result, changes = settings_ui.save(CONFIG_PATH, body, CFG, channel, PORT)
+        if changes:
+            settings_ui.apply_live(sys.modules[__name__], changes)
+            send({"type": "config", **settings_ui.editable(CFG)}, only=local_clients)
     elif path == "/pair/start" and not remote:
         code, expires = DEV.start_pairing()
         await remote_on()

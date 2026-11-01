@@ -270,9 +270,90 @@
       && words.every((w) => [m.name, m.handle, m.system, m.text].join(' ').toLowerCase().includes(w)));
   }
 
+  // ---- Settings → Channels & options: the parts of config.json the hub lets this window change -----------------------
+  // Each field: where it lives in config.json, how it is shown, and one line on what it does. The hub checks every value
+  // again (POST /config) and says which changes need OBS restarted.
+  const CONFIG_FIELDS = [
+    { key: 'twitch', group: 'Channels', label: 'Twitch channel', type: 'text', max: 200, placeholder: 'twitch.tv/yourname', hint: 'Your channel name or link. CrossChat reads its chat.' },
+    { key: 'youtube', group: 'Channels', label: 'YouTube channel', type: 'text', max: 200, placeholder: '@yourhandle', hint: 'Your @handle or channel link. Chat shows up once you are live.' },
+    { key: 'kick', group: 'Channels', label: 'Kick channel', type: 'text', max: 200, placeholder: 'kick.com/yourname', hint: 'Your channel name or link. CrossChat reads its chat.' },
+    { key: 'tiktok', group: 'Channels', label: 'TikTok @name', type: 'text', max: 200, placeholder: '@yourname', hint: 'Your TikTok LIVE page opens in your browser when you go live, and its chat is read there.' },
+    { key: 'facebook', group: 'Channels', label: 'Facebook Live', type: 'bool', hint: 'Reads comments from Live Producer, which opens in your browser when you go live.' },
+    { key: 'x.enabled', group: 'X', label: 'X livestreams', type: 'bool', hint: 'Reads and answers the chat of your livestream on X.' },
+    { key: 'x.auto_go_live', group: 'X', label: 'Go live on X by itself', type: 'bool', hint: 'Starts the X livestream a few seconds after OBS starts streaming.' },
+    { key: 'x.title', group: 'X', label: 'Livestream title', type: 'text', max: 120, placeholder: 'Live now', hint: 'The title X shows, unless a title file is set.' },
+    { key: 'x.title_file', group: 'X', label: 'Title file', type: 'text', max: 260, placeholder: 'C:\\stream\\title.txt', hint: 'A text file whose first line becomes the title. Leave empty to use the title above.' },
+    { key: 'x.source', group: 'X', label: 'Source name on X', type: 'text', max: 40, placeholder: 'OBS', hint: 'The video source X Live Studio should pick: the name it shows for OBS.' },
+    { key: 'open_window_on_stream_start', group: 'Window', label: 'Open this window when the stream starts', type: 'bool', hint: 'Chat is in front of you the moment OBS goes live.' },
+    { key: 'close_window_seconds_after_stream', group: 'Window', label: 'Close the windows after the stream (seconds)', type: 'int', min: 0, max: 3600, hint: 'How long the chat window and live pages stay open once OBS stops streaming.' },
+    { key: 'window', group: 'Window', label: 'Window position', type: 'select', options: [['auto', 'Right edge of the main screen'], ['custom', 'Where config.json says']], hint: 'Where this window opens. Keep it somewhere OBS doesn’t capture.' },
+    { key: 'emotes.7tv', group: 'Emotes', label: '7TV emotes', type: 'bool', hint: 'Shows 7TV emote pictures here and on stream.' },
+    { key: 'emotes.bttv', group: 'Emotes', label: 'BetterTTV emotes', type: 'bool', hint: 'Shows BetterTTV emote pictures here and on stream.' },
+    { key: 'emotes.ffz', group: 'Emotes', label: 'FrankerFaceZ emotes', type: 'bool', hint: 'Shows FrankerFaceZ emote pictures here and on stream.' },
+    { key: 'logs.enabled', group: 'Chat history', label: 'Save chat history', type: 'bool', hint: 'Keeps every stream’s chat on this PC to search and export. Applies from the next stream.' },
+    { key: 'logs.keep_days', group: 'Chat history', label: 'Keep chat history for (days)', type: 'int', min: 1, max: 3650, hint: 'Streams older than this are deleted from this PC.' },
+    { key: 'remote.enabled', group: 'Companion', label: 'Companion for phones and tablets', type: 'bool', hint: 'Lets devices you pair on your home network read and answer chat.' },
+    { key: 'remote.port', group: 'Companion', label: 'Companion port', type: 'int', min: 1024, max: 65535, hint: 'Change it only if another program uses it. Paired devices then need the new address.' },
+  ];
+  const CONFIG_KEYS = CONFIG_FIELDS.map((f) => f.key);
+
+  // A field as the hub takes it, from what was typed or ticked: { value } or { why } in plain words.
+  function configValue(field, raw) {
+    if (field.type === 'bool') return { value: raw === true };
+    if (field.type === 'int') {
+      const text = String(raw == null ? '' : raw).trim();
+      const n = /^\d+$/.test(text) ? Number(text) : NaN;
+      if (!(n >= field.min && n <= field.max)) return { why: field.label + ': a whole number from ' + field.min + ' to ' + field.max + '.' };
+      return { value: n };
+    }
+    const text = clean(raw);
+    if ([...text].length > (field.max || 200)) return { why: field.label + ': at most ' + field.max + ' characters.' };
+    if (field.type === 'select' && !field.options.some(([v]) => v === text)) return { why: field.label + ': pick one of the choices.' };
+    return { value: text };
+  }
+
+  // The fields that differ from what the hub has, to send with POST /config ({} when nothing changed).
+  function configChanges(saved, now) {
+    const out = {};
+    CONFIG_KEYS.forEach((k) => { if (now && k in now && now[k] !== (saved || {})[k]) out[k] = now[k]; });
+    return out;
+  }
+
+  // ---- viewer cards --------------------------------------------------------------------------------------------------
+  // Where a viewer's card comes from: GET /viewer for one platform and name (plus the platform's id when known), and
+  // what to search for.
+  function viewerPath(who, q) {
+    const out = ['p=' + encodeURIComponent(who.p || ''), 'name=' + encodeURIComponent(String(who.name || '').slice(0, 100))];
+    if (who.uid && /^[\w.:@|-]{1,128}$/.test(who.uid)) out.push('uid=' + encodeURIComponent(who.uid));
+    const search = clean(q).slice(0, 100);
+    if (search) out.push('q=' + encodeURIComponent(search));
+    return '/viewer?' + out.join('&');
+  }
+
+  // The card's short facts, in plain words. at(t): a time of day for t.
+  function viewerFacts(card, at) {
+    if (!card || !card.ok) return [];
+    const out = [], n = Number(card.count) || 0, past = Number(card.past_streams) || 0;
+    if (card.first_ever) out.push('First message ever in your channel');
+    if (card.first_seen) out.push('First message this stream at ' + at(card.first_seen));
+    out.push(n ? n + (n === 1 ? ' message this stream' : ' messages this stream') : 'No messages this stream yet');
+    if (past) out.push('Chatted in ' + past + (past === 1 ? ' earlier stream' : ' earlier streams') + (card.truncated ? ' (the most recent ones)' : ''));
+    else if (!card.first_ever) out.push('Not in the chat history of earlier streams');
+    return out;
+  }
+
+  // The latest chat message on a card, to moderate, read aloud or reply to.
+  const viewerLatest = (card) => ((card && card.stream) || []).find((m) => m && m.kind === 'chat') || null;
+
+  // The word on an event's tag in the chat window, by alert type (theme.js alertKind).
+  const ALERT_WORDS = { sub: 'Sub', resub: 'Resub', gift: 'Gift', raid: 'Raid', cheer: 'Bits', member: 'Member', superchat: 'Super Chat',
+                        sticker: 'Super Sticker', rant: 'Rant', follow: 'Follow', other: 'Event' };
+  const alertWord = (kind) => ALERT_WORDS[kind] || ALERT_WORDS.other;
+
   return { NAMES, LIMIT, PAGE_PLATFORMS, QUICK_MAX, QUICK_LENGTH, LIST_MAX, LIST_LENGTH, TTS_READ, TTS_PLATFORMS, name, takesReplies, openPlatforms, targetsFor,
            tooLong, clean, route, canReply, modMenu, duration, describe, cleanQuick, inView, mention, secondsLeft, readable, pieces, timeoutSeconds,
-           ttsSettings, onlineVoice, voiceMaker, voiceGroups, pickVoice, speech, cleanList, filterSettings, span, health, validLog, bytes, logFilter };
+           ttsSettings, onlineVoice, voiceMaker, voiceGroups, pickVoice, speech, cleanList, filterSettings, span, health, validLog, bytes, logFilter,
+           CONFIG_FIELDS, CONFIG_KEYS, configValue, configChanges, viewerPath, viewerFacts, viewerLatest, alertWord };
 });
 
 // ---- the page ---------------------------------------------------------------------------------------------------------
@@ -287,6 +368,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
   const touch = matchMedia('(hover: none)');
 
   const F = globalThis.CrossChatFeed || { emoteMap: () => new Map(), withEmotes: (p) => p };
+  const T = globalThis.CrossChatTheme;            // alert sentences, the same as on stream (theme.js)
   const ctx = { remote: false, device: null, version: '', lanUrl: null, executor: false, executorKnown: false, twitch: 'off',
                 bridge: !!document.documentElement.dataset.crosschat, states: {}, unpaired: false };
   let counts = {}, starred = new Set(), quick = [], devices = [], twitchAuth = { state: 'off' }, kickAuth = { state: 'off' }, rumbleAuth = { state: 'off' }, pairTimer = null;
@@ -545,6 +627,33 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
   const rowOf = (id) => list.querySelector('.m[data-id="' + CSS.escape(id) + '"]');
   function tagFor(p) { const tag = el('div', 'tag', A.NAMES[p] ? A.NAMES[p][1] : '?'); tag.dataset.p = p; tag.style.setProperty('--c', css(p)); return tag; }
 
+  // A viewer's name in the list: a button that opens their card (their messages now and in earlier streams).
+  function nameButton(m, text) {
+    const b = el(m.name && A.NAMES[m.p] ? 'button' : 'span', 'name', text || m.name);
+    b.dataset.color = m.color || ''; b.style.color = nameColor(m.color);
+    if (b.tagName === 'BUTTON') {
+      b.type = 'button'; b.title = 'See ' + m.name + '’s messages';
+      b.onclick = (e) => { e.stopPropagation(); openViewer(m); };
+    }
+    return b;
+  }
+
+  // A sub, gift, raid, cheer, Super Chat or Rant: its type, the same sentence the alerts widget shows (name and amount
+  // picked out) and what the viewer wrote, alike for every platform.
+  function eventBody(into, m) {
+    const a = T.alertParts(m, null, A.name(m.p));
+    const kind = el('span', 'akind', A.alertWord(a.kind)); kind.dataset.alert = a.kind;
+    into.append(kind);
+    const line = el('span', 'system');
+    a.parts.forEach((part) => {
+      if (part.key === 'name' && m.name) line.append(nameButton(m, part.value));
+      else if (part.key === 'amount') line.append(el('b', 'amount', part.value));
+      else line.append(part.text !== undefined ? part.text : part.value);
+    });
+    into.append(line);
+    if (a.words) { into.append(' · '); const said = el('span', 'words'); words(said, m); into.append(said); }
+  }
+
   function add(m) {
     const empty = $('empty'); if (empty && view === 'all') empty.hidden = true;
     const row = el('div', 'm ' + m.kind); row.dataset.id = m.id; row.dataset.who = m.p + ':' + (m.name || '').toLowerCase();
@@ -560,17 +669,18 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     if (msgs.size > 600) msgs.delete(msgs.keys().next().value);
     row.tabIndex = -1;
     row.setAttribute('aria-label', m.name + ' on ' + A.name(m.p) + (m.first === 'ever' ? ', first message in your channel' : '') + ': '
-      + (m.system ? m.system + ' ' : '') + m.text + (m.hidden ? ' (hidden by your filters)' : ''));
+      + (m.kind === 'event' ? T.alertLine(m, null, A.name(m.p)) : m.text) + (m.hidden ? ' (hidden by your filters)' : ''));
     if (m.question) row.classList.add('q');
     if (m.first === 'ever') row.classList.add('first');
     const tag = el('div', 'tags'); tag.append(tagFor(m.p));
     const body = el('div', 'body');
     (m.badges || []).filter((b) => /^(broadcaster|owner|moderator|vip|verified|member|subscriber|founder)$/.test(b))
       .forEach((b) => body.append(el('span', 'badge', b === 'broadcaster' || b === 'owner' ? 'you' : b === 'moderator' ? 'mod' : b === 'subscriber' ? 'sub' : b)));
-    const who = el('span', 'name', m.name); who.dataset.color = m.color || ''; who.style.color = nameColor(m.color);
-    body.append(who);
-    if (m.system && m.system !== m.text) body.append(el('span', 'system', m.system + (m.text ? ' · ' : '')));
-    const said = el('span', 'words'); words(said, m); body.append(said);
+    if (m.kind === 'event') eventBody(body, m);
+    else {
+      body.append(nameButton(m));
+      const said = el('span', 'words'); words(said, m); body.append(said);
+    }
     body.append(el('span', 'time', new Date(m.t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })));
     const flags = el('span', 'flags');
     if (FIRST[m.first]) { const f = el('span', 'flag first', FIRST[m.first][0]); f.title = FIRST[m.first][1]; flags.append(f); }
@@ -772,7 +882,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     const menu = $('sheet-menu'), quote = $('sheet-quote'), c = ctxNow();
     $('sheet-title').textContent = m.name + ' · ' + A.name(m.p);
     quote.textContent = ''; quote.append(tagFor(m.p));
-    if (m.system) quote.append(el('b', '', m.system + (m.text ? ' · ' : '')));
+    if (m.kind === 'event') quote.append(el('b', '', T.alertLine({ ...m, text: '' }, null, A.name(m.p)) + (m.text ? ' · ' : '')));
     words(quote, m);
     menu.textContent = '';
     const close = () => $('sheet').close();
@@ -786,26 +896,12 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     menu.append(item('🔊', 'Read aloud', m.hidden ? { ok: false, why: 'Hidden by your filters, so it is never read aloud' } : yes, () => { close(); readAloud(m); },
       { hint: 'On the streaming PC’s speakers' }));
     menu.append(item('⧉', 'Copy text', yes, () => { close(); copy((m.system ? m.system + ' ' : '') + m.text); }));
-    if (m.name) {
-      const filtered = filters.users.some((u) => [m.name, m.handle].some((n) => n && n.toLowerCase() === u.toLowerCase().replace(/^@/, '')));
-      menu.append(item('⊘', filtered ? 'Stop filtering ' + m.name : 'Filter this user', ctx.remote ? { ok: false, why: 'Filters are set on the streaming PC' } : yes,
-        () => { close(); filterUser(m, !filtered); }, { hint: filtered ? '' : 'Hide their messages here and on stream' }));
+    if (m.name && A.NAMES[m.p]) {
+      menu.append(item('👤', 'View viewer', yes, () => { close(); openViewer(m); }, { hint: 'Their messages this stream and in earlier ones' }));
+      menu.append(filterItem(m, close));
     }
     group(menu, 'Moderate');
-    A.modMenu(m, c).forEach((entry) => {
-      const icon = { delete: '🗑', timeout: '⏱', ban: '⛔', unban: '↺' }[entry.action] || '•';
-      menu.append(item(icon, entry.label, entry, async () => {
-        close();
-        if (entry.custom) {
-          const kick = m.p === 'kick';
-          $('confirm-input').max = kick ? 10080 : 20160;
-          const minutes = await ask({ title: 'Time out ' + m.name, text: 'How long on ' + A.name(m.p) + '? (1 minute to ' + (kick ? '7' : '14') + ' days)', ok: 'Time out', input: true });
-          if (minutes) moderate(m, entry, A.timeoutSeconds(m.p, minutes));
-        } else if (entry.action === 'ban') {
-          if (await ask({ title: (m.p === 'youtube' ? 'Hide ' : 'Ban ') + m.name + '?', text: m.p === 'youtube' ? 'They won\'t be able to chat on your channel until you unhide them in YouTube Studio.' : 'They won\'t be able to chat on your ' + A.name(m.p) + ' channel until you unban them.', ok: m.p === 'youtube' ? 'Hide user' : 'Ban' })) moderate(m, entry, 0);
-        } else moderate(m, entry, entry.seconds || 0);
-      }, { danger: entry.danger }));
-    });
+    modItems(menu, m, c, close);
     if (A.LIMIT[m.p] && m.kind === 'chat') {
       group(menu, 'Quick reply to ' + m.name);
       if (!quick.length) menu.append(item('✎', 'Add quick replies', yes, () => { close(); openQuickEditor(); }));
@@ -820,6 +916,31 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     if (first && byKeyboard) first.focus();
   }
   $('sheet').addEventListener('close', () => list.querySelectorAll('.m.open').forEach((r) => r.classList.remove('open')));
+
+  // "Filter this user" (or stop filtering them), for the action sheet and the viewer card.
+  function filterItem(m, close) {
+    const filtered = filters.users.some((u) => [m.name, m.handle].some((n) => n && n.toLowerCase() === u.toLowerCase().replace(/^@/, '')));
+    return item('⊘', filtered ? 'Stop filtering ' + m.name : 'Filter this user', ctx.remote ? { ok: false, why: 'Filters are set on the streaming PC' } : { ok: true },
+      () => { close(); filterUser(m, !filtered); }, { hint: filtered ? '' : 'Hide their messages here and on stream' });
+  }
+
+  // The moderation entries for message m (delete, timeouts, ban, unban), each asking first where it should.
+  function modItems(menu, m, c, close) {
+    A.modMenu(m, c).forEach((entry) => {
+      const icon = { delete: '🗑', timeout: '⏱', ban: '⛔', unban: '↺' }[entry.action] || '•';
+      menu.append(item(icon, entry.label, entry, async () => {
+        close();
+        if (entry.custom) {
+          const kick = m.p === 'kick';
+          $('confirm-input').max = kick ? 10080 : 20160;
+          const minutes = await ask({ title: 'Time out ' + m.name, text: 'How long on ' + A.name(m.p) + '? (1 minute to ' + (kick ? '7' : '14') + ' days)', ok: 'Time out', input: true });
+          if (minutes) moderate(m, entry, A.timeoutSeconds(m.p, minutes));
+        } else if (entry.action === 'ban') {
+          if (await ask({ title: (m.p === 'youtube' ? 'Hide ' : 'Ban ') + m.name + '?', text: m.p === 'youtube' ? 'They won\'t be able to chat on your channel until you unhide them in YouTube Studio.' : 'They won\'t be able to chat on your ' + A.name(m.p) + ' channel until you unban them.', ok: m.p === 'youtube' ? 'Hide user' : 'Ban' })) moderate(m, entry, 0);
+        } else moderate(m, entry, entry.seconds || 0);
+      }, { danger: entry.danger }));
+    });
+  }
 
   function copy(text) {
     const fallback = () => {                      // the companion runs on plain http, where the clipboard API is off
@@ -1245,15 +1366,22 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     $('log-count').textContent = n.toLocaleString() + (n === 1 ? ' message' : ' messages') + (n !== all ? ' of ' + all.toLocaleString() : '');
     $('log-more').hidden = log.shown >= n;
   }
-  function logLine(m) {
-    const li = el('li', 'line' + (m.kind === 'event' ? ' event' : '') + (m.hidden ? ' hid' : ''));
-    li.append(el('span', 'at', new Date(Number(m.t) || 0).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })), tagFor(m.p));
+  // One saved line (chat history, viewer cards). dated: the day goes with the time (lines from earlier streams).
+  function logLine(m, dated) {
+    const li = el('li', 'line' + (m.kind === 'event' ? ' event' : '') + (m.hidden ? ' hid' : '') + (m.gone ? ' gone' : ''));
+    const t = new Date(Number(m.t) || 0);
+    const at = el('span', 'at', dated ? t.toLocaleDateString([], { month: 'short', day: 'numeric' }) : t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
+    if (dated) at.title = t.toLocaleString();
+    li.append(at, tagFor(m.p));
     const body = el('span', 'said');
-    const who = el('b', 'name', m.name || ''); who.style.color = nameColor(m.color); body.append(who);
-    if (m.system && m.system !== m.text) body.append(el('span', 'system', m.system + (m.text ? ' · ' : '')));
-    body.append(m.text || '');
+    if (m.kind === 'event') body.append(el('span', 'akind', A.alertWord(T.alertKind(m))), ' ', T.alertLine(m, null, A.name(m.p)));
+    else {
+      const who = el('b', 'name', m.name || ''); who.style.color = nameColor(m.color); body.append(who);
+      body.append(m.text || '');
+    }
     if (m.question) body.append(' ', el('span', 'flag q', 'Q'));
     if (m.hidden) body.append(' ', el('span', 'flag hid', 'hidden'));
+    if (m.gone) body.append(' ', el('span', 'flag hid', 'deleted'));
     li.append(body);
     return li;
   }
@@ -1264,8 +1392,140 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
   $('history-back').onclick = () => { showLogList(); drawLogs(); };
   $('history-open').onclick = () => { $('settings').close(); openHistory(); };
 
+  // ---- viewer cards: one viewer's messages this stream and in earlier streams, and what can be done about them ---------
+  let viewer = null, viewerSearch = 0;
+  const clock = (t) => new Date(Number(t) || 0).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+  function openViewer(m) {
+    viewer = { from: m, card: null };
+    $('viewer-search').value = '';
+    $('viewer-tag').replaceChildren(tagFor(m.p));
+    $('viewer-title').textContent = m.name;
+    $('viewer-where').textContent = 'on ' + A.name(m.p) + (m.handle ? ' · @' + m.handle : '');
+    drawViewer(null, 'Loading…');
+    if (!$('viewer').open) openDialog($('viewer'));
+    loadViewer();
+  }
+  async function loadViewer() {
+    const asked = viewer;
+    let card = null;
+    try { card = await getJSON(A.viewerPath(asked.from, $('viewer-search').value)); } catch (e) { card = null; }
+    if (viewer !== asked) return;                 // another card was opened meanwhile
+    asked.card = card && card.ok ? card : null;
+    drawViewer(asked.card, asked.card ? '' : 'Could not load this viewer’s messages.');
+  }
+  function drawViewer(card, status) {
+    const facts = $('viewer-facts'); facts.textContent = '';
+    if (status) facts.append(el('li', 'none', status));
+    A.viewerFacts(card, clock).forEach((f) => facts.append(el('li', '', f)));
+    // Their newest message this stream is what "read aloud" and the moderation act on (else the one clicked).
+    const latest = A.viewerLatest(card), m = latest ? { ...viewer.from, ...latest } : viewer.from;
+    const menu = $('viewer-menu'), close = () => $('viewer').close();
+    menu.textContent = '';
+    const said = latest ? (m.hidden ? { ok: false, why: 'Hidden by your filters, so it is never read aloud' } : { ok: true })
+      : { ok: false, why: card ? 'Nothing from them this stream' : '' };
+    menu.append(item('🔊', 'Read aloud last message', said, () => readAloud(m), { hint: 'On the streaming PC’s speakers' }));
+    menu.append(filterItem(m, close));
+    group(menu, 'Moderate');
+    modItems(menu, m, ctxNow(), close);
+    const searched = !!A.clean($('viewer-search').value);
+    [['viewer-stream', 'viewer-count', card && card.stream, false, searched ? 'Nothing this stream matches.' : 'No messages this stream yet.'],
+     ['viewer-past', 'viewer-past-count', card && card.past, true, searched ? 'Nothing in earlier streams matches.' : 'Nothing in the chat history of earlier streams.']]
+      .forEach(([id, count, rows, dated, none]) => {
+        const ol = $(id); ol.textContent = '';
+        (rows || []).forEach((r) => ol.append(logLine(r, dated)));
+        if (card && !(rows || []).length) ol.append(el('li', 'none', none));
+        $(count).textContent = rows && rows.length ? rows.length : '';
+      });
+    $('viewer-note').hidden = !(card && card.truncated);
+    $('viewer-note').textContent = 'Showing the newest messages. Search to find older ones.';
+  }
+  $('viewer-search').addEventListener('input', () => { clearTimeout(viewerSearch); viewerSearch = setTimeout(loadViewer, 250); });
+
+  // ---- Settings → Channels & options (this PC only): the parts of config.json worth changing, no hand-editing ---------
+  let config = null;                              // what the hub has: { settings, restart, custom_window, first_run }
+  const cfgId = (key) => 'cfg-' + key.replace(/\W/g, '-');
+
+  async function loadConfig() {
+    try { const c = await getJSON('/config/editable'); config = c && c.settings ? c : null; } catch (e) { config = null; }
+    return config;
+  }
+  function drawChannels() {
+    const box = $('channels-form');
+    if ($('channels-section').contains(document.activeElement) && box.childElementCount) return;   // not under the cursor
+    box.textContent = '';
+    $('channels-save').disabled = !config;
+    if (!config) { box.append(el('p', 'hint', 'Loading your settings…')); return; }
+    let heading = '';
+    A.CONFIG_FIELDS.forEach((f) => {
+      if (f.group !== heading) { heading = f.group; box.append(el('h4', '', heading)); }
+      const id = cfgId(f.key), value = config.settings[f.key], wrap = el('div', 'field');
+      let input;
+      if (f.type === 'bool') {
+        const label = el('label', 'switch'); input = el('input'); input.type = 'checkbox'; input.checked = value === true;
+        label.append(f.label, input); wrap.append(label);
+      } else {
+        const label = el('label', '', f.label); label.htmlFor = id;
+        if (f.type === 'select') {
+          input = el('select');
+          f.options.forEach(([v, text]) => { const o = new Option(text, v); o.disabled = v === 'custom' && !config.custom_window; input.append(o); });
+        } else {
+          input = el('input'); input.type = 'text'; input.autocomplete = 'off'; input.spellcheck = false;
+          if (f.type === 'int') { input.inputMode = 'numeric'; input.pattern = '[0-9]*'; input.className = 'num'; } else input.maxLength = f.max;
+          if (f.placeholder) input.placeholder = f.placeholder;
+        }
+        input.value = value == null ? '' : String(value);
+        wrap.append(label, input);
+      }
+      input.id = id;
+      const hint = el('p', 'hint', f.hint + (config.restart.includes(f.key) ? ' Takes effect when OBS restarts.' : '')); hint.id = id + '-hint';
+      input.setAttribute('aria-describedby', hint.id);
+      wrap.append(hint); box.append(wrap);
+    });
+  }
+  function readChannels() {
+    const values = {}, problems = [];
+    A.CONFIG_FIELDS.forEach((f) => {
+      const input = $(cfgId(f.key)); if (!input) return;
+      const r = A.configValue(f, f.type === 'bool' ? input.checked : input.value);
+      if (r.why) problems.push({ f, why: r.why }); else values[f.key] = r.value;
+    });
+    return { values, problems };
+  }
+  function savedSay(text, tone) { $('channels-saved').textContent = text; $('channels-saved').className = 'saved' + (tone ? ' ' + tone : ''); }
+  async function saveChannels() {
+    if (!config) return;
+    const { values, problems } = readChannels();
+    if (problems.length) { savedSay(problems[0].why, 'bad'); $(cfgId(problems[0].f.key)).focus(); return; }
+    const changes = A.configChanges(config.settings, values);
+    if (!Object.keys(changes).length) { savedSay('Nothing changed.'); return; }
+    $('channels-save').disabled = true; savedSay('Saving…');
+    const a = await api('/config', { settings: changes });
+    $('channels-save').disabled = false;
+    if (!a.ok) { savedSay('Not saved: ' + (a.why || 'CrossChat did not answer.'), 'bad'); return; }
+    savedSay(a.why || 'Saved.', a.restart_needed ? 'warn' : 'good');
+    $('channels-first').hidden = true;
+    if (document.activeElement && $('channels-section').contains(document.activeElement)) document.activeElement.blur();
+    await loadConfig(); drawChannels();
+  }
+  $('channels-save').onclick = saveChannels;
+  $('channels-form').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); saveChannels(); } });
+
+  // First run (no channel in config.json yet): Settings opens at Channels & options with a short prompt.
+  async function openChannels(first) {
+    drawSettings();
+    $('channels-first').hidden = !first;
+    if (!$('settings').open) openDialog($('settings'));
+    $('channels-section').scrollIntoView({ block: 'start' });
+    if (!config) { await loadConfig(); drawChannels(); }
+    const input = $(cfgId('twitch')); if (input && first && !touch.matches) input.focus();
+  }
+
   function drawSettings() {
     showTheme(); showDing(); drawTwitch(); drawKick(); drawRumble(); drawDevices(); drawHealth(); drawTts(); drawFilters();
+    $('channels-section').hidden = ctx.remote;
+    $('channels-first').hidden = true; savedSay('');
+    if (!ctx.remote) { drawChannels(); loadConfig().then(drawChannels); }
     $('devices-section').hidden = ctx.remote;
     $('filters-section').hidden = ctx.remote;
     $('history-section').hidden = ctx.remote;
@@ -1339,6 +1599,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
       case 'say_stop': stopSpeech(false); break;
       case 'tts': tts = A.ttsSettings(m.settings); if ($('settings').open) drawTts(); break;
       case 'filters': filters = A.filterSettings(m.settings); if ($('settings').open && !$('filters-section').contains(document.activeElement)) drawFilters(); break;
+      case 'config': if (m.settings) { config = { settings: m.settings, restart: m.restart || [], custom_window: !!m.custom_window, first_run: !!m.first_run }; if ($('settings').open) drawChannels(); } break;
       case 'hide':                                // the hub hid messages after the fact: { id } or { p, name }, with why
         if (m.id) { const msg = msgs.get(m.id); if (msg) { msg.hidden = m.why || 'user'; const row = rowOf(m.id); if (row) hideRow(row, msg.hidden); } }
         else hideWho(m.name, m.why || 'user', m.p);
@@ -1385,6 +1646,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     applyMode();
     connect();
     drawEntry();
+    if (!ctx.remote && (await loadConfig()) && config.first_run) openChannels(true);
   }
 
   // ---- ?demo: made-up people and lines, no network ------------------------------------------------------------------
@@ -1416,6 +1678,12 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     if (path === '/kick/disconnect') { handle({ type: 'kick_auth', state: 'off' }); return ok(); }
     if (path === '/rumble/connect') { handle({ type: 'rumble_auth', state: 'on' }); return ok(); }
     if (path === '/rumble/disconnect') { handle({ type: 'rumble_auth', state: 'off' }); return ok(); }
+    if (path === '/config') {                     // as the hub answers: saved, and which changes wait for OBS to restart
+      const changes = body.settings || {}, later = Object.keys(changes).filter((k) => demoConfig.restart.includes(k));
+      Object.assign(demoConfig.settings, changes);
+      const label = (k) => (A.CONFIG_FIELDS.find((f) => f.key === k) || { label: k }).label;
+      return ok({ why: later.length ? 'Saved. Restart OBS to apply: ' + later.map(label).join(', ') + '.' : 'Saved.', restart_needed: !!later.length, restart: later });
+    }
     if (path === '/tts') { setTimeout(() => handle({ type: 'tts', settings: body.settings }), 50); return ok(); }
     if (path === '/filters') { setTimeout(() => handle({ type: 'filters', settings: body.settings }), 50); return ok(); }
     if (path === '/tts/skip') { handle({ type: 'say_stop' }); return ok(); }
@@ -1427,8 +1695,36 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     return ok();
   }
 
+  // ?demo settings: placeholder channels, nothing real.
+  const demoConfig = {
+    settings: { twitch: 'your_channel', youtube: '@yourchannel', kick: 'your_channel', tiktok: '', facebook: false, 'x.enabled': true, 'x.auto_go_live': false,
+                'x.title': 'Building a chat app live', 'x.title_file': '', 'x.source': 'OBS', window: 'auto', open_window_on_stream_start: true,
+                close_window_seconds_after_stream: 120, 'emotes.bttv': true, 'emotes.ffz': true, 'emotes.7tv': true, 'logs.enabled': true, 'logs.keep_days': 90,
+                'remote.enabled': true, 'remote.port': 4467 },
+    restart: ['twitch', 'youtube', 'kick', 'tiktok', 'facebook', 'x.enabled'], custom_window: false, first_run: false,
+  };
+  if (DEMO_KIND === 'firstrun') {
+    Object.assign(demoConfig.settings, { twitch: '', youtube: '', kick: '', 'x.enabled': false, 'x.title': 'Live now' });
+    demoConfig.first_run = true;
+  }
+
+  // ?demo viewer card: the viewer's lines in this page, and made-up ones from two earlier streams.
+  function demoViewer(path) {
+    const q = new URLSearchParams(path.split('?')[1] || ''), p = q.get('p'), who = String(q.get('name') || '').toLowerCase();
+    const search = String(q.get('q') || '').toLowerCase(), hit = (m) => !search || String(m.text || '').toLowerCase().includes(search);
+    const mine = [...msgs.values()].filter((m) => m.p === p && m.kind !== 'note' && String(m.name || '').toLowerCase() === who);
+    const chat = mine.filter((m) => m.kind === 'chat'), day = 24 * 3600000, first = chat.some((m) => m.first === 'ever');
+    const past = first ? [] : ['that build from last week still runs great', 'is the overlay open source?', 'gg, see you Thursday', 'how do you keep chat this fast?']
+      .map((text, i) => ({ id: 'old-' + i, t: Date.now() - (i < 2 ? 2 : 5) * day - i * 600000, p, name: mine[0] ? mine[0].name : who, kind: 'chat', text,
+                           stream: i < 2 ? 'demo-tuesday' : 'demo-saturday' })).filter(hit);
+    return Promise.resolve({ ok: true, p, name: mine[0] ? mine[0].name : who, count: chat.length, first_seen: chat.length ? chat[0].t : null,
+                             first_ever: first, history: true, stream: mine.filter(hit).reverse(), past, past_streams: first ? 0 : 2, truncated: false });
+  }
+
   // ?demo chat history: three streams of made-up chat.
   function demoGet(path) {
+    if (path === '/config/editable') return Promise.resolve(JSON.parse(JSON.stringify(demoConfig)));
+    if (path.startsWith('/viewer?')) return demoViewer(path);
     const hour = 3600000, start = new Date(); start.setHours(13, 45, 0, 0);
     const day = (n) => start.getTime() - n * 24 * hour;
     const all = [
@@ -1472,7 +1768,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
      { p: 'youtube', name: 'Maya Chen', badges: ['member'], text: 'Watching from Lisbon 👋 love the new overlay', t: at(1.5), mid: 'y1' },
      { p: 'x', name: 'Dev Daily', handle: 'devdaily', text: 'One chat for every platform, finally', t: at(2) },
      { p: 'kick', name: 'turbo_kat', color: '#53fc18', text: 'W stream, audio sounds great', t: at(3) },
-     { p: 'twitch', kind: 'event', name: 'nightowl_42', system: 'subscribed for 6 months!', text: 'half a year already', t: at(4) },
+     { p: 'twitch', kind: 'event', name: 'nightowl_42', alert: 'resub', amount: '6', system: 'nightowl_42 subscribed for 6 months!', text: 'half a year already', t: at(4) },
      { p: 'twitch', name: 'nightowl_42', color: '#1e90ff', badges: ['moderator'], text: 'welcome in, new folks 🙂', t: at(4.5), mid: 'a2', uid: '102' },
      { p: 'youtube', name: 'Sam Ortiz', text: 'can you show how replies reach every platform?', question: true, t: at(6), id: 'yt-sam', mid: 'y2' },
      { p: 'twitch', name: 'bot_4417', color: '#7fff00', text: 'cheap followers!!! dm me for a deal', t: at(6.5), id: 'tw-spam', mid: 'a3', uid: '103',
@@ -1505,6 +1801,23 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     }
     if (DEMO_KIND === 'history') openHistory().then(() => openLog(logs[1]));
     if (DEMO_KIND === 'quick') openQuickEditor();
+    if (DEMO_KIND === 'channels' || DEMO_KIND === 'firstrun') openChannels(DEMO_KIND === 'firstrun');
+    if (DEMO_KIND === 'viewer') openViewer(msgs.get('demo-6'));
+    if (DEMO_KIND === 'alerts') {                 // every platform's alerts, as they arrive from the hub
+      [{ p: 'youtube', name: 'Maya Chen', alert: 'superchat', amount: '$10.00', system: 'Super Chat $10.00', text: 'Thanks for the tutorial, it finally clicked!' },
+       { p: 'youtube', name: 'Priya N', alert: 'superchat', amount: '$2.00', system: 'Super Sticker $2.00' },
+       { p: 'youtube', name: 'Rafael Gomes', alert: 'gift', amount: '5 memberships', system: 'Rafael Gomes gifted 5 memberships' },
+       { p: 'youtube', name: 'Sam Ortiz', alert: 'member', system: 'Welcome to Members!' },
+       { p: 'twitch', name: 'bitbucket', alert: 'cheer', amount: '500 bits', system: 'bitbucket cheered 500 bits', text: 'Cheer500 great stream' },
+       { p: 'twitch', name: 'raid_leader', alert: 'raid', amount: '37', system: '37 raiders from raid_leader have joined!' },
+       { p: 'twitch', name: 'kiwi_codes', alert: 'resub', amount: '', system: 'kiwi_codes subscribed at Tier 1.' },
+       { p: 'kick', name: 'turbo_kat', alert: 'gift', amount: '3 subs', system: 'turbo_kat gifted 3 subs' },
+       { p: 'kick', name: 'glitchfox', alert: 'raid', amount: '12', system: 'glitchfox is raiding with 12 viewers' },
+       { p: 'rumble', name: 'trailhead_tv', alert: 'superchat', amount: '$5.00', system: 'trailhead_tv sent a $5.00 Rant', text: 'Keep the builds coming' },
+       { p: 'rumble', name: 'maple_moto', alert: 'gift', amount: '2 subs', system: 'maple_moto gifted 2 subs' },
+       { p: 'twitch', name: 'AriaPlays', alert: 'announcement', system: 'AriaPlays shared an announcement', text: 'Giveaway at the top of the hour!' }]
+        .forEach((e, i) => handle({ type: 'msg', id: 'demo-alert-' + i, kind: 'event', color: '', badges: [], text: '', t: at(8.2 + i * 0.05), ...e }));
+    }
   }
 
   start();

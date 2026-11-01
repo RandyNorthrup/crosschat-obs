@@ -13,7 +13,7 @@ The CrossChat hub is a small web server on your PC. The chat window, the Theme S
 | The CrossChat window, the Theme Studio and the widgets (`http://127.0.0.1:4466/…`) | Everything below |
 | **Your own overlay pages** (`http://localhost:4466/custom/…`) | Their own files, and the public chat: `/events` (public types only), `/settings`, `/version`, `/themes`. Nothing else |
 | A program on this PC (no browser `Origin`) | Every `GET`. `POST` needs `Content-Type: application/json` |
-| A paired companion device (port 4467) | `/events`, and `POST` to `/send`, `/mod`, `/feature`, `/star`, `/quick`, `/test`, `/tts/say`, `/tts/skip` |
+| A paired companion device (port 4467) | `/events`, `/viewer`, and `POST` to `/send`, `/mod`, `/feature`, `/star`, `/quick`, `/test`, `/tts/say`, `/tts/skip` |
 | A page from any other website, or a local file | Nothing |
 
 Put your own overlay pages in the folder named by `"custom_overlays"` in `config.json`. The hub serves them at `http://localhost:4466/custom/<file>` (an old `http://127.0.0.1:4466/custom/…` address is sent there). That address is kept apart from the CrossChat window's by the browser, so an overlay page you downloaded can show chat but can't reply, moderate or change anything as you. Inside one, `/events` and the other public addresses work as relative URLs; `http://127.0.0.1:4466/events` works too. See [SECURITY.md](../SECURITY.md) for the rules in full.
@@ -64,8 +64,8 @@ Your own overlay pages get the chat as viewers see it: `msg`, `delete`, `purge`,
 | `question` | `true` when the line looks like a question |
 | `first` | `"ever"` for the viewer's first message in the channel (Twitch says so), `"stream"` for their first this stream |
 | `hidden` | Why your filters hide it: `bot`, `user`, `command` or `word`. Hidden messages still arrive, so a page can show them to you; don't show them on stream |
-| `alert` | For `kind: "event"`: `sub`, `resub`, `gift`, `raid`, `cheer`, `superchat`, `member` or `other` |
-| `amount` | For alerts: months, number of gifts, viewers, bits or the Super Chat amount, as text (`"5 subs"`, `"$5.00"`) |
+| `alert` | For `kind: "event"`: `sub`, `resub`, `gift`, `raid`, `cheer`, `superchat`, `member` or `other`. YouTube Super Stickers and Rumble Rants come as `superchat`; the widgets tell them apart (a sticker's `system` starts with `Super Sticker`, a Rant has `p: "rumble"`). Treat any other value as `other` |
+| `amount` | For alerts: months, number of gifts, viewers, bits or the Super Chat or Rant amount, as text (`"5 subs"`, `"$5.00"`). Can be `""` |
 | `system` | For alerts: the platform's own line, such as `nightowl_42 subscribed for 6 months!` |
 | `mid` | The platform's own message id, used for moderation |
 | `uid` | The platform's user id, when it gives one |
@@ -91,6 +91,7 @@ Your own overlay pages get the chat as viewers see it: `msg`, `delete`, `purge`,
 | `executor` | `present` | Whether the chat window with the extension is open (it posts to YouTube and X) |
 | `twitch_auth`, `kick_auth` | `state` (`off`, `pending`, `on`, `error`), `login`, `why` | Sign-in state |
 | `tts`, `filters` | `settings` | Text-to-speech or filter settings changed |
+| `config` | the same fields as `GET /config/editable` | Settings → Channels & options was saved. Sent to pages on this PC only |
 | `say`, `say_stop` | `text`, `voice`, `rate`, `volume` | Sent to the CrossChat window on this PC only: read this aloud, or stop |
 | `devices`, `pair` | | Sent to pages on this PC only: paired devices and pairing codes |
 
@@ -108,6 +109,53 @@ Your own overlay pages get the chat as viewers see it: `msg`, `delete`, `purge`,
 | `GET /logs/<name>.json` | One stream's messages, with deleted ones marked `"gone": true` |
 | `GET /logs/<name>.csv` | The same as a spreadsheet (UTF-8, opens in Excel). Lines starting with `= + - @` get a leading `'` so they stay text |
 | `GET /logs/<name>.html` | The same as a page to read or print |
+| `GET /viewer?p=<platform>&name=<name>` | A viewer card. Also `&uid=` (the platform's user id, which wins over the name) and `&q=` (words to search for). This PC's pages and paired devices only. See below |
+| `GET /config/editable` | Settings → Channels & options. This PC's own pages only. See below |
+
+### `GET /viewer`
+
+One viewer's messages, newest first: this stream's (from its chat history file, or the last 300 messages when history is off) and earlier streams' (from the chat history on this PC).
+
+```json
+{"ok": true, "p": "twitch", "name": "nightowl_42", "handle": "", "uid": "102", "color": "#1e90ff", "badges": ["moderator"],
+ "count": 12, "first_seen": 1767225600000, "first_ever": false, "history": true,
+ "stream": [{"id": "…", "t": 1767225900000, "kind": "chat", "text": "welcome in", "mid": "…"}],
+ "past": [{"id": "…", "t": 1766620800000, "kind": "chat", "text": "gg", "stream": "2026-10-24_1900"}],
+ "past_streams": 3, "truncated": false}
+```
+
+- `count` and `first_seen` count chat lines this stream; `first_ever` is the platform's own "first message in the channel" flag.
+- Deleted lines have `"gone": true`, hidden ones `hidden`.
+- At most 200 lines each, from at most 60 earlier streams and 32 MB of history; `truncated` says when there is more. Narrow it down with `q`.
+- A wrong platform, an empty or over-long name (100 characters), a strange `uid` or a search over 100 characters answers `400` with `{"ok": false, "why"}`.
+- The demo (`--demo`) never reads your real chat history.
+
+### `GET /config/editable` and `POST /config`
+
+The settings the CrossChat window may change, so nobody has to edit `config.json` by hand. Both answer only the hub's own pages on this PC: not paired devices, not your overlay pages, not other websites.
+
+```json
+{"settings": {"twitch": "your_channel", "youtube": "@yourchannel", "kick": "", "tiktok": "", "facebook": false,
+              "x.enabled": true, "x.auto_go_live": false, "x.title": "Live now", "x.title_file": "", "x.source": "OBS",
+              "window": "auto", "open_window_on_stream_start": true, "close_window_seconds_after_stream": 120,
+              "emotes.bttv": true, "emotes.ffz": true, "emotes.7tv": true, "logs.enabled": true, "logs.keep_days": 90,
+              "remote.enabled": true, "remote.port": 4467},
+ "restart": ["twitch", "youtube", "kick", "tiktok", "facebook", "x.enabled"], "custom_window": false, "first_run": false}
+```
+
+Tokens, client ids and secrets, the OBS password, `browser` and `custom_overlays` are never part of it.
+
+`POST /config` takes `{"settings": {…}}` with any of those fields. Every value is checked: channels the way CrossChat reads them (a name, an @handle or a link), numbers within range (`close_window_seconds_after_stream` 0–3600, `logs.keep_days` 1–3650, `remote.port` 1024–65535 and not CrossChat's own port), text on one line (`x.title` up to 120 characters), and `x.title_file` must exist. One bad or unknown field and nothing is saved.
+
+`config.json` is then replaced in one step (a new file moved into place), the previous one kept as `config.json.bak`, and every key the window doesn't edit kept as it was. A `config.json` that can't be read is never overwritten.
+
+The answer says what happens next:
+
+```json
+{"ok": true, "why": "Saved. Restart OBS to apply: Twitch channel.", "restart_needed": true, "restart": ["twitch"]}
+```
+
+The channels, Facebook and X on or off apply when OBS restarts; everything else at once (emotes, chat history, the window, X's title and source, and the companion, which reopens on its new port).
 
 ## Doing
 
@@ -179,6 +227,7 @@ These answer only the hub's own pages on this PC:
 - `/twitch/connect`, `/twitch/disconnect`;
 - `/kick/connect` (answers the Kick sign-in `url` to open), `/kick/disconnect`;
 - `/themes/save`, `/themes/delete`, `/themes/default`;
+- `/config` (refused in the demo);
 - `/outbox/result`, used by the extension.
 
 `POST /rumble/connect` (`{"url"}`) and `/rumble/disconnect` set or remove the Rumble Live Stream API URL, this PC only.

@@ -293,6 +293,45 @@ a.btn:not([href]) { opacity: .45; cursor: default; }
 .loglines .event .said { color: var(--accent-hi); }
 .loglines .hid .said { opacity: .5; }
 
+.loglines .gone .said { text-decoration: line-through; opacity: .55; }
+.loglines .none { padding: 6px 4px 10px; color: var(--hint); font-size: 13.5px; }
+
+/* events (subs, gifts, raids, cheers, Super Chats, Rants): their type, the sentence, the amount picked out */
+.akind { font: 700 10px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--tag-ink); background: var(--accent-hi);
+         border-radius: 4px; padding: 1px 5px; margin-right: 7px; position: relative; top: -1px; white-space: nowrap; }
+.amount { color: var(--strong); font-weight: 700; }
+.system .name { margin-right: 0; }
+
+/* a viewer's name opens their card */
+button.name { border: 0; background: none; padding: 0; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+button.name:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* viewer cards */
+#viewer { width: min(620px, calc(100vw - 24px)); max-height: min(88vh, 900px); }
+#viewer .dhead .tag { display: grid; }
+#viewer .vhead { padding-bottom: 10px; }
+#viewer .vhead .hint { margin: 0 0 8px; }
+.vfacts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.vfacts li { font: 400 12.5px var(--mono); color: var(--text); background: var(--raised); border: 1px solid var(--line); border-radius: 12px; padding: 3px 10px; }
+.vfacts li.none { color: var(--muted); }
+#viewer-menu { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+#viewer .section h3 { margin-top: 14px; }
+#viewer .loglines { padding: 0; }
+.vsearch { width: 100%; min-height: 40px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); padding: 6px 10px; }
+
+/* Settings → Channels & options */
+.cfg h4 { margin: 14px 0 0; font: 700 13px var(--display); color: var(--accent-hi); }
+.cfg .field { margin: 6px 0 4px; }
+.cfg .field > .switch { font-size: 14.5px; }
+.section .cfg p.hint { margin: 0; font-size: 12.5px; line-height: 1.4; }
+.cfg input.num { width: 130px; min-height: 40px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); padding: 6px 10px; }
+.first { margin: 2px 0 10px; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 10px; background: var(--flash); }
+.first b { font: 700 15px var(--display); color: var(--strong); }
+.first p { margin: 4px 0 0; }
+.saved.good { color: var(--ok); }
+.saved.warn, .saved.bad { color: var(--warn); }
+#channels-saved { flex: 1 1 200px; line-height: 1.4; }
+
 /* quick-reply editor */
 .qlist { list-style: none; margin: 0; padding: 0 16px; }
 .qlist li { display: flex; align-items: center; gap: 6px; padding: 5px 0; }

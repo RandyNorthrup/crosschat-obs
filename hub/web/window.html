@@ -75,9 +75,36 @@
   <div class="dbody"><ul class="menu" id="sheet-menu"></ul></div>
 </dialog>
 
+<dialog id="viewer" aria-labelledby="viewer-title">
+  <div class="dhead"><span id="viewer-tag"></span><h2 id="viewer-title">Viewer</h2><button class="icon-btn" type="button" data-close aria-label="Close">✕</button></div>
+  <div class="dbody">
+    <div class="section vhead">
+      <p class="hint" id="viewer-where"></p>
+      <ul class="vfacts" id="viewer-facts" aria-live="polite"></ul>
+    </div>
+    <ul class="menu" id="viewer-menu" aria-label="What to do"></ul>
+    <div class="section">
+      <input id="viewer-search" class="vsearch" type="search" placeholder="Search their messages" aria-label="Search this viewer’s messages" autocomplete="off" maxlength="100">
+      <h3>This stream <em id="viewer-count"></em></h3>
+      <ol class="loglines" id="viewer-stream" aria-label="Their messages this stream, newest first"></ol>
+      <h3>Earlier streams <em id="viewer-past-count"></em></h3>
+      <ol class="loglines" id="viewer-past" aria-label="Their messages in earlier streams, newest first"></ol>
+      <p class="hint" id="viewer-note" hidden></p>
+    </div>
+  </div>
+</dialog>
+
 <dialog id="settings" aria-labelledby="settings-title">
   <div class="dhead"><h2 id="settings-title">Settings</h2><button class="icon-btn" type="button" data-close aria-label="Close">✕</button></div>
   <div class="dbody">
+    <section class="section" id="channels-section">
+      <h3>Channels &amp; options</h3>
+      <div class="first" id="channels-first" role="note" hidden><b>Set up your channels</b>
+        <p>Type the channels you stream to and press Save. CrossChat reads their chat from the next time OBS starts.</p></div>
+      <p class="hint">Saved in config.json on this PC. Sign-ins, keys and passwords are never shown or changed here.</p>
+      <div class="cfg" id="channels-form"></div>
+      <div class="buttons"><button class="btn primary" type="button" id="channels-save">Save</button><span class="saved" id="channels-saved" role="status" aria-live="polite"></span></div>
+    </section>
     <section class="section">
       <h3>Look and sound</h3>
       <div class="seg" role="group" aria-label="Theme">
@@ -256,6 +283,7 @@
 
 <script src="/web/vendor/qrcode.js"></script>
 <script src="/web/feed.js"></script>
+<script src="/web/theme.js"></script>
 <script src="/web/app.js"></script>
 </body>
 </html>

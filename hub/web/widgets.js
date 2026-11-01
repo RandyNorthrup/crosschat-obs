@@ -78,15 +78,9 @@
     });
   }
 
-  // A sub, raid, cheer or Super Chat as one line in the chat feed: the theme's alert sentence ("{name} cheered {amount}!"),
-  // or the platform's own sentence, then whatever the viewer wrote.
-  function eventLine(m) {
-    const template = m.alert && theme.alerts.labels[m.alert];
-    const values = { name: m.name || '', amount: m.amount || '', text: m.text || '', platform: I.NAMES[m.p] || '' };
-    let line = template ? template.replace(/\{(name|amount|text|platform)\}/g, (_, k) => values[k]).replace(/\s+/g, ' ').trim() : (m.system || '');
-    if (m.text && !(template && template.includes('{text}')) && m.text !== line) line = (line ? line + ' · ' : '') + m.text;
-    return line || m.system || m.text || '';
-  }
+  // A sub, raid, cheer, Super Chat or Rant as one line in the chat feed: the theme's alert sentence ("{name} cheered
+  // {amount}!"), then whatever the viewer wrote. The same sentence as the alerts widget, for every platform.
+  const eventLine = (m) => T.alertLine(m, theme, I.NAMES[m.p]);
 
   function message(m, cls) {
     const el = doc.createElement('div');
@@ -264,9 +258,7 @@
   const alerts = { queue: [], m: null, el: null, timer: 0, seen: new Set() };
 
   function alertShows(m) {
-    if (m.kind !== 'event') return false;
-    const kind = T.ALERTS.includes(m.alert) ? m.alert : 'other';
-    return !!theme.alerts.types[kind];
+    return m.kind === 'event' && !!theme.alerts.types[T.alertKind(m)];
   }
 
   function alertAdd(m, fresh) {
@@ -293,19 +285,18 @@
   }
 
   function alertCard(m) {
-    const kind = T.ALERTS.includes(m.alert) ? m.alert : 'other';
-    const el = doc.createElement('div'); el.className = 'cc-alert'; el.dataset.alert = kind; el.dataset.platform = m.p; el.dataset.id = m.id;
+    const a = T.alertParts(m, theme, I.NAMES[m.p]);
+    const el = doc.createElement('div'); el.className = 'cc-alert'; el.dataset.alert = a.kind; el.dataset.platform = m.p; el.dataset.id = m.id;
     colourFor(el, m);
     const icon = doc.createElement('div'); icon.className = 'cc-alert-icon'; icon.appendChild(I.icon(m.p, doc));
     const body = doc.createElement('div'); body.className = 'cc-alert-body';
     const title = doc.createElement('div'); title.className = 'cc-alert-title';
-    const template = theme.alerts.labels[kind];
-    T.fillParts(template, { name: m.name, amount: m.amount, text: m.text, platform: I.NAMES[m.p] || '' }).forEach((part) => {
+    a.parts.forEach((part) => {
       if (part.text !== undefined) { title.appendChild(doc.createTextNode(part.text)); return; }
       const span = doc.createElement('span'); span.className = 'cc-alert-' + part.key; span.textContent = part.value; title.appendChild(span);
     });
     body.appendChild(title);
-    if (theme.alerts.showText && m.text && !/\{text\}/.test(template)) {
+    if (theme.alerts.showText && a.words) {
       const text = doc.createElement('div'); text.className = 'cc-alert-text'; words(text, m); body.appendChild(text);
     }
     el.append(icon, body);
@@ -403,6 +394,9 @@
     { alert: 'member', p: 'youtube', name: 'Rafael Gomes' },
     { alert: 'cheer', p: 'twitch', name: 'pixel_pirate', amount: '500 bits', text: "Let's go!" },
     { alert: 'gift', p: 'twitch', name: 'nightowl_42', amount: '5 subs' },
+    { alert: 'superchat', p: 'rumble', name: 'trailhead_tv', amount: '$5.00', text: 'Keep the builds coming' },
+    { alert: 'gift', p: 'kick', name: 'turbo_kat', amount: '3 subs' },
+    { alert: 'superchat', p: 'youtube', name: 'Priya N', amount: '$2.00', system: 'Super Sticker $2.00' },
     { alert: 'follow', p: 'kick', name: 'quietstorm' },
   ].map((a, i) => ({ type: 'msg', kind: 'event', id: 'demo-alert-' + i, t: Date.now(), text: '', ...a }));
 

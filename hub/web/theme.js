@@ -8,7 +8,9 @@
 })(typeof self !== 'undefined' ? self : globalThis, function () {
   const SCHEMA = 1;
   const PLATFORMS = ['twitch', 'youtube', 'kick', 'x', 'tiktok', 'facebook', 'rumble'];
-  const ALERTS = ['sub', 'resub', 'gift', 'raid', 'cheer', 'member', 'superchat', 'follow', 'other'];
+  // Alert types. YouTube's Super Stickers and Rumble's Rants come from the hub as "superchat" and are told apart by
+  // alertKind(), so each can have its own sentence and switch.
+  const ALERTS = ['sub', 'resub', 'gift', 'raid', 'cheer', 'member', 'superchat', 'sticker', 'rant', 'follow', 'other'];
   const SANS = '"Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif';
 
   // Every key a theme may have, with its default. A theme file only needs the keys it changes.
@@ -66,7 +68,7 @@
       sound: true,
       volume: 0.35,
       showText: true,
-      types: { sub: true, resub: true, gift: true, raid: true, cheer: true, member: true, superchat: true, follow: true, other: true },
+      types: { sub: true, resub: true, gift: true, raid: true, cheer: true, member: true, superchat: true, sticker: true, rant: true, follow: true, other: true },
       labels: {
         sub: '{name} just subscribed!',
         resub: '{name} resubscribed for {amount} months!',
@@ -75,6 +77,8 @@
         cheer: '{name} cheered {amount}!',
         member: '{name} became a member!',
         superchat: '{name} sent a Super Chat: {amount}',
+        sticker: '{name} sent a Super Sticker: {amount}',
+        rant: '{name} sent a Rant: {amount}',
         follow: '{name} followed!',
         other: '{text}',
       },
@@ -288,6 +292,64 @@
     return out;
   }
 
+  // ---- alerts: one look for every platform's subs, gifts, raids, cheers, Super Chats and Rants ------------------------
+  // An event's alert type. Unknown types (a platform adding something new) are "other".
+  function alertKind(m) {
+    const a = m && m.alert;
+    if (a === 'superchat' && m.p === 'rumble') return 'rant';
+    if (a === 'superchat' && m.p === 'youtube' && /^super sticker/i.test(m.system || '')) return 'sticker';
+    return ALERTS.includes(a) ? a : 'other';
+  }
+
+  // The built-in sentences for when the platform sent no amount (a resub without its months, say).
+  const BARE = { resub: '{name} resubscribed!', gift: '{name} sent a gift!', raid: '{name} is raiding!', cheer: '{name} cheered!',
+                 superchat: '{name} sent a Super Chat!', sticker: '{name} sent a Super Sticker!', rant: '{name} sent a Rant!' };
+  const oneLine = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+
+  // Neighbouring text pieces joined, with no doubled or dangling spaces where a missing value was left out.
+  function tidy(parts) {
+    const out = [];
+    parts.forEach((p) => {
+      const last = out[out.length - 1];
+      if (p.text !== undefined && last && last.text !== undefined) last.text += p.text; else out.push({ ...p });
+    });
+    out.forEach((p, i) => {
+      if (p.text === undefined) return;
+      p.text = p.text.replace(/\s+/g, ' ');
+      if (i === 0) p.text = p.text.trimStart();
+      if (i === out.length - 1) p.text = p.text.trimEnd();
+    });
+    return out.filter((p) => p.text !== '');
+  }
+
+  // An alert's title for theme t, as pieces ([{text}] and [{key, value}]) a page can style: the theme's sentence for
+  // its type, a shorter built-in one when the amount is missing, and the platform's own sentence (or the name) when
+  // nothing readable is left. words: whether the viewer's own message goes under (or after) the title.
+  function alertParts(m, t, platform) {
+    m = m || {};
+    const kind = alertKind(m), labels = (t && t.alerts && t.alerts.labels) || DEFAULTS.alerts.labels;
+    let template = typeof labels[kind] === 'string' ? labels[kind] : DEFAULTS.alerts.labels[kind];
+    const vars = { name: oneLine(m.name) || 'Someone', amount: oneLine(m.amount), text: oneLine(m.text), platform: platform || '' };
+    if (!vars.amount && template === DEFAULTS.alerts.labels[kind] && BARE[kind]) template = BARE[kind];
+    const own = oneLine(m.system);
+    if (kind === 'other' && template === DEFAULTS.alerts.labels.other && own && !vars.text.includes(own)) {
+      return { kind, parts: [{ text: own }], words: !!vars.text };     // an event type CrossChat doesn't know: the platform's words
+    }
+    const parts = tidy(fillParts(template, vars));
+    if (parts.some((p) => /[\p{L}\p{N}]/u.test(p.text !== undefined ? p.text : p.value))) {
+      return { kind, parts, words: !!vars.text && !/\{text\}/.test(template) };
+    }
+    const title = own || vars.text || vars.name;
+    return { kind, parts: [{ text: title }], words: !!vars.text && vars.text !== title };
+  }
+
+  // The same as one line of text, the viewer's message after a dot: for the chat feed and the chat window.
+  function alertLine(m, t, platform) {
+    const a = alertParts(m, t, platform);
+    const title = a.parts.map((p) => (p.text !== undefined ? p.text : p.value)).join('');
+    return a.words ? title + ' · ' + oneLine(m.text) : title;
+  }
+
   function outlineShadow(t) {
     const w = t.colors.outlineWidth;
     if (!w) return 'none';
@@ -364,6 +426,7 @@
   return {
     SCHEMA, PLATFORMS, ALERTS, DEFAULTS, RANGES, ENUMS, TEXTS,
     merge, problems, diff, validName, slug, color, platforms, wanted, shows, emotePieces, fill, fillParts,
+    alertKind, alertParts, alertLine,
     luminance, contrast, readable, ink, nameColor, lightSurface, cssVars, switches, apply, clone,
   };
 });

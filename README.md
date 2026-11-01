@@ -135,7 +135,7 @@ Every setting, the CSS hooks and how to share themes are in **[docs/THEMES.md](d
 | **PC** | Windows 10 or 11, 64-bit (tested on Windows 11) |
 | **OBS Studio** | 28 or newer, with its built-in WebSocket server. Tested with **33.0.1** (obs-websocket 5.7.6). |
 | **Browser** | Google Chrome, or Microsoft Edge. Needed only for replying, and for X and TikTok. |
-| **Python** | 3.10 or newer. If you don't have it, the installer offers to install it. |
+| **Python** | Nothing to install: the setup program brings its own (python.org's embeddable Python). The zip's `Install.cmd` needs Python 3.10 or newer, and offers to install it. |
 | **X Live** *(optional)* | X Premium with access to [X Live Studio](https://studio.x.com/live), and OBS sending video to X (see [X Live](#x-live)). |
 | **TikTok LIVE** *(optional)* | Signed in to TikTok in the same browser, and OBS sending video to TikTok (see [TikTok LIVE](#tiktok-live)). |
 | **Facebook Live, Rumble** *(optional)* | Signed in to them in the same browser (see [Facebook Live and Rumble](#facebook-live-and-rumble)). |
@@ -144,17 +144,14 @@ CrossChat doesn't send your video anywhere. OBS does that. To stream to several 
 
 ## Install
 
-1. **Download** `CrossChat-<version>-windows.zip` from **[Releases](https://github.com/RandyNorthrup/crosschat-obs/releases/latest)** and extract it anywhere.
-2. **Double-click `Install.cmd`.** It does the following:
-   - finds Python 3.10+, or offers to install it;
-   - copies CrossChat to `%LOCALAPPDATA%\CrossChat`;
-   - sets up its own Python environment;
-   - asks for your Twitch, YouTube and Kick channels and whether you stream to X;
-   - turns on OBS's WebSocket server if it's off;
-   - adds a **CrossChat** folder to the Start menu.
+1. **Download** `CrossChat-Setup-<version>.exe` from **[Releases](https://github.com/RandyNorthrup/crosschat-obs/releases/latest)** and run it. It does the following:
+   - installs CrossChat for your Windows account in `%LOCALAPPDATA%\CrossChat`, with its own Python, and needs no administrator rights;
+   - turns on OBS's WebSocket server if it's off (it asks first);
+   - adds a **CrossChat** folder to the Start menu, and CrossChat to *Settings → Apps*.
 
-   Running it again later updates CrossChat and keeps your settings and themes.
-3. **Add the script to OBS:** *Tools → Scripts → +*, then pick `%LOCALAPPDATA%\CrossChat\obs\crosschat.lua`. The installer puts this path on your clipboard.
+   Running a newer one later updates CrossChat and keeps your settings, themes, sign-ins and chat history. Windows may say "Windows protected your PC" until the setup program is code-signed: **More info → Run anyway**. Details, silent install and how it's built: [docs/INSTALLER.md](docs/INSTALLER.md).
+2. **Set your channels:** Start menu → CrossChat → **Open chat** → **Settings**.
+3. **Add the script to OBS:** *Tools → Scripts → +*, then pick `%LOCALAPPDATA%\CrossChat\obs\crosschat.lua`. Setup puts this path on your clipboard.
 4. **Add the extension** to Chrome or Edge:
    1. Open `chrome://extensions` (or `edge://extensions`).
    2. Switch on **Developer mode**.
@@ -176,6 +173,8 @@ CrossChat doesn't send your video anywhere. OBS does that. To stream to several 
 > Use the `http://127.0.0.1:4466/...` addresses rather than local files. OBS 33's browser blocks pages opened as local files from reaching anything on `127.0.0.1`.
 
 To check everything without going live, press **Send test to OBS** in the Theme Studio, or start OBS streaming to a test server on your own PC. CrossChat sees that a stream to `rtmp://127.0.0.1` is a test and doesn't start anything public.
+
+**Prefer a zip?** `CrossChat-<version>-windows.zip` is still on every release. Extract it and double-click `Install.cmd`: it uses a Python 3.10+ already on your PC (or offers to install one), sets up its own environment, and asks for your channels in a console window. Then follow steps 3–5 above.
 
 ## Try it without going live
 
@@ -256,7 +255,9 @@ The extension first asks CrossChat which TikTok account is yours. On every other
 
 **Rumble.** In Settings → Connections → Rumble, paste your **Live Stream API URL** from [rumble.com/account/livestream-api](https://rumble.com/account/livestream-api). CrossChat reads Rumble chat, Rants, subs, gifted subs and the viewer count through Rumble's official API, and keeps the URL encrypted on this PC. When your Rumble live starts, CrossChat opens Rumble's chat window for it, and replies are typed there as you (sign in to Rumble in the same browser). The extension never presses Rumble's Rant button.
 
-Moderate Facebook and Rumble chat on the platforms themselves.
+**Deleting Facebook comments.** In the CrossChat window, a Facebook comment's menu has **Delete comment**. The extension opens that comment's own menu in Live Producer, picks Delete and confirms Facebook's question, as you. It finds the comment by the id Facebook gave it, so it can't delete a different one. Hiding comments and banning people are still done in Facebook itself.
+
+Moderate Rumble chat on Rumble itself.
 
 ## Settings
 
@@ -384,7 +385,7 @@ More detail, and how to report a problem privately: [SECURITY.md](SECURITY.md).
 
 ## Uninstall
 
-Start menu → CrossChat → **Uninstall CrossChat**. It offers to keep your settings and themes in `Documents\CrossChat backup`.
+Start menu → CrossChat → **Uninstall CrossChat**, or *Settings → Apps → CrossChat → Uninstall*. It offers to keep your settings and themes in `Documents\CrossChat backup`.
 
 Then remove the two pieces it can't:
 - the script in OBS (*Tools → Scripts*, select it, **−**);

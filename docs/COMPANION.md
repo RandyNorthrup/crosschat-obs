@@ -68,6 +68,7 @@ When something isn't available, the companion says why: in the bar under the hea
   - **Answer later**: stars it.
   - **Read aloud**: reads it on the streaming PC's speakers.
   - **Copy text**.
+  - **View viewer**: their card (see below).
   - **Filter this user** (streaming PC only): hides everything they write, here and on stream. Press it again on one of their messages to stop.
   - **Moderate**: see below.
   - **Quick reply to *name***: one of your quick replies, sent to that person.
@@ -80,6 +81,20 @@ When something isn't available, the companion says why: in the bar under the hea
   - **r** replies, and **s** stars;
   - **Esc** cancels a reply.
 - **The box** sends to every live chat that takes replies. Use **only:** to send to one platform. The counter warns when a message is too long for a platform: X takes 140 characters, YouTube 200, Twitch and Kick 500.
+
+### Viewer cards
+
+**Tap or click a name** (or **View viewer** in a message's actions) to see that viewer:
+- their first message this stream, and whether it was their first ever in your channel;
+- how many messages they sent this stream, and in how many earlier streams they chatted;
+- everything they wrote this stream and in earlier streams (from the chat history on the streaming PC), newest first, with a search box;
+- **Read aloud last message**, **Filter this user** (streaming PC only) and the same **Moderate** choices as on a message, for their latest message.
+
+The card shows the newest 200 lines of each; search to find older ones.
+
+### Alerts
+
+Subs, resubs, gifts, raids, cheers, Super Chats, Super Stickers, memberships and Rumble Rants look the same in the chat list whichever platform they come from: a tag with the kind (**GIFT**, **RANT**…), one sentence with the name and the amount, then what the viewer wrote. The widgets in OBS use the same sentences, which you can change in the Theme Studio.
 
 ### Quick replies
 
@@ -130,6 +145,7 @@ These are set up on the streaming PC, in Settings there.
 
 | | |
 |---|---|
+| **Channels & options** | Your Twitch, YouTube, Kick and TikTok channels, Facebook and X on or off, X's title, the window, emotes, chat history and the companion, each with a line on what it does (on the streaming PC). **Save** checks every value and says which changes wait for OBS to restart. The first time CrossChat runs without any channel, Settings opens here. |
 | **Look and sound** | Auto (follows the device), Light or Dark; a ding when a message arrives. Each device remembers its own. |
 | **Text to speech** | What to read, voice, speed, volume (on the streaming PC). **Stop reading** works from any device. |
 | **Filters** | Words, viewers, `!commands`, bots (on the streaming PC). |

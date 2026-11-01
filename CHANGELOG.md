@@ -8,6 +8,22 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 
 - The installer shows what CrossChat connects to, and asks whether to use 7TV, BetterTTV and FrankerFaceZ emotes (the one outside service CrossChat uses by default).
 - A code signing policy in the README, for signing releases through SignPath Foundation.
+- **Delete Facebook comments** from the CrossChat window. The extension uses Live Producer's own comment menu and finds the comment by the id Facebook gave it.
+
+### Fixed
+
+- In a checkout, git now ignores every `.bin` file in the folder, so an encrypted sign-in like `rumble.bin` can't be committed by accident.
+- **A setup program**, `CrossChat-Setup-<version>.exe`, now the normal way to install. See [docs/INSTALLER.md](docs/INSTALLER.md).
+  - Installs for your Windows account only, needs no administrator rights, and brings its own Python (python.org's embeddable package), so there's nothing else to install.
+  - No console windows. It shows a privacy page, asks before switching on OBS's WebSocket server, and adds CrossChat to *Settings → Apps* with an uninstaller.
+  - It keeps your settings, themes, sign-ins and chat history on update.
+  - Channels are set in CrossChat's Settings.
+  - Built in the release workflow from pinned, checksum-checked downloads, with a build provenance attestation like the zip.
+  - The zip with `Install.cmd` is still published.
+
+### Changed
+
+- The OBS script runs CrossChat with the setup program's Python when it's there, then the one `Install.cmd` made, then the Python launcher. The script's own Python field still comes first.
 
 ## [1.6.0] - 2026-10-31
 

@@ -1,6 +1,8 @@
-"""Used by the installer: write config.json from the answers it collected, and switch on OBS's WebSocket server.
+"""Used by the installers: write config.json, and switch on OBS's WebSocket server.
 
-  python setup_config.py config TEMPLATE TARGET     answers in CROSSCHAT_* environment variables
+  python setup_config.py config TEMPLATE TARGET     answers in CROSSCHAT_* environment variables (Install.cmd)
+  python setup_config.py ensure TEMPLATE TARGET     the template as it is, only when TARGET doesn't exist yet (setup.exe:
+                                                    channels are set later in CrossChat's Settings)
   python setup_config.py websocket FILE             turn the server on (a password is made when it has none)
 """
 import json
@@ -33,6 +35,13 @@ def config(template, target):
     write(target, data)
 
 
+def ensure(template, target):
+    if os.path.exists(target):
+        return
+    with open(template, encoding="utf-8-sig") as f:
+        write(target, json.load(f))
+
+
 def websocket(path):
     try:
         with open(path, encoding="utf-8-sig") as f:
@@ -49,6 +58,8 @@ def websocket(path):
 if __name__ == "__main__":
     if sys.argv[1:2] == ["config"] and len(sys.argv) == 4:
         config(sys.argv[2], sys.argv[3])
+    elif sys.argv[1:2] == ["ensure"] and len(sys.argv) == 4:
+        ensure(sys.argv[2], sys.argv[3])
     elif sys.argv[1:2] == ["websocket"] and len(sys.argv) == 3:
         websocket(sys.argv[2])
     else:

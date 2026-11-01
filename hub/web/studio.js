@@ -28,7 +28,8 @@
     bottom: 'Newest at the bottom', top: 'Newest at the top', left: 'Left', right: 'Right',
     slide: 'Slide', fade: 'Fade', pop: 'Pop', banner: 'Full-width banner', row: 'In a row', stack: 'Stacked', total: 'Total only',
   };
-  const ALERT_NAMES = { sub: 'Subs', resub: 'Resubs', gift: 'Gift subs', raid: 'Raids', cheer: 'Bits', member: 'Members', superchat: 'Super Chats', follow: 'Follows', other: 'Other events' };
+  const ALERT_NAMES = { sub: 'Subs', resub: 'Resubs', gift: 'Gift subs', raid: 'Raids', cheer: 'Bits', member: 'Members', superchat: 'Super Chats',
+                        sticker: 'Super Stickers', rant: 'Rumble Rants', follow: 'Follows', other: 'Other events' };
 
   // Every control, by section. path = where it lives in the theme.
   const SECTIONS = [

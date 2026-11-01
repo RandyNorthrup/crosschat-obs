@@ -2,7 +2,8 @@
 // script, while a live is running and CrossChat says Facebook is on:
 //   - passes new comments and the viewer count to the CrossChat hub on this PC, which shows them in the CrossChat
 //     window;
-//   - types a reply that comes from that window into Live Producer's comment box and posts it.
+//   - types a reply that comes from that window into Live Producer's comment box and posts it;
+//   - deletes a comment the streamer chose to delete in that window, through Live Producer's own comment menu.
 // Live Producer only ever shows the signed-in streamer's own broadcasts. The extension may touch no other part of
 // Facebook, and it never touches the Facebook login.
 (() => {
@@ -121,9 +122,59 @@
     return { ok: false, why: 'Facebook did not post it' };
   }
 
+  // Waits up to ms for find() to give something.
+  async function until(find, ms) {
+    for (let waited = 0; waited <= ms; waited += 100) {
+      const found = find();
+      if (found) return found;
+      await sleep(100);
+    }
+    return null;
+  }
+  const named = (root, selector, pattern) => [...root.querySelectorAll(selector)].find((b) => pattern.test(clean(b.getAttribute('aria-label') || b.textContent)));
+
+  // Deletes one comment the way the streamer would: its "..." menu, Delete, then Delete again in Facebook's question.
+  // The comment is found by the id CrossChat got from it (the hub's "fb-" + its comment_id); nothing else is touched.
+  async function remove(messageId) {
+    if (!(await wanted())) return { ok: false, why: 'no Facebook live is running in Live Producer' };
+    const article = [...document.querySelectorAll('[role="article"]')].find((a) => {
+      const c = comment(a);
+      return c && 'fb-' + c.id.replace(/[^\w=-]/g, '').slice(0, 120) === messageId;
+    });
+    if (!article) return { ok: false, why: 'that comment is no longer in Live Producer' };
+    const menu = named(article, '[role="button"], button', /report this/i);     // "Edit, delete or report this"
+    if (!menu) return { ok: false, why: 'Facebook shows no menu for that comment' };
+    menu.click();
+    const del = await until(() => {
+      for (const list of document.querySelectorAll('[role="menu"]')) {
+        const item = named(list, '[role="menuitem"], [role="button"]', /^Delete( comment)?$/i);
+        if (item) return item;
+      }
+      return null;
+    }, 3000);
+    if (!del) {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+      return { ok: false, why: "Facebook didn't offer Delete for that comment" };
+    }
+    del.click();
+    const confirm = await until(() => {
+      for (const box of document.querySelectorAll('[role="dialog"]')) {
+        if (!/Delete Comment\?/i.test(clean(box.textContent))) continue;
+        const yes = named(box, '[role="button"], button', /^Delete$/i);
+        if (yes) return yes;
+      }
+      return null;
+    }, 3000);
+    if (!confirm) return { ok: false, why: "Facebook didn't ask to confirm the delete" };
+    confirm.click();
+    return (await until(() => !article.isConnected || !comment(article), 5000)) ? { ok: true } : { ok: false, why: 'Facebook did not delete it' };
+  }
+
   chrome.runtime.onMessage.addListener((message, sender, respond) => {
-    if (message.type !== 'fb-say') return;
-    say(String(message.text || '')).then(respond, () => respond({ ok: false, why: 'it failed' }));
+    if (message.type === 'fb-say') say(String(message.text || '')).then(respond, () => respond({ ok: false, why: 'it failed' }));
+    else if (message.type === 'fb-mod' && message.action === 'delete') remove(String(message.message_id || '')).then(respond, () => respond({ ok: false, why: 'it failed' }));
+    else if (message.type === 'fb-mod') respond({ ok: false, why: 'Facebook comments can only be deleted from CrossChat' });
+    else return;
     return true;   // the answer comes later
   });
   setInterval(tick, 1000);

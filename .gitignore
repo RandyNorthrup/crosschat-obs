@@ -3,8 +3,7 @@
 /themes/
 /quick.json
 /devices.json
-/twitch.bin
-/kick.bin
+/*.bin
 /filters.json
 /tts.json
 /*-demo.json
@@ -12,6 +11,7 @@
 *.log
 *.tmp
 
+/.claude/
 __pycache__/
 .venv/
 .ruff_cache/
