@@ -234,6 +234,8 @@ A Stream Deck can trigger them with a *Hotkey* action, or open the Start-menu sh
 
 **The OBS script panel** (*Tools → Scripts → crosschat.lua*) has buttons for all of the above, plus a dry run for X and **Start the hub again**.
 
+**Dock the chat inside OBS.** In OBS: *Docks → Custom Browser Docks*, name it `CrossChat`, URL `http://127.0.0.1:4466/` (4466 is the `port` setting), then **Apply** and drag the dock where you want it. Use `127.0.0.1`, not `localhost`: `localhost` is the overlays' address and only serves the widgets. The dock reads chat, replies, puts messages on stream and moderates Twitch and Kick. Keep the CrossChat window in Chrome or Edge open as well (it opens by itself when you go live): it does the work on the YouTube, X, TikTok, Facebook, Instagram and Rumble pages, and it is the one that reads chat aloud.
+
 ### What each platform supports
 
 | | Read chat | Reply | Moderate | Viewer count | Alerts |
@@ -242,10 +244,10 @@ A Stream Deck can trigger them with a *Hotkey* action, or open the Start-menu sh
 | **YouTube** | ✅ | ✅ | remove, 5-minute timeout, hide user | ✅ | Super Chats, Super Stickers, members, gifted memberships |
 | **Kick** | ✅ | ✅ (official API once connected) | delete, timeout, ban, unban | ✅ | subs, gifts, hosts (see [Known limits](#known-limits)) |
 | **X** | ✅ | ✅ | — | ✅ | — |
-| **TikTok LIVE** | ✅ (your own LIVE page) | ✅ | in TikTok | ✅ | — (see [Known limits](#known-limits)) |
-| **Facebook Live** | ✅ (Live Producer) | ✅ | in Facebook | ✅ | — |
+| **TikTok LIVE** | ✅ (your own LIVE page) | ✅ | in TikTok | ✅ | gifts, follows, shares; likes and joins if you turn them on (see [Known limits](#known-limits)) |
+| **Facebook Live** | ✅ (Live Producer) | ✅ | delete (the rest in Facebook) | ✅ | — |
 | **Instagram Live** | ✅ (Live producer) | ✅ | in Instagram | ✅ | — |
-| **Rumble** | ✅ (official API) | ✅ | in Rumble | ✅ | Rants, subs, gifted subs |
+| **Rumble** | ✅ (official API) | ✅ | delete, mute 5 minutes, mute for the stream, mute forever | ✅ | Rants, subs, gifted subs |
 
 ## X Live
 

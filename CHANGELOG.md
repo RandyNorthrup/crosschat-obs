@@ -27,8 +27,11 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 - **Mac (beta)**: a macOS download with `Install.command`. Sign-ins are encrypted under a key in your login Keychain, and the chat window is placed through your browser. It's tested on macOS in CI (tests, a full install, start and uninstall), but not yet with OBS on a real Mac.
 - The installer shows what CrossChat connects to, and asks whether to use 7TV, BetterTTV and FrankerFaceZ emotes.
 - A code signing policy in the README, for signing releases through SignPath Foundation (application in progress).
+- The README shows how to dock the chat window inside OBS (Docks → Custom Browser Docks), and the real-OBS check now runs with it docked.
 
 ### Fixed
+
+- The README's table of what each platform supports still said Facebook and Rumble are moderated only on the platform, and that TikTok has no alerts.
 
 - Facebook and Rumble messages carried no moderation id, so moderation menus for them couldn't work.
 - A Rumble reply could stall when Rumble kept its Send button off; the text is now typed the way a person types.

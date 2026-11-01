@@ -50,6 +50,8 @@ def obs_settings(config, version, backdrop=None):
     major, minor, patch = (int(p) for p in version.split(".")[:3])
     ini = ("[General]\nFirstRun=true\nLastVersion=%d\nEnableAutoUpdates=false\n\n[Basic]\nProfile=CrossChat\nProfileDir=CrossChat\n"
            "SceneCollection=CrossChat\nSceneCollectionFile=CrossChat\n" % ((major << 24) | (minor << 16) | patch))
+    # the CrossChat window docked inside OBS (Docks → Custom Browser Docks), as the README tells streamers to set it up
+    ini += "\n[BasicWindow]\nExtraBrowserDocks=%s\n" % json.dumps([{"title": "CrossChat", "url": BASE + "/", "uuid": str(uuid.uuid4())}])
     write(os.path.join(config, "global.ini"), ini)
     write(os.path.join(config, "user.ini"), ini)
     write(os.path.join(config, "plugin_config", "obs-websocket", "config.json"), json.dumps(
