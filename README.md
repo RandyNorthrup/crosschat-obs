@@ -197,7 +197,7 @@ There is a Mac download too. It was checked with **OBS Studio 33.0.1** (installe
 | The sign-in key in the login Keychain: stored, read back, removed | ✅ | | ✅ |
 | The extension in Chrome 156: the chat window recognises it, and the hub takes that window as the one that posts replies | ✅ | | |
 | **Read-aloud** in the chat window (Chrome 156): the Mac's voices are listed (191 on this Mac), the hub sends the line to the chat window that reads aloud and to no other, and the line is spoken from start to end, in the voice picked in Settings | ✅ | | |
-| **The phone companion**, with OBS starting the hub: pairing from Settings; a Windows PC and the MacBook's Chrome pair over the home network with the code, get the chat, send a test reply (nothing posted) through the Mac's chat window and its extension, and have a line read aloud on the Mac. Refused before pairing, with a wrong code, from another website, and once removed in Settings | ✅ | ✅ as the paired browser | |
+| **The phone companion**: pairing started from Settings; a Windows PC pairs over the home network with the code (with OBS starting the hub), gets the chat, sends a test reply (nothing posted) through the Mac's chat window and its extension, and has a line read aloud on the Mac; the MacBook's Chrome pairs through the pairing page and shows the chat. Refused before pairing, with a wrong code, from another website, and once removed in Settings | ✅ | ✅ as the paired browser | |
 | The uninstaller removes CrossChat, its Applications folder and its Keychain key | | ✅ | ✅ the folders |
 | The hub's and the OBS script's tests | ✅ all 158 | ✅ 142; the 11 that use the Keychain can't run over SSH there | ✅ 161; the one Tailscale test is for Windows |
 
