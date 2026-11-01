@@ -78,6 +78,8 @@
 - CrossChat reads its OBS WebSocket settings from OBS itself, and portable OBS works too.
 - No account, server or telemetry. Update checks only if you switch them on: then CrossChat asks GitHub once a day and shows a link to the new release (it never downloads anything itself).
 
+**How it compares** with Restream, Streamlabs, StreamElements, Social Stream Ninja, Casterlabs and Streamer.bot, every claim linked to its source: [docs/COMPARISON.md](docs/COMPARISON.md).
+
 ## See it in action
 
 | | |

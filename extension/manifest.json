@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CrossChat",
-  "version": "1.7.2",
+  "version": "1.8.0",
   "description": "Companion to the CrossChat hub for OBS: starts and ends your X livestream with OBS, brings in chat from your own TikTok LIVE page, Facebook Live Producer and Instagram live, and posts chat replies to YouTube, X, TikTok, Facebook, Instagram and Rumble. Places and closes CrossChat's own windows. Talks only to the hub on this PC and reads no logins.",
   "minimum_chrome_version": "116",
   "icons": {

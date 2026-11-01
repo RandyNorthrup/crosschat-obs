@@ -4,8 +4,25 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-11-01
+
+### Highlights
+
+- **Signed Windows installer.** Since 1.7.2, `CrossChat-Setup-<version>.exe` is code-signed by Randy Northrup (Azure Artifact Signing), and the release workflow checks the signature before publishing.
+- **Linux.** A new download, tested with real OBS on Ubuntu 25.10 and, on every change, on Ubuntu 24.04 (OBS from the OBS Project's PPA and from Flathub).
+- **Mac, out of beta.** Tested with real OBS 33.0.1 on Intel Macs (macOS 15.7) and, on every change, on an Apple-silicon Mac (macOS 26).
+- **Moderation tested live, with a second account in the chat** (31 October 2026):
+  - Twitch: delete, timeout, ban and unban, also from the CrossChat dock inside OBS.
+  - YouTube: remove, 5-minute timeout and hide user; remove also from the dock.
+  - Kick: delete, timeout, ban and unban; timeout also from the dock.
+  - Facebook: delete a comment.
+  - Rumble: delete was tested on the streamer's own message in a real live; moderating another viewer isn't tested yet.
+- **Found and fixed by those live tests:** YouTube moderation, Kick chat (it had stopped arriving) and Facebook comments (viewers' comments never reached CrossChat).
+- **Real OBS end to end on Windows, Mac and Linux on every change**, plus CrossChat's windows placed and closed by its extension on every system.
+
 ### Added
 
+- `docs/COMPARISON.md`: CrossChat next to Restream, Streamlabs, StreamElements, Social Stream Ninja, Casterlabs and Streamer.bot, each claim linked to that product's own page (checked 31 October to 1 November 2026).
 - **Linux:** a Linux download, `CrossChat-<version>-linux.tar.gz`, installed with `bash scripts/install.sh` into `~/.local/share/CrossChat` (readable by your account only), with app-menu entries and an uninstaller. Checked on Ubuntu 25.10 with Ubuntu's OBS 30.2.3 and OBS 33.0.1 from Flathub, and on every change on Ubuntu 24.04 with OBS 32.2.0 from the OBS Project's PPA and 33.0.1 from Flathub (see the README's Linux section for exactly what, and what isn't checked yet).
   - **Read-aloud** uses the computer's own voices through speech-dispatcher. Google Chrome offers them only when it's started with `--enable-speech-dispatcher` (without it, only Google's online voices, which CrossChat doesn't pick by itself). The installer says whether speech-dispatcher is there, and which packages add it.
   - **Sign-ins** are encrypted as on a Mac (AES-256 and HMAC-SHA256) under a key kept in your desktop keyring (Secret Service: GNOME Keyring, KWallet and others), through `secret-tool`, which gets the key on its standard input, never on a command line. **With no keyring, CrossChat keeps no sign-ins at all and says why**: Twitch and Kick drop a sign-in they couldn't encrypt, and Rumble and Discord say the keyring's reason instead of "Could not save it".
@@ -314,7 +331,8 @@ First public release.
 - Overlays are served by the hub over `http://127.0.0.1`. OBS 33 blocks local-file overlays from reaching the hub.
 - Fonts are Windows' own: Segoe UI Variable and Cascadia Mono.
 
-[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.7.2...HEAD
+[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.7.2...v1.8.0
 [1.7.2]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.6.0...v1.7.0
