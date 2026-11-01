@@ -16,7 +16,7 @@ Get-CimInstance Win32_Process -Filter "Name like 'python%'" | Where-Object { $_.
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 
 $keep = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'CrossChat backup'
-$mine = @('config.json', 'themes') | ForEach-Object { Join-Path $App $_ } | Where-Object { Test-Path $_ }
+$mine = @('config.json', 'themes', 'quick.json', 'filters.json', 'tts.json') | ForEach-Object { Join-Path $App $_ } | Where-Object { Test-Path $_ }
 if ($mine) {
     $save = if ($Quiet) { 'y' } else { Read-Host "Keep your settings and themes in `"$keep`"? (y/n) [y]" }
     if ($save -notmatch '^[nN]') {
@@ -27,6 +27,8 @@ if ($mine) {
 }
 
 if (Test-Path $Menu) { Remove-Item $Menu -Recurse -Force }
+# The Apps entry, if CrossChat's setup program installed here before
+Remove-Item 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\CrossChat' -Recurse -Force -ErrorAction SilentlyContinue
 # This script runs from inside the folder it removes, so the last step happens after it ends.
 Start-Process -WindowStyle Hidden cmd.exe -ArgumentList "/c timeout /t 2 >nul & rmdir /s /q `"$App`""
 

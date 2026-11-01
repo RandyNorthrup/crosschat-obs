@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self'">
+<title>CrossChat: first steps</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f6f1e9; --fg: #1d2733; --muted: #5d6874; --line: #e1d6c6; --accent: #b87045; --card: #fffaf3; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0d141c; --fg: #f0e8dc; --muted: #a9b2bc; --line: #2a3644; --accent: #e3a57b; --card: #141e29; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 20px 48px; }
+  h1 { font-size: 28px; margin: 0 0 6px; }
+  .lead { color: var(--muted); margin: 0 0 28px; }
+  ol.steps { list-style: none; padding: 0; margin: 0; counter-reset: s; }
+  ol.steps > li { counter-increment: s; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px 16px 64px; margin: 0 0 14px; position: relative; }
+  ol.steps > li::before { content: counter(s); position: absolute; left: 18px; top: 16px; width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; display: grid; place-items: center; }
+  h2 { font-size: 18px; margin: 0 0 6px; }
+  code { font: 14px "Cascadia Mono", Consolas, monospace; background: color-mix(in srgb, var(--accent) 12%, transparent); padding: 1px 6px; border-radius: 6px; word-break: break-all; }
+  table { border-collapse: collapse; margin-top: 8px; width: 100%; }
+  td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .note { color: var(--muted); font-size: 14px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>CrossChat is installed</h1>
+  <p class="lead">Four short steps and your stream chat is in one window.</p>
+  <ol class="steps">
+    <li>
+      <h2>Add the script to OBS</h2>
+      In OBS: <b>Tools → Scripts → +</b>, then pick<br>
+      <code>%LOCALAPPDATA%\CrossChat\obs\crosschat.lua</code><br>
+      <span class="note">Setup put this path on your clipboard: paste it into the file box. From then on, CrossChat starts and stops with OBS.</span>
+    </li>
+    <li>
+      <h2>Set your channels</h2>
+      Open CrossChat (Start menu → CrossChat → <b>Open chat</b>), then <b>Settings</b>, and enter your Twitch, YouTube, Kick, TikTok,
+      Facebook, Rumble and X details. Connect Twitch and Kick there to reply and moderate through their official APIs.
+    </li>
+    <li>
+      <h2>Add the browser extension</h2>
+      In Chrome or Edge: open <code>chrome://extensions</code> (or <code>edge://extensions</code>), switch on <b>Developer mode</b>,
+      press <b>Load unpacked</b> and pick<br>
+      <code>%LOCALAPPDATA%\CrossChat\extension</code><br>
+      <span class="note">Reading chat and the on-stream widgets work without it. Replying to YouTube, X, TikTok, Facebook and Rumble, and X Live, need it. It reads no logins.</span>
+    </li>
+    <li>
+      <h2>Put chat on your stream</h2>
+      In OBS, add a <b>Browser Source</b> for each widget you want:
+      <table>
+        <tr><td>Chat feed</td><td><code>http://127.0.0.1:4466/overlay/chat</code></td><td>450 × 800</td></tr>
+        <tr><td>Featured message</td><td><code>http://127.0.0.1:4466/overlay/featured</code></td><td>900 × 260</td></tr>
+        <tr><td>Viewer counter</td><td><code>http://127.0.0.1:4466/overlay/viewers</code></td><td>600 × 120</td></tr>
+        <tr><td>Alerts</td><td><code>http://127.0.0.1:4466/overlay/alerts</code></td><td>800 × 300</td></tr>
+      </table>
+      <span class="note">Restyle them in Start menu → CrossChat → Theme Studio. To try everything without going live: Start menu → CrossChat → Try the demo.</span>
+    </li>
+  </ol>
+  <p class="note">More help: the README in your CrossChat folder (<code>%LOCALAPPDATA%\CrossChat\README.md</code>), or github.com/RandyNorthrup/crosschat-obs.</p>
+</main>
+</body>
+</html>

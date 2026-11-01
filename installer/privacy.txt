@@ -1,0 +1,17 @@
+CrossChat runs only on this PC. It has no server, no account and no telemetry.
+
+It connects only to:
+  - the chat platforms you set up (Twitch, YouTube, Kick, X, TikTok, Facebook, Rumble), and
+  - unless you turn them off in CrossChat's Settings, 7TV, BetterTTV and FrankerFaceZ for emote pictures.
+    They get your Twitch channel's public id.
+
+Your sign-ins (Twitch, Kick, Rumble) are kept on this PC, encrypted for your Windows account.
+Replies to YouTube, X, TikTok and Facebook are typed into those sites' own pages in your browser;
+the CrossChat browser extension reads no logins.
+
+Setup installs CrossChat for your Windows account only, in your AppData folder, with its own copy of
+Python from python.org. It doesn't need administrator rights and changes nothing else on this PC,
+except, if you agree, switching on OBS's WebSocket server so CrossChat can follow your stream.
+
+Every connection CrossChat makes and what it sends:
+https://github.com/RandyNorthrup/crosschat-obs/blob/main/SECURITY.md#what-leaves-your-pc

@@ -44,3 +44,7 @@ jobs:
       - name: Release package builds
         shell: pwsh
         run: ./scripts/package.ps1
+      - name: Setup program builds
+        if: matrix.python == '3.14'
+        shell: pwsh
+        run: ./installer/build.ps1

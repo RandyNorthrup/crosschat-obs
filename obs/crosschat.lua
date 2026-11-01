@@ -83,14 +83,16 @@ local function obs_config_folder()
   return (os.getenv("APPDATA") or "") .. "\\obs-studio"
 end
 
--- pythonw.exe to run the hub with: the setting, else the installer's own copy, else the Python launcher.
+-- pythonw.exe to run the hub with: the setting, else the Python CrossChat's setup brings, else the one Install.cmd
+-- made, else the Python launcher.
 local function python()
   if python_setting ~= "" then
     return python_setting, ""
   end
-  local mine = app_folder() .. "\\.venv\\Scripts\\pythonw.exe"
-  if exists(mine) then
-    return mine, ""
+  for _, mine in ipairs({ app_folder() .. "\\python\\pythonw.exe", app_folder() .. "\\.venv\\Scripts\\pythonw.exe" }) do
+    if exists(mine) then
+      return mine, ""
+    end
   end
   return "pyw.exe", "-3 "
 end
@@ -125,7 +127,7 @@ local function python_run(script, arguments, watched)
     ok = run(exe, parameters, hub)
   end
   if not ok then
-    obs.script_log(obs.LOG_WARNING, "could not start Python (" .. exe .. "). Run Install.cmd again, or set the Python field in "
+    obs.script_log(obs.LOG_WARNING, "could not start Python (" .. exe .. "). Run CrossChat's setup again, or set the Python field in "
       .. "Tools > Scripts > crosschat.lua.")
   end
   return ok
