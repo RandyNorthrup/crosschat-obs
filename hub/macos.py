@@ -1,10 +1,11 @@
 """macOS: the few jobs the hub does with Windows' own tools, done the Mac way.
 
-  windows / place / close   the browser's own AppleScript dictionary (Chrome, Edge and Chromium all have one). When
-                            OBS starts the hub, macOS refuses this without asking anyone: OBS 33 is signed without the
-                            com.apple.security.automation.apple-events entitlement, and macOS holds programs OBS starts
-                            to OBS's entitlements. Windows still open where they should (the browser places them); the
-                            hub just can't move or close them afterwards
+  windows / place / close   the browser's own AppleScript dictionary (Chrome, Edge and Chromium all have one), for when
+                            the CrossChat extension isn't there to do it (it does it with the browser's own window API,
+                            see extension/windows.js). When OBS starts the hub, macOS refuses AppleScript without
+                            asking anyone: OBS 33 is signed without the com.apple.security.automation.apple-events
+                            entitlement, and macOS holds programs OBS starts to OBS's entitlements. Then, without the
+                            extension, windows open where the browser puts them and stay where they are
   work_area                 the main screen without the menu bar and the Dock (AppKit, through osascript)
   message_box               a plain alert (osascript)
   running                   whether a process (OBS) is still there
@@ -146,8 +147,11 @@ def work_area():
     return _screen["area"]
 
 
-async def open_app(app, url, where):
-    """A bare window of the browser on `url` at `where` (x, y, width, height); its handle when CrossChat may manage it."""
+async def open_app(app, url, where, place_it=True, wait=30):
+    """A bare window of the browser on `url` at `where` (x, y, width, height); its handle when CrossChat may manage it.
+    A running Chrome opens it where it likes (it takes --window-position and --window-size only when it starts with
+    that window): with `place_it` it is then moved to `where`. A browser starting cold can take more than 10 seconds
+    to show it: it is looked for for up to `wait` seconds."""
     before = await asyncio.to_thread(windows, app)
     command = ["open", "-n", "-a", app, "--args", "--app=" + url, "--window-position=%d,%d" % where[:2], "--window-size=%d,%d" % where[2:]]
     try:
@@ -156,14 +160,16 @@ async def open_app(app, url, where):
         return None
     if before is None:                      # no say over the browser's windows: it opened where it was asked, that's all
         return None
-    for _ in range(40):
+    deadline = time.monotonic() + wait
+    while time.monotonic() < deadline:
         await asyncio.sleep(0.25)
         now = await asyncio.to_thread(windows, app)
         if now is None:                      # macOS is asking the person, or was told no: the window is open all the same
             return None
         new = [h for h in now if h not in before]
         if new:
-            place(new[0], *where)
+            if place_it:
+                place(new[0], *where)
             return new[0]
     return None
 

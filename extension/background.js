@@ -1,10 +1,12 @@
-// Background part of the CrossChat extension. Two jobs:
+// Background part of the CrossChat extension. Three jobs:
 //   1. carry questions and reports between X's Live Studio page, the streamer's own TikTok LIVE page, Facebook's
 //      Live Producer, Instagram's Live producer and the CrossChat hub on this PC (hub/hub.py), which a page script
 //      may not call directly;
 //   2. post a reply typed in the CrossChat window to YouTube, X, TikTok, Facebook, Instagram and Rumble by typing it into those
 //      sites' own chat boxes, as the accounts logged in to this browser. (Twitch and Kick replies go through their official APIs in
 //      the hub; the extension never reads any login, cookie or token.)
+//   3. place, move and close CrossChat's own windows for the hub (windows.js says which windows, and how).
+if (typeof importScripts === 'function') importScripts('windows.js');     // (the service worker; Node, in the tests, has none)
 const HUB = 'http://127.0.0.1:4466';
 const LIMIT = { youtube: 200, x: 140, tiktok: 150, facebook: 8000, instagram: 2200, rumble: 200 };
 const NAME = { youtube: 'YouTube', x: 'X', tiktok: 'TikTok', facebook: 'Facebook', instagram: 'Instagram', rumble: 'Rumble' };
@@ -21,6 +23,10 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   }
   if (message.type === 'mod' && from.startsWith(HUB + '/')) {
     moderate(message.data || {}, sender.tab).then(respond, () => respond({ ok: false, why: 'it failed' }));
+    return true;
+  }
+  if (message.type === 'window' && from.startsWith(HUB + '/') && sender.tab) {    // only from the chat window, for the hub
+    self.CrossChatWindows.job(message.data || {}, sender.tab, chrome.windows).then(respond, () => respond({ ok: false, why: 'it failed' }));
     return true;
   }
   if (message.type === 'tt-check' && from.startsWith('https://www.tiktok.com/')) {     // which account is the streamer's

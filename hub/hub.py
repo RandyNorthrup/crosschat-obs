@@ -860,24 +860,110 @@ def browser_exe():
     return None
 
 
-async def open_app(url, where):
-    """Open a bare window of the everyday browser on `url` at `where` (x, y, width, height) and hand the keyboard back."""
+# CrossChat's windows are the chat window and the platform pages it works through (PAGES: X Live Studio, your TikTok
+# LIVE page, Live Producer, Instagram, Rumble's chat), opened in the everyday browser with --app. With the CrossChat
+# extension in that browser (a chat window with it is connected: the "executor"), the extension places, moves and
+# closes them with the browser's own window API (extension/windows.js), with no permission from the system: macOS
+# refuses Apple Events to programs OBS starts, and Wayland lets no program move another's windows, so on a Mac and on
+# Linux it does the placing. On Windows the system's own way places a window it can see: it puts the window's visible
+# edges exactly on the place, in Windows' own pixels, while the browser's bounds include Windows' invisible resize
+# borders (the visible window was 7 px in from them at the left, right and bottom, on GitHub's Windows machines) and
+# are in the browser's own units. Closing is the extension's everywhere (it never closes an ordinary browser window of
+# yours, even one showing the chat in a tab). Without the extension, or when it can't, the system's way does it all.
+PAGES = ("x", "tiktok", "facebook", "instagram", "rumble")
+WINDOW_WAIT = 30                             # seconds a new window may take to show up (a browser starting cold took 10 s in our tests)
+HANDLE_WAIT = 5                              # once the extension has placed a window: seconds the system may take to find it too
+pages = {}                                   # role -> {"url": address opened, "id": the browser's id for the window, "handle": the system's}
+
+
+def system_places():
+    """Whether the system's own way places a window it can see before the extension is asked (Windows)."""
+    return not (MAC or LINUX)
+
+
+def opening():
+    """One window opens at a time, so each new window is told apart from the others (the system's way knows a new
+    window by its not having been there before)."""
+    loop = asyncio.get_running_loop()
+    if getattr(opening, "loop", None) is not loop:
+        opening.loop, opening.lock = loop, asyncio.Lock()
+    return opening.lock
+
+
+async def by_extension(action, role, url="", where=None, window=None, known=None, wait=0):
+    """A window job for the CrossChat extension, through the chat window that has it: "list" (the ids of the browser's
+    windows), "place", "find" (a page just opened, not moved) or "close" one of CrossChat's windows. Its answer,
+    {"ok": True, ...} when it did the job; ok is False when no chat window with the extension is connected, the
+    extension is too old for window jobs, or it couldn't (then the system's way is next)."""
+    if state["executor"] is None:
+        return {"ok": False, "why": NO_EXECUTOR}
+    job = {"id": secrets.token_hex(8), "kind": "window", "action": action, "role": role, "url": url,
+           "box": [int(n) for n in where] if where else None, "window": window or 0, "known": known or [], "wait": wait}
+    answer = await by_executor(job, wait + 15)
+    if not isinstance(answer, dict):
+        answer = {"ok": False, "why": "the extension did not answer"}
+    if answer.get("ok") is True:
+        if action != "list":
+            log.info("window %s %s: done by the extension", action, role)
+        return answer
+    log.info("window %s %s: %s", action, role or "-", answer.get("why") or "it couldn't")
+    return {**answer, "ok": False}
+
+
+async def open_app(url, where, role=None):
+    """Open a bare window of the everyday browser on `url` and put it at `where` (x, y, width, height), without taking the
+    keyboard. A browser that is already running opens it where it likes (it takes --window-position and --window-size
+    only when it starts with that window), so the window is moved once it is there. A platform page (`role`) is found
+    by the extension too, when a chat window with it is connected, so the extension can close it later. Returns the
+    system's handle for the window (or None), for closing it the system's way."""
     exe = browser_exe()
     if not exe:
         warn("CrossChat could not find Chrome or Edge. Set \"browser\" in config.json to the full path of your browser.")
         return None
+    async with opening():
+        known = await by_extension("list", "") if role else {"ok": False}
+        found = {}
+        if not known["ok"]:
+            handle = await os_open(exe, url, where, True)
+        elif system_places():                    # Windows: the system places it; the extension finds it (to close it)
+            native = asyncio.ensure_future(os_open(exe, url, where, True))
+            found = await by_extension("find", role, url=url, known=known.get("windows"), wait=WINDOW_WAIT)
+            handle = await native
+            if not handle and found["ok"]:       # (the system didn't see it: the extension places it)
+                await by_extension("place", role, url=url, where=where, window=found["window"])
+        else:                                    # macOS, Linux: the extension finds and places it; the system finds its handle
+            native = asyncio.ensure_future(os_open(exe, url, where, False))
+            found = await by_extension("place", role, url=url, where=where, known=known.get("windows"), wait=WINDOW_WAIT)
+            if found["ok"]:                      # placed: the system's handle (to close it without the extension) if it's there soon
+                await asyncio.wait({native}, timeout=HANDLE_WAIT)
+                if not native.done():
+                    native.cancel()
+                handle = native.result() if native.done() and not native.cancelled() else None
+            else:
+                handle = await native
+                if handle:
+                    place(handle, *where)
+        if role:
+            pages[role] = {"url": url, "id": found.get("window") if found.get("ok") else None, "handle": handle}
+        return handle
+
+
+async def os_open(exe, url, where, place_it):
+    """Start the window with the browser's command line, then find it (and with `place_it`, place it) the system's way."""
     if MAC:
-        return await macos.open_app(exe, url, where)
+        return await macos.open_app(exe, url, where, place_it, WINDOW_WAIT)
     if LINUX:
-        return await linux.open_app(exe, url, where)
+        return await linux.open_app(exe, url, where, place_it, WINDOW_WAIT)
     before, front = set(browser_windows()), user32.GetForegroundWindow()
     cmd = [exe, "--app=" + url, "--window-position=%d,%d" % where[:2], "--window-size=%d,%d" % where[2:]]
     subprocess.Popen(cmd, creationflags=NO_WINDOW, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for _ in range(40):
+    deadline = time.monotonic() + WINDOW_WAIT
+    while time.monotonic() < deadline:
         await asyncio.sleep(0.25)
         new = [h for h in browser_windows() if h not in before]
         if new:
-            place(new[0], *where)
+            if place_it:
+                place(new[0], *where)
             if front:
                 user32.SetForegroundWindow(front)
             return new[0]
@@ -885,17 +971,70 @@ async def open_app(url, where):
 
 
 async def show_window():
+    """Open the chat window, or put the open one back in its place."""
     where = box(CFG["window"], "chat")
-    if LINUX:
+    if system_places():                          # Windows: its own way, when it sees the chat window
+        found = browser_windows(TITLE)
+        if found:
+            place(found[0], *where)
+            return
+    moved = await by_extension("place", "chat", where=where)
+    if moved["ok"]:
+        return
+    if moved.get("none") or system_places():    # (the extension sees every window of its browser: no chat window there)
+        found = []
+    elif LINUX:
         found = await asyncio.to_thread(linux.windows, browser_exe(), TITLE)
         if found is None and roles["speaker"]:   # open already, where X can't see it (a Wayland browser): not a second one
             return
     else:
-        found = await asyncio.to_thread(browser_windows, TITLE) if MAC else browser_windows(TITLE)     # (a Mac asks the browser)
+        found = await asyncio.to_thread(browser_windows, TITLE)     # (a Mac asks the browser)
     if found:
         place(found[0], *where)
-    else:
-        await open_app("http://127.0.0.1:%d/" % PORT, where)
+        return
+    state["chat_opened"] = (where, time.time())  # the extension puts it in its place once it's up (chat_connected)
+    if await open_app("http://127.0.0.1:%d/" % PORT, where) and system_places():
+        state.pop("chat_opened", None)           # (Windows: placed already, the system's way)
+
+
+async def chat_connected():
+    """A chat window with the extension has connected. If CrossChat has just opened it and the system's way didn't
+    place it, the extension puts it in its place (a running browser opens a new window where it likes)."""
+    opened = state.get("chat_opened")
+    if not opened or time.time() - opened[1] >= 2 * WINDOW_WAIT:
+        return
+    async with opening():                        # (the system's way may be finding it this moment)
+        pass
+    await asyncio.sleep(0)
+    if state.pop("chat_opened", None):
+        await by_extension("place", "chat", where=opened[0])
+
+
+async def open_page(role, url, where):
+    """Open one of the platform pages in a window of its own, closing the one opened before."""
+    await close_page(role)
+    await open_app(url, where, role)
+
+
+async def close_page(role):
+    """Close the platform page CrossChat opened for `role`, if it is still there: by the extension, else the system's way."""
+    page = pages.pop(role, None)
+    if page and not (await by_extension("close", role, url=page["url"], window=page.get("id")))["ok"]:
+        close_handle(page.get("handle"))
+
+
+async def close_chat():
+    """Close the chat window: by the extension (every chat window CrossChat opened in that browser), else the system's way."""
+    state.pop("chat_opened", None)
+    if not (await by_extension("close", "chat"))["ok"]:
+        close_window()
+
+
+async def close_windows():
+    """The platform pages, then the chat window (it carries the extension's jobs, so it goes last)."""
+    for role in PAGES:
+        await close_page(role)
+    await close_chat()
 
 
 def close_window():
@@ -932,11 +1071,6 @@ def x_title():
     return ((X.get("title_prefix") or "") + line)[:120] if line else (X.get("title") or "Live now")[:120]
 
 
-def close_x_window():
-    close_handle(state.get("x_window"))
-    state["x_window"] = None
-
-
 async def x_go(mode):
     """Open X's Live Studio and ask the extension to go live there.
 
@@ -950,8 +1084,7 @@ async def x_go(mode):
     tail = {"live": "#golive", "private": "#golive-private", "dry": "#golive-dry"}.get(mode, "")
     state["x_armed"] = (mode, time.time()) if tail else None
     state["x_last"] = None
-    close_x_window()
-    state["x_window"] = await open_app("https://studio.x.com/live" + tail, box(X.get("window"), "x"))
+    await open_page("x", "https://studio.x.com/live" + tail, box(X.get("window"), "x"))
     if mode == "live":
         note("X: starting the livestream there...")
     return mode or "OBS is not live, so X was only opened"
@@ -1036,15 +1169,9 @@ def tiktok_page():
     return "https://www.tiktok.com/@%s/live" % TIKTOK
 
 
-def close_tiktok_window():
-    close_handle(state.get("tiktok_window"))
-    state["tiktok_window"] = None
-
-
 async def tiktok_open():
-    close_tiktok_window()
     set_status("tiktok", "waiting")
-    state["tiktok_window"] = await open_app(tiktok_page(), box(CFG.get("tiktok_window"), "tiktok"))
+    await open_page("tiktok", tiktok_page(), box(CFG.get("tiktok_window"), "tiktok"))
 
 
 def tiktok_off():
@@ -1141,15 +1268,9 @@ def tiktok_feed(first):
 facebook_told = collections.deque(maxlen=5000)
 
 
-def close_facebook_window():
-    close_handle(state.get("facebook_window"))
-    state["facebook_window"] = None
-
-
 async def facebook_open():
-    close_facebook_window()
     set_status("facebook", "waiting")
-    state["facebook_window"] = await open_app("https://www.facebook.com/live/producer", box(CFG.get("facebook_window"), "facebook"))
+    await open_page("facebook", "https://www.facebook.com/live/producer", box(CFG.get("facebook_window"), "facebook"))
 
 
 def facebook_off():
@@ -1194,15 +1315,9 @@ def facebook_feed(first):
 instagram_told = collections.deque(maxlen=5000)  # comments already shown (the page gives them no ids; see instagram.js)
 
 
-def close_instagram_window():
-    close_handle(state.get("instagram_window"))
-    state["instagram_window"] = None
-
-
 async def instagram_open():
-    close_instagram_window()
     set_status("instagram", "waiting")
-    state["instagram_window"] = await open_app("https://www.instagram.com/", box(CFG.get("instagram_window"), "instagram"))
+    await open_page("instagram", "https://www.instagram.com/", box(CFG.get("instagram_window"), "instagram"))
 
 
 def instagram_off():
@@ -1255,15 +1370,9 @@ def rumble_chat_id(live):
     return str(int(raw, 36)) if re.fullmatch(r"[0-9a-z]{1,13}", raw) else ""
 
 
-def close_rumble_window():
-    close_handle(state.get("rumble_window"))
-    state["rumble_window"] = None
-
-
 async def rumble_open(chat):
     """Rumble's own chat pop-out for this live, where the extension types replies (Rumble has no API for sending)."""
-    close_rumble_window()
-    state["rumble_window"] = await open_app("https://rumble.com/chat/popup/" + chat, box(CFG.get("rumble_window"), "rumble"))
+    await open_page("rumble", "https://rumble.com/chat/popup/" + chat, box(CFG.get("rumble_window"), "rumble"))
 
 
 def rumble_read(data, told, last):
@@ -1421,16 +1530,11 @@ async def stream_stopped():
 
     async def later():
         await asyncio.sleep(CFG.get("close_window_seconds_after_stream", 120))
-        close_window()
-        close_x_window()
-        close_tiktok_window()
         tiktok_off()
-        close_facebook_window()
         facebook_off()
-        close_instagram_window()
         instagram_off()
-        close_rumble_window()
         state["rumble_chat"] = ""
+        await close_windows()
     closing = asyncio.create_task(later())
 
 
@@ -1570,8 +1674,8 @@ async def obs_link():
             break
         await asyncio.sleep(2)
     log.info("OBS closed")
-    close_window()
-    close_x_window()
+    await close_page("x")
+    await close_chat()
 
 
 # ---- themes: how the on-stream widgets look ----------------------------------------------------------
@@ -2766,6 +2870,7 @@ async def serve(reader, writer, remote=False):
                 if query.get("executor") == ["1"]:           # the chat window with the extension: it posts for everyone
                     take_role("executor", queue)
                     send(executor_event())
+                    asyncio.create_task(chat_connected())   # (and puts itself in its place, if CrossChat has just opened it)
                 if query.get("speaker") == ["1"]:            # the chat window on this PC (not in OBS): it reads chat aloud
                     take_role("speaker", queue)
             queue.put_nowait(executor_event())        # (not to a PublicFeed)
@@ -3099,12 +3204,17 @@ async def main():
         tasks.append(asyncio.create_task(keep_running("companion", remote_watch)))
         tasks.append(asyncio.create_task(keep_running("discord", DC.run)))
         tasks.append(asyncio.create_task(keep_running("updates", update_watch)))
-    async with server:
+    try:
         if TEST:
             await stream_started()
             await asyncio.Event().wait()
         else:
             await keep_running("obs", obs_link)
+    finally:
+        # Stop listening, without waiting for the open connections to end ("async with server" does, from Python
+        # 3.12.1): a chat page's live feed never ends by itself, so a chat still open in a tab kept the hub (and its
+        # port) after OBS had closed.
+        server.close()
     for t in tasks:
         t.cancel()
 

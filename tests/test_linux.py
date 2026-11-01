@@ -1,6 +1,7 @@
-"""Linux (beta): hub/linux.py, the hub's Linux paths and Tailscale on Linux. The rules run everywhere; what needs Linux
-says so. One test opens a real browser window under X (an Xvfb display, a throwaway browser profile): it runs only when
-CROSSCHAT_WINDOW_TESTS=1, so it never touches anyone's own browser."""
+"""Linux: hub/linux.py, the hub's Linux paths and Tailscale on Linux. The rules run everywhere; what needs Linux says
+so. One test opens a real browser window under X the system's way (an Xvfb display, a throwaway browser profile): it
+runs only when CROSSCHAT_WINDOW_TESTS=1, so it never touches anyone's own browser. (The extension's way, on X11 and
+Wayland: scripts/window_e2e.py.)"""
 import asyncio
 import os
 import shutil
@@ -115,7 +116,7 @@ def test_on_wayland_an_open_chat_window_is_not_opened_twice(home, monkeypatch):
     monkeypatch.setattr(linux, "work_area", lambda: (0, 0, 1920, 1080))
     opened = []
 
-    async def open_app(url, where):
+    async def open_app(url, where, role=None):
         opened.append((url, where))
     monkeypatch.setattr(hub, "open_app", open_app)
     asyncio.run(hub.show_window())
@@ -200,7 +201,9 @@ def test_a_real_browser_window_opens_moves_and_closes(tmp_path):
         pytest.skip("no Chrome or Chromium here")
     page = tmp_path / "page.html"
     page.write_text("<!doctype html><title>CrossChat window test</title><p>hello")
+    started = time.monotonic()
     handle = asyncio.run(linux.open_app(browser, page.as_uri(), (40, 50, 420, 500)))
+    print("the new window was found %.1f s after the browser was started" % (time.monotonic() - started))   # (a cold start took 10)
     try:
         assert handle, "the new window wasn't found"
         deadline = time.time() + 15

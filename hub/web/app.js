@@ -387,9 +387,10 @@
     : 'Start menu → CrossChat → Open chat');
   // A Discord webhook URL, the way Discord's "Copy Webhook URL" gives it (the hub checks it again, and with Discord).
   const discordWebhook = (url) => /^https:\/\/(discord\.com|discordapp\.com|ptb\.discord\.com|canary\.discord\.com)\/api\/webhooks\/\d{15,22}\/[\w-]{30,100}$/.test(clean(url));
-  // How long to wait for a reply or moderation (ms). YouTube moderation may first have to open YouTube's chat pop-out
-  // (the hub waits as long: YT_MOD_SECONDS).
-  const patience = (job) => (job && job.kind === 'mod' && job.p === 'youtube' ? 75000 : 25000);
+  // How long to wait for a reply, moderation or a window job (ms). YouTube moderation may first have to open YouTube's
+  // chat pop-out (the hub waits as long: YT_MOD_SECONDS); a window job may wait for a window that is still opening.
+  const patience = (job) => (job && job.kind === 'mod' && job.p === 'youtube' ? 75000
+    : 25000 + (job && job.kind === 'window' ? Math.min(Math.max(Number(job.wait) || 0, 0), 60) * 1000 : 0));
 
   return { NAMES, LIMIT, PAGE_PLATFORMS, QUICK_MAX, QUICK_LENGTH, LIST_MAX, LIST_LENGTH, TTS_READ, TTS_PLATFORMS, name, takesReplies, openPlatforms, targetsFor,
            tooLong, clean, route, canReply, modMenu, duration, describe, cleanQuick, inView, mention, secondsLeft, readable, pieces, timeoutSeconds,
@@ -473,6 +474,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
   }
 
   // ---- the executor: the chat window on the streaming PC hands jobs to the extension --------------------------------
+  // Replies, moderation, and window jobs: the extension places and closes CrossChat's own windows for the hub.
   const jobs = {};
   let jobN = 0;
   function runJob(job) {
@@ -481,6 +483,10 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     if (job.kind === 'mod') {
       window.postMessage({ crosschat: 'mod', n, p: job.p, action: job.action, message_id: job.message_id || '', user_id: job.user_id || '',
                            name: job.name || '', text: job.text || '', seconds: job.seconds || 0, reason: job.reason || '' }, location.origin);
+    } else if (job.kind === 'window') {
+      if (!document.documentElement.dataset.crosschatWindows) { done(n, { ok: false, why: 'the CrossChat extension here is too old for window jobs' }); return; }
+      window.postMessage({ crosschat: 'window', n, action: job.action, role: job.role, url: job.url || '', box: job.box || null,
+                           window: job.window || 0, known: job.known || [], wait: job.wait || 0 }, location.origin);
     } else {
       window.postMessage({ crosschat: 'send', n, to: job.to || [], text: job.text || '', reply: job.reply || null, dry: !!job.dry }, location.origin);
     }
@@ -490,11 +496,11 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     if (!j) return;
     delete jobs[n]; clearTimeout(j.timer);
     const why = 'the CrossChat extension did not answer';
-    if (!answer) answer = j.job.kind === 'mod' ? { ok: false, why } : Object.fromEntries((j.job.to || []).map((p) => [p, { ok: false, why }]));
+    if (!answer) answer = j.job.kind === 'send' ? Object.fromEntries((j.job.to || []).map((p) => [p, { ok: false, why }])) : { ok: false, why };
     api('/outbox/result', { job_id: j.job.id, answer });
   }
   window.addEventListener('message', (e) => {
-    if (e.source !== window || !e.data || (e.data.crosschat !== 'sent' && e.data.crosschat !== 'modded')) return;
+    if (e.source !== window || !e.data || !['sent', 'modded', 'windowed'].includes(e.data.crosschat)) return;
     done(e.data.n, e.data.answer);
   });
 

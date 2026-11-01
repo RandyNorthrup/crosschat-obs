@@ -50,7 +50,7 @@ def no_windows(monkeypatch):
     closes one: the hub closes the chat window when OBS goes, and the person running the tests may have theirs open."""
     opened = []
 
-    async def open_app(url, where):
+    async def open_app(url, where, role=None):
         opened.append(url)
         return None
     monkeypatch.setattr(hub, "open_app", open_app)
@@ -75,8 +75,10 @@ def home(tmp_path):
         hub.local_clients.clear()
         hub.starred.clear()
         hub.jobs.clear()
+        hub.pages.clear()
         for holders in hub.roles.values():
             holders.clear()
+        hub.state.pop("chat_opened", None)
         hub.state.update({"youtube_video": "", "youtube_chat": None, "since": 0.0, "featured": None, "x_armed": None, "executor": None})
         hub.companion_setup()
         return tmp_path
