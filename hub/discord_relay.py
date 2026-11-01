@@ -8,8 +8,8 @@ ping anyone (allowed_mentions is empty and every @ is broken up), Discord format
 chat can't be clicked or previewed.
 
 The webhook URL works like a password (anyone who has it can post in that channel), so CrossChat keeps it in
-discord.bin, encrypted for the current Windows user (DPAPI), never logs it, never shows it again and never puts it in
-an error message.
+discord.bin, encrypted for the current Windows user (DPAPI; on a Mac or Linux, see vault.py), never logs it, never
+shows it again and never puts it in an error message. When it can't be encrypted, it isn't kept.
 """
 import asyncio
 import collections
@@ -128,7 +128,11 @@ class Discord:
             raise DiscordError("Discord's answer was about another webhook.")
         self.url, self.name, self.why = url, str(data.get("name") or "")[:80], ""
         self.clear()
-        self.choose(choices)
+        try:
+            self.choose(choices)
+        except OSError:                          # not kept safely (vault.py): not kept at all
+            self.url, self.name = "", ""
+            raise
 
     def ask(self, url):
         """Discord's description of the webhook (its name), which also proves it exists."""
