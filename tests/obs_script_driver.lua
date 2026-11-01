@@ -19,8 +19,9 @@ log_lines, timers, buttons = {}, {}, {}
 obslua = {
   LOG_INFO = 300, LOG_WARNING = 200, OBS_PATH_FILE = 0,
   script_log = function(level, text) table.insert(log_lines, text) end,
-  timer_add = function(fn, ms) timers[1] = fn end,
-  timer_remove = function(fn) timers[1] = nil end,
+  timer_add = function(fn, ms) timers[fn] = true end,
+  timer_remove = function(fn) timers[fn] = nil end,
+  obs_enum_sources = function() return nil end,       -- no scenes here, so no widgets to refresh
   obs_data_get_string = function(settings, key) return PYTHON end,
   obs_hotkey_register_frontend = function() return 1 end,
   obs_data_get_array = function() return nil end,
@@ -65,7 +66,9 @@ local function run_for(seconds, done)
   local stop = os.time() + seconds
   while os.time() < stop and not done() do
     sleep()
-    if timers[1] then timers[1]() end
+    local due = {}
+    for fn in pairs(timers) do table.insert(due, fn) end
+    for _, fn in ipairs(due) do fn() end
   end
 end
 

@@ -1,6 +1,6 @@
 """The OBS script (obs/crosschat.lua) run in LuaJIT, the Lua OBS uses, with a stand-in for OBS's own functions.
 
-It starts a stand-in hub.py through the script's real code (ShellExecuteExW on Windows, posix_spawn on a Mac) and
+It starts a stand-in hub.py through the script's real code (ShellExecuteExW on Windows, posix_spawn on a Mac or Linux) and
 checks the watchdog: a hub that stops with an error is started again, at most five times in ten minutes, and one that
 ends normally is left alone. The scenario itself is tests/obs_script_driver.lua. It runs inside this process with
 lupa (pip install lupa) where lupa has LuaJIT (Windows, Linux), else with a `luajit` program (brew install luajit on a
@@ -25,6 +25,10 @@ LUAJIT = shutil.which("luajit")
 pytestmark = pytest.mark.skipif(not (luajit21 or LUAJIT), reason="needs LuaJIT: pip install lupa, or brew install luajit")
 FAKE = """import json, os, sys
 app = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if os.path.isdir("/dev/fd"):                        # the files it was handed (the listing itself adds one)
+    fds = sorted(int(n) for n in os.listdir("/dev/fd"))
+    with open(os.path.join(app, "%s.fds"), "w", encoding="utf-8") as f:
+        f.write(json.dumps(fds))
 with open(os.path.join(app, "%s.jsonl"), "a", encoding="utf-8") as f:
     f.write(json.dumps(sys.argv[1:]) + "\\n")
 with open(os.path.join(app, "exit_code.txt"), encoding="utf-8") as f:
@@ -40,7 +44,7 @@ def obs(tmp_path):
     (app / "hub").mkdir(parents=True)
     (app / "obs").mkdir()
     for name in ("hub", "control"):
-        (app / "hub" / (name + ".py")).write_text(FAKE % name, encoding="utf-8")
+        (app / "hub" / (name + ".py")).write_text(FAKE % (name, name), encoding="utf-8")
     python = ""
     if sys.platform == "win32":
         windowless = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
@@ -52,7 +56,8 @@ def obs(tmp_path):
     class Obs:
         report, log = [], []
 
-        def run(self, exit_code=0, press="", wait_for="", runs=1, seconds=20, extra=0):
+        def run(self, exit_code=0, press="", wait_for="", runs=1, seconds=20, extra=0, inherit=()):
+            """`inherit`: open files "OBS" has that a program it starts could inherit (none should get them)."""
             (app / "exit_code.txt").write_text(str(exit_code), encoding="utf-8")
             given = [SCRIPT, str(app / "obs").replace("\\", "/") + "/", python, press, wait_for, str(runs), str(seconds), str(extra)]
             if luajit21:
@@ -63,10 +68,14 @@ def obs(tmp_path):
                     lua.execute(f.read())
                 self.report = list(lua.eval("REPORT").values())
             else:
-                done = subprocess.run([LUAJIT, DRIVER, *given], capture_output=True, text=True, timeout=seconds + extra + 60)
+                done = subprocess.run([LUAJIT, DRIVER, *given], capture_output=True, text=True, timeout=seconds + extra + 60, pass_fds=inherit)
                 assert done.returncode == 0, done.stderr
                 self.report = done.stdout.splitlines()
             self.log = [line[4:] for line in self.report if line.startswith("LOG ")]
+
+        def fds(self, name="hub"):
+            with open(app / (name + ".fds"), encoding="utf-8") as f:
+                return json.load(f)
 
         def runs(self, name="hub"):
             try:
@@ -78,14 +87,30 @@ def obs(tmp_path):
     return Obs()
 
 
+def obs_folder():
+    """Where OBS keeps its settings on this system (where the script tells the hub to look)."""
+    if sys.platform == "win32":
+        return os.path.join(os.environ.get("APPDATA", ""), "obs-studio")
+    if sys.platform == "darwin":
+        return os.path.expanduser("~/Library/Application Support/obs-studio")
+    base = os.environ.get("XDG_CONFIG_HOME", "")
+    return os.path.join(base if base.startswith("/") else os.path.expanduser("~/.config"), "obs-studio")
+
+
 def test_the_script_starts_the_hub_for_this_obs(obs):
     obs.run()
-    folder = os.path.join(os.environ.get("APPDATA", ""), "obs-studio") if sys.platform == "win32" else \
-        os.path.expanduser("~/Library/Application Support/obs-studio")
+    folder = obs_folder()
     pid = os.getpid() if luajit21 else None              # (the luajit program is OBS here, with its own pid)
     first = obs.runs()[0]
     assert first[0] == "--obs-pid" and first[1].isdigit() and first[2:] == ["--obs-config", folder]
     assert pid is None or first[1] == str(pid)
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="XDG folders are a Linux matter")
+def test_on_linux_the_script_finds_obs_settings_where_obs_does(obs, monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "elsewhere"))      # (what a Flatpak or a custom setup sets)
+    obs.run()
+    assert obs.runs()[0][2:] == ["--obs-config", str(tmp_path / "elsewhere" / "obs-studio")]
 
 
 def test_a_hub_that_ends_normally_is_left_alone(obs):
@@ -103,6 +128,22 @@ def test_the_watchdog_restarts_a_failing_hub_five_times_then_gives_up(obs):
 def test_buttons_run_control_py(obs):
     obs.run(press="show")
     assert obs.runs("control") == [["show"]]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="ShellExecute hands nothing over; posix_spawn would, unless told not to")
+def test_the_hub_gets_none_of_obss_open_files(obs):
+    """OBS's own files and sockets (its WebSocket port among them) must not go to the hub, or after OBS closes the hub
+    would keep the port from an OBS started again. Here "OBS" holds a pipe any started program could inherit."""
+    reader, writer = os.pipe()
+    os.set_inheritable(writer, True)
+    try:
+        obs.run(press="show", inherit=(writer,))
+    finally:
+        os.close(reader)
+        os.close(writer)
+    for name in ("hub", "control"):
+        fds = obs.fds(name)
+        assert fds[:3] == [0, 1, 2] and len(fds) == 4, (name, fds)     # standard input, output, error, and the listing
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="zombie processes are a Unix matter")
