@@ -2974,8 +2974,8 @@ async def main():
     companion_setup()
     if not DEMO:                                 # the demo stays on this PC
         await remote_on()
-    log.info("CrossChat %s on http://127.0.0.1:%d (Twitch %r, YouTube %r, Kick %r, X %s)", VERSION, PORT, TWITCH, YOUTUBE, KICK,
-             "on" if X else "off")
+    log.info("CrossChat %s on http://127.0.0.1:%d (Twitch %r, YouTube %r, Kick %r, X %s; Python %s in %s)", VERSION, PORT, TWITCH, YOUTUBE,
+             KICK, "on" if X else "off", sys.version.split()[0], sys.prefix)
     tasks = []
     for name, wanted, job in (("twitch", TWITCH, lambda: twitch(TWITCH)), ("youtube", YOUTUBE, lambda: youtube(YOUTUBE)),
                               ("kick", KICK, lambda: kick(KICK, KICK_ROOM))):

@@ -100,7 +100,7 @@
   <div class="dbody">
     <section class="section" id="channels-section">
       <h3>Channels &amp; options</h3>
-      <div class="first" id="channels-first" role="note" hidden><b>Set up your channels</b>
+      <div class="first-run" id="channels-first" role="note" hidden><b>Set up your channels</b>
         <p>Type the channels you stream to and press Save. CrossChat reads their chat from the next time OBS starts.</p></div>
       <p class="hint">Saved in config.json on this PC. Sign-ins, keys and passwords are never shown or changed here.</p>
       <div class="cfg" id="channels-form"></div>
@@ -237,7 +237,7 @@
           <div class="left" id="pair-left" aria-live="polite"></div>
         </div>
       </div>
-      <p class="hint">The first time, Windows asks whether CrossChat may use the network: allow it on <b>private networks</b>.</p>
+      <p class="hint" id="firewall-hint">The first time, Windows asks whether CrossChat may use the network: allow it on <b>private networks</b>.</p>
       <label class="switch">Away from home too, with Tailscale <input id="tailscale-switch" type="checkbox"></label>
       <p class="hint" id="tailscale-hint"></p>
     </section>

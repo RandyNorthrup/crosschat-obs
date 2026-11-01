@@ -4,6 +4,20 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Fixed
+
+- **Mac:** the hub no longer gets a copy of everything OBS has open. The OBS script started it with all of OBS's files and sockets, OBS's WebSocket server among them, so after OBS closed the hub kept OBS's WebSocket port taken (about 20 seconds in our tests), and an OBS opened again in that time couldn't start its WebSocket server (CrossChat then couldn't follow it). Found with OBS 33.0.1 on macOS 15.
+- **Mac:** the chat window's notice said "Start menu → CrossChat → Open chat"; on a Mac it now names Applications → CrossChat in the home folder. The Paired-devices hint about Windows' network question no longer shows on a Mac, and the Theme Studio's look button says "follows this device", not "follows Windows".
+- The chat window styled a first-time chatter's **1ST** flag and line like the Settings "Set up your channels" note (a padded, bordered box), so the flag stood out of the line as a large pill and stretched the **Q** flag beside it. Seen in OBS's dock on a Mac; the same on Windows.
+- **Mac:** the README and the installer say where the Applications → CrossChat folder is (the Applications folder in your home folder, not Finder's main one), and that `Install.command` has to be started from Terminal: macOS 15 refuses to open it with a double-click, because the download isn't signed by Apple.
+
+### Changed
+
+- **Mac is checked with real OBS.** CrossChat 1.7.1 and this version were run with OBS 33.0.1 on macOS 15.7.4 (Intel Mac mini) and 15.7.9 (Intel MacBook Pro): download and checksum, installer, the OBS script and the hub following OBS, the four widgets and the chat docked inside OBS, the login Keychain, the extension in Chrome 156, and the uninstaller. The README's Mac section lists exactly what; Apple silicon with OBS, moving and closing windows through the browser, read-aloud and the companion are still a beta there.
+- The real-OBS check (`scripts/obs_e2e.py`) runs on a Mac too, with the installed OBS.app and a stand-in home folder, so your own OBS settings are never touched. It also checks that OBS's own browser shows the four widgets and the docked chat (with test chat in it), and that OBS's WebSocket port is free once OBS closes. `--crosschat` tests an installed copy, `--ffmpeg` names the RTMP receiver, and the logs are kept when something fails.
+- The hub's start line in `crosschat.log` names the Python running it.
+- The README says what to do when the CrossChat dock in OBS says "Couldn't load that page!" (OBS opened it before CrossChat was ready: press "Click here to retry"), and that OBS on a Mac needs the Input Monitoring permission for hotkeys while another app is in front.
+
 ## [1.7.2] - 2026-11-01
 
 ### Security

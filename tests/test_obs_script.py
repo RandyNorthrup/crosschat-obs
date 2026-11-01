@@ -25,7 +25,17 @@ LUAJIT = shutil.which("luajit")
 pytestmark = pytest.mark.skipif(not (luajit21 or LUAJIT), reason="needs LuaJIT: pip install lupa, or brew install luajit")
 FAKE = """import json, os, sys
 app = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-with open(os.path.join(app, "%s.jsonl"), "a", encoding="utf-8") as f:
+held = []                                       # the files this program was handed open (a Mac can name them)
+if sys.platform == "darwin":
+    import fcntl
+    for fd in range(3, 256):
+        try:
+            held.append(fcntl.fcntl(fd, fcntl.F_GETPATH, bytes(1024)).rstrip(b"\\0").decode())
+        except OSError:
+            pass
+with open(os.path.join(app, "NAME.held.jsonl"), "a", encoding="utf-8") as f:
+    f.write(json.dumps(held) + "\\n")
+with open(os.path.join(app, "NAME.jsonl"), "a", encoding="utf-8") as f:
     f.write(json.dumps(sys.argv[1:]) + "\\n")
 with open(os.path.join(app, "exit_code.txt"), encoding="utf-8") as f:
     sys.exit(int(f.read()))
@@ -40,7 +50,7 @@ def obs(tmp_path):
     (app / "hub").mkdir(parents=True)
     (app / "obs").mkdir()
     for name in ("hub", "control"):
-        (app / "hub" / (name + ".py")).write_text(FAKE % name, encoding="utf-8")
+        (app / "hub" / (name + ".py")).write_text(FAKE.replace("NAME", name), encoding="utf-8")
     python = ""
     if sys.platform == "win32":
         windowless = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
@@ -75,6 +85,10 @@ def obs(tmp_path):
             except FileNotFoundError:
                 return []
 
+        def held(self, name="hub"):
+            """For each run of `name`: the files it was handed open."""
+            return self.runs(name + ".held")
+
     return Obs()
 
 
@@ -103,6 +117,15 @@ def test_the_watchdog_restarts_a_failing_hub_five_times_then_gives_up(obs):
 def test_buttons_run_control_py(obs):
     obs.run(press="show")
     assert obs.runs("control") == [["show"]]
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="a Mac matter: on Windows the hub is started without OBS's handles")
+def test_the_hub_gets_none_of_obs_own_files_or_sockets(obs):
+    # A hub holding OBS's WebSocket server socket kept OBS's port taken after OBS closed (found with OBS 33 on macOS 15)
+    obs.run(press="show")
+    for name in ("hub", "control"):
+        held = obs.held(name)
+        assert held and not any(path.endswith("obs-held.txt") for paths in held for path in paths), held
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="zombie processes are a Unix matter")

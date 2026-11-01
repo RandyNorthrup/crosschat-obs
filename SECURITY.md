@@ -90,7 +90,7 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 
 - CrossChat signs in with Twitch's device code flow as a public app. There is no client secret to leak.
 - It asks for three permissions only: `user:write:chat`, `moderator:manage:chat_messages`, `moderator:manage:banned_users`.
-- The tokens are encrypted for your Windows account with DPAPI (`twitch.bin`), so a copy of the file is useless elsewhere. On a Mac (beta), they're encrypted with AES-256 and sealed with HMAC-SHA256 under a random key CrossChat keeps in your login Keychain; the same goes for `kick.bin` and `rumble.bin`, and the uninstaller removes the key.
+- The tokens are encrypted for your Windows account with DPAPI (`twitch.bin`), so a copy of the file is useless elsewhere. On a Mac, they're encrypted with AES-256 and sealed with HMAC-SHA256 under a random key CrossChat keeps in your login Keychain; the same goes for `kick.bin` and `rumble.bin`, and the uninstaller removes the key.
 - **Disconnect** deletes the file and revokes the token at Twitch. If Twitch doesn't confirm, CrossChat says so, and you can remove it at twitch.tv → Settings → Connections.
 - The sign-in page CrossChat opens is always on `https://www.twitch.tv/`.
 
