@@ -251,6 +251,12 @@ test('an extension older than CrossChat is noticed, anything else is not', () =>
     ['1.6', '1.7.0'], ['1.6.0<b>', '1.7.0'], [{}, '1.7.0']]) assert.equal(A.extensionBehind(ext, hub), false, String(ext) + ' vs ' + String(hub));
 });
 
+test('the extension is only called old when it is too old to work', () => {
+  assert.equal(A.extensionBehind('1.7.2', A.EXTENSION_NEEDED), true);
+  assert.equal(A.extensionBehind('1.8.0', A.EXTENSION_NEEDED), false, 'the last release that changed what the extension does');
+  assert.equal(A.extensionBehind(require('../../extension/manifest.json').version, A.EXTENSION_NEEDED), false, 'the extension in this download is new enough');
+});
+
 test('the window names the shortcut of its own system: no Start menu on a Mac', () => {
   // navigator.platform in OBS's own browser on macOS 15 (OBS 33.0.1) and in Chrome there is "MacIntel"
   assert.equal(A.onMac('MacIntel'), true);

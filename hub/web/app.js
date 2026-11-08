@@ -375,6 +375,9 @@
   // The extension in this browser is older than CrossChat: an unpacked extension keeps its old code after an update
   // until it is reloaded in chrome://extensions.
   const versionParts = (v) => (/^(\d{1,4})\.(\d{1,4})\.(\d{1,4})$/.exec(typeof v === 'string' ? v : '') || []).slice(1).map(Number);
+  // The oldest extension this CrossChat works with. An installed extension can stay behind CrossChat for a while, so only
+  // one older than this needs the reminder. Raise it when a release changes the extension in a way the hub depends on.
+  const EXTENSION_NEEDED = '1.8.0';
   const extensionBehind = (ext, hub) => {
     const a = versionParts(ext), b = versionParts(hub);
     if (a.length !== 3 || b.length !== 3) return false;
@@ -396,7 +399,7 @@
   return { NAMES, LIMIT, PAGE_PLATFORMS, QUICK_MAX, QUICK_LENGTH, LIST_MAX, LIST_LENGTH, TTS_READ, TTS_PLATFORMS, name, takesReplies, openPlatforms, targetsFor,
            tooLong, clean, route, canReply, modMenu, duration, describe, cleanQuick, inView, mention, secondsLeft, readable, pieces, timeoutSeconds,
            ttsSettings, onlineVoice, voiceMaker, voiceGroups, pickVoice, speech, cleanList, filterSettings, span, health, validLog, bytes, logFilter,
-           CONFIG_FIELDS, CONFIG_KEYS, configValue, configChanges, viewerPath, viewerFacts, viewerLatest, alertWord, releaseLink, extensionBehind,
+           CONFIG_FIELDS, CONFIG_KEYS, configValue, configChanges, viewerPath, viewerFacts, viewerLatest, alertWord, releaseLink, extensionBehind, EXTENSION_NEEDED,
            discordWebhook, onMac, openChatHow, patience };
 });
 
@@ -1670,9 +1673,9 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     let say_ = '';
     if (ctx.unpaired) say_ = 'This device is no longer paired. Pair it again from Settings on the streaming PC.';
     else if (blocked) say_ = 'Click anywhere in this window once so it can read chat aloud (the browser asks for that).';
-    else if (!ctx.remote && A.extensionBehind(document.documentElement.dataset.crosschat, ctx.version)) {
-      say_ = 'The CrossChat extension in this browser is still ' + document.documentElement.dataset.crosschat + ' (CrossChat is ' + ctx.version
-        + '). Open chrome://extensions (edge://extensions in Edge) and press the reload arrow on CrossChat, then reload this window (F5).';
+    else if (!ctx.remote && A.extensionBehind(document.documentElement.dataset.crosschat, A.EXTENSION_NEEDED)) {
+      say_ = 'The CrossChat extension in this browser is still ' + document.documentElement.dataset.crosschat + ' (CrossChat needs ' + A.EXTENSION_NEEDED
+        + ' or newer). Open chrome://extensions (edge://extensions in Edge) and press the reload arrow on CrossChat, then reload this window (F5).';
     } else if (!DEMO && ctx.executorKnown && !ctx.executor) {
       say_ = ctx.remote ? 'Replies to YouTube and X need the CrossChat window open on the streaming PC (Chrome or Edge with the extension).'
         : ctx.bridge ? '' : 'Replies to YouTube and X go out through the CrossChat window in Chrome or Edge with the extension: '

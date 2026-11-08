@@ -65,7 +65,7 @@ elif LINUX:
 else:
     from ctypes import wintypes
 
-VERSION = "1.8.0"
+VERSION = "1.9.0"
 # CrossChat's public Twitch app (Client ID only: public apps have no secret). "twitch_client_id" in config.json overrides it.
 TWITCH_CLIENT_ID = "gg5cmjfvr1l09niyes19ccclashuth"  # gitleaks:allow (a public client ID, not a secret)
 # CrossChat's Kick app. Kick requires the app's secret even with PKCE, so it ships here and is not confidential: Kick

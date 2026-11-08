@@ -4,18 +4,32 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-11-08
+
+### Highlights
+
+- **Your own logos and names on stream**, or none at all: one button hides which platform a message came from.
+- **Streamlabs Desktop**, and a **Start stream** button for any other streaming app. CrossChat no longer needs OBS.
+- **A [wiki](https://github.com/RandyNorthrup/crosschat-obs/wiki)** with step-by-step guides.
+
 ### Added
 
 - **Your own platform logos and names on the on-stream widgets.** In the Theme Studio: one logo or name for every platform, one per platform (which wins), the plain bubble, or no name. **Hide every platform** removes every sign of which platform a message came from. Logos are kept inside the theme, so they export with it. See [docs/THEMES.md](docs/THEMES.md#your-own-logos-and-names).
-- **Streamlabs Desktop.** CrossChat follows its stream with no token and nothing to set up there, and closes when it closes.
+- **Streamlabs Desktop.** CrossChat follows its stream with no token and nothing to set up there, and closes when it closes. Tested on Windows with Streamlabs Desktop 1.21.9: a real stream from start to stop, and the widgets in its Browser Source and in the video it sends.
 - **Any other streaming app.** A **Start stream** / **End stream** button in the chat window, or `control.py stream-start` and `stream-end`. See [Other streaming apps](README.md#other-streaming-apps).
 - **Settings → Streaming app** (`"broadcaster"` in `config.json`), and **Close CrossChat** when it follows Streamlabs or nothing.
-- `PRIVACY.md`, `docs/CHROME_WEB_STORE.md` and `scripts/package_extension.py`, for publishing the extension on the Chrome Web Store.
+- `PRIVACY.md`: CrossChat's privacy policy.
 
 ### Changed
 
 - A theme file can now be up to 224 KB (it was 64 KB), to hold its logos.
-- The extension's description is 132 characters, the most the Chrome Web Store takes.
+- CrossChat's own words no longer assume OBS: **Copy address**, **Send test** and **Add to your stream** in the Theme Studio, and the hints in Settings.
+- The chat window now asks you to reload the extension only when it's too old to work with this CrossChat, not after every update.
+- The extension's description is shorter.
+
+### Security
+
+- The end-to-end test no longer writes a fixed WebSocket password into its throwaway OBS profile. OBS makes up its own, as on a fresh install, and the test reads it from OBS's settings. CrossChat itself isn't affected.
 
 ## [1.8.0] - 2026-11-01
 
@@ -344,7 +358,8 @@ First public release.
 - Overlays are served by the hub over `http://127.0.0.1`. OBS 33 blocks local-file overlays from reaching the hub.
 - Fonts are Windows' own: Segoe UI Variable and Cascadia Mono.
 
-[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.7.2...v1.8.0
 [1.7.2]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.7.0...v1.7.1
