@@ -79,7 +79,7 @@ These override the theme for one source. Combine them with `&`.
 | Option | Example | Does |
 |---|---|---|
 | `theme` | `theme=neon` | Theme file name. |
-| `platforms` | `platforms=twitch,youtube` | Chat feed: only these platforms (`twitch`, `youtube`, `kick`, `x`, `tiktok`, `facebook`, `instagram`, `rumble`, or `all`). |
+| `platforms` | `platforms=twitch,youtube` | Chat feed: only these platforms (`twitch`, `youtube`, `kick`, `x`, `tiktok`, `facebook`, `instagram`, `rumble`, or `all`). This comes first, then the theme's list, then `overlay.platforms` in `config.json`. |
 | `size` | `size=26` | Text size in pixels. |
 | `layout` | `layout=compact` | `card`, `bubble`, `line` or `compact`. |
 | `icons` | `icons=text` | Platform shown as `icon`, `text`, `bar` or `none`. |

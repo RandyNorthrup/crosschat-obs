@@ -532,7 +532,7 @@ More detail, and how to report a problem privately: [SECURITY.md](SECURITY.md).
 | A message box says CrossChat can't reach OBS's WebSocket server | OBS → *Tools → WebSocket Server Settings* → tick **Enable WebSocket server**. CrossChat connects by itself once it's on. |
 | Widgets show nothing | Is OBS open with `crosschat.lua` loaded? Press **Start the hub again** in *Tools → Scripts*. Use the `http://127.0.0.1:4466/...` address, not a local file. |
 | The CrossChat dock in OBS says "Couldn't load that page!" | OBS opened it before CrossChat was ready. Press **Click here to retry** in the dock. |
-| "Replies go out through the CrossChat extension, and it is not active" | Load the extension (Install step 4), then close the chat window and open it again. |
+| "Replies to YouTube, X, TikTok, Facebook, Instagram and Rumble go out through the CrossChat window in Chrome or Edge with the extension" | Load the extension (Install step 4), then close the chat window and open it again. |
 | A reply to one platform failed | The chat window says why (not signed in, message too long, chat not open). YouTube replies need you signed in to YouTube in the same browser. |
 | X stopped at a step | The X page banner and the chat window name the step. Finish by hand; if it keeps happening, X may have changed its page, so [open an issue](https://github.com/RandyNorthrup/crosschat-obs/issues). |
 | Anything else | `%LOCALAPPDATA%\CrossChat\crosschat.log`, and the OBS log (*Help → Log Files*, lines with `crosschat.lua`). |
