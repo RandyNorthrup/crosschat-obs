@@ -15,8 +15,8 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 ### Added
 
 - **Your own platform logos and names on the on-stream widgets.** In the Theme Studio: one logo or name for every platform, one per platform (which wins), the plain bubble, or no name. **Hide every platform** removes every sign of which platform a message came from. Logos are kept inside the theme, so they export with it. See [docs/THEMES.md](docs/THEMES.md#your-own-logos-and-names).
-- **Streamlabs Desktop.** CrossChat follows its stream with no token and nothing to set up there, and closes when it closes. Tested on Windows with Streamlabs Desktop 1.21.9: a real stream from start to stop, and the widgets in its Browser Source and in the video it sends.
-- **Any other streaming app.** A **Start stream** / **End stream** button in the chat window, or `control.py stream-start` and `stream-end`. See [Other streaming apps](README.md#other-streaming-apps).
+- **Streamlabs Desktop.** CrossChat follows its stream with no token and nothing to set up there, and closes when it closes. Tested on Windows with Streamlabs Desktop 1.21.9, signed out: a real stream to a private receiver from start to stop, and the chat feed in its Browser Source and in the video it sends.
+- **Any other streaming app.** A **Start stream** / **End stream** button in the chat window, or `control.py stream-start` and `stream-end`. See [Other streaming apps](README.md#other-streaming-apps). Not tested inside any specific app yet.
 - **Settings → Streaming app** (`"broadcaster"` in `config.json`), and **Close CrossChat** when it follows Streamlabs or nothing.
 - `PRIVACY.md`: CrossChat's privacy policy.
 

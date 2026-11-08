@@ -45,6 +45,9 @@ import requests
 from websockets.sync.client import connect
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "hub"))
+from hub import answer  # noqa: E402  (the hub's own obs-websocket login: the test signs in exactly as CrossChat does)
+
 SCRIPT = os.path.join(ROOT, "obs", "crosschat.lua")
 HUB_PORT, WS_PORT = 4486, 4456
 ws_settings = ""                             # obs-websocket's settings file in the throwaway profile (OBS makes up its password there)
@@ -308,14 +311,9 @@ def obs_password():
 
 
 def obs_connect():
-    import base64
-    import hashlib
     ws = connect("ws://127.0.0.1:%d" % WS_PORT, open_timeout=5)
     hello = json.loads(ws.recv(timeout=10))["d"]
-    auth = hello["authentication"]
-    secret = base64.b64encode(hashlib.sha256((obs_password() + auth["salt"]).encode()).digest()).decode()
-    ws.send(json.dumps({"op": 1, "d": {"rpcVersion": 1, "authentication": base64.b64encode(
-        hashlib.sha256((secret + auth["challenge"]).encode()).digest()).decode(), "eventSubscriptions": 0}}))
+    ws.send(json.dumps({"op": 1, "d": {"rpcVersion": 1, "authentication": answer(hello["authentication"], obs_password()), "eventSubscriptions": 0}}))
     json.loads(ws.recv(timeout=10))
     return ws, hello
 
