@@ -15,8 +15,8 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 ### Added
 
 - **Your own platform logos and names on the on-stream widgets.** In the Theme Studio: one logo or name for every platform, one per platform (which wins), the plain bubble, or no name. **Hide every platform** removes the logos, names and platform colours; alert wording such as "sent a Super Chat" stays until you change it. Logos are kept inside the theme, so they export with it. See [docs/THEMES.md](docs/THEMES.md#your-own-logos-and-names).
-- **Streamlabs Desktop.** CrossChat follows its stream with no token and nothing to set up there, and closes when it closes. Tested on Windows with Streamlabs Desktop 1.21.9, signed out: a real stream to a private receiver from start to stop, and the chat feed in its Browser Source and in the video it sends.
-- **Any other streaming app.** A **Start stream** / **End stream** button in the chat window, or `control.py stream-start` and `stream-end`. See [Other streaming apps](README.md#other-streaming-apps). Not tested inside any specific app yet.
+- **Streamlabs Desktop.** CrossChat follows its stream with no token and nothing to set up there, and closes when it closes. Tested on Windows with Streamlabs Desktop 1.21.9, signed out: a real stream to a private receiver from start to stop, with all four widgets and custom logos in the video it sent. See [Known limits](README.md#known-limits).
+- **Any other streaming app.** A **Start stream** / **End stream** button in the chat window, or `control.py stream-start` and `stream-end`. See [Other streaming apps](README.md#other-streaming-apps). Tested on Windows with vMix 29, XSplit Broadcaster 4.6 and Meld Studio 0.10: the widgets in each app, and the button in the chat window of an installed CrossChat.
 - **Settings → Streaming app** (`"broadcaster"` in `config.json`), and **Close CrossChat** (or `control.py leave`) when it follows Streamlabs or nothing.
 - `PRIVACY.md`: CrossChat's privacy policy.
 
@@ -26,6 +26,30 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 - CrossChat's own words no longer assume OBS: **Copy address**, **Send test** and **Add to your stream** in the Theme Studio, and the hints in Settings.
 - The chat window now asks you to reload the extension only when it's too old to work with this CrossChat, not after every update.
 - The extension's description is shorter.
+- The hub's made-up test events and its demo cover all eight platforms.
+- A chat box no longer stops at 500 characters: a message too long for a platform shows the red "too long" text instead.
+- A window that stops reporting is noted after 90 seconds, not 20, because a browser slows the timers of a page that is covered.
+- The Mac and Linux installers ask about Instagram and the update notice too.
+- The Theme Studio button and links in the OBS script follow the `port` setting.
+
+### Fixed
+
+- **`overlay.platforms` in `config.json` did nothing.** The chat widget now honours it, after `?platforms=` and a theme's own list.
+- A broken `config.json` is now shown to you and written to the log, instead of quietly falling back to defaults.
+- When another program holds CrossChat's port, CrossChat says so once. A second copy of CrossChat still leaves quietly.
+- A full disk or an unwritable chat history no longer stops chat from coming in or a stream from starting: you get one warning and that stream isn't saved.
+- Opening Chat history no longer freezes live chat and the widgets.
+- Platform windows now close when OBS closes, not only the chat window.
+- A damaged `filters.json`, `tts.json`, `quick.json` or `devices.json` is kept as `<name>.bad` with a warning, rather than silently reset. A bad `filters.json` used to switch filtering off.
+- A sign-in that can't be read (a locked keyring, say) shows as an error in Settings instead of "Not connected".
+- YouTube picks **Live chat** by name and tells you if it had to fall back to Top chat.
+- Facebook and Instagram could lose lines when many arrived at once. Lines are now sent in batches the hub reads whole.
+- The chat window could hide its own errors while drawing a message. They now reach the console, and a lost connection shows *reconnecting…*.
+- OBS shows a message if Python can't start or the hub keeps stopping, instead of only writing it to the Script Log.
+- **Start the hub again** in OBS no longer loses track of the hub already running.
+- Uninstalling on a Mac or Linux keeps your quick replies, filters and read-aloud settings, as Windows does. Every uninstaller asks about your chat history (a silent uninstall removes it), and reports it if the folder couldn't be removed.
+- The Tailscale switch no longer appears on a Mac, where it can't work.
+- A single gift on Rumble now reads *a sub*.
 
 ### Security
 

@@ -206,6 +206,25 @@ Without OBS there is no script to start CrossChat, so open it before you stream:
 
 <p align="center"><img src="assets/screenshots/start-stream.png" alt="The top of the chat window with Another app chosen: OFF AIR with a Start stream button, then LIVE with an End stream button" width="460"></p>
 
+**Tested on real installs, on Windows, on 8 November 2026:**
+
+| App | Version | What was checked |
+|---|---|---|
+| **Streamlabs Desktop** | 1.21.9 | CrossChat found it, whether it was open first or after CrossChat. A real stream, sent to a private receiver on the same PC, from start to stop. All four widgets and custom logos in the video it sent. CrossChat closed when it closed. |
+| **vMix** | 29.0.0.49 (trial) | All four widgets as Browser inputs, in vMix's output, with custom logos. |
+| **XSplit Broadcaster** | 4.6.2609.2802 | All four widgets as Webpage sources, in its preview. |
+| **Meld Studio** | 0.10.8.2 | All four widgets as Browser layers over a scene, in its preview. |
+
+With vMix, XSplit and Meld, **Start stream** and **End stream** were pressed in the chat window of an installed CrossChat; no video was sent from them. No real platform was used with any of the four. See [Known limits](#known-limits).
+
+| Streamlabs Desktop, the video it sent | vMix, its output |
+|---|---|
+| <img src="assets/screenshots/streamlabs-output.png" alt="CrossChat's chat feed, featured message, alert and viewer counter in the video Streamlabs Desktop sent" width="420"> | <img src="assets/screenshots/vmix-output.png" alt="CrossChat's four widgets in vMix's output" width="420"> |
+| **XSplit Broadcaster** | **Meld Studio** |
+| <img src="assets/screenshots/xsplit-output.png" alt="CrossChat's four widgets as Webpage sources in XSplit Broadcaster" width="420"> | <img src="assets/screenshots/meld-output.png" alt="CrossChat's four widgets as Browser layers in Meld Studio" width="420"> |
+
+These pictures use a test theme: an orange square as Twitch's logo, the plain bubble for the others, and *MyTube* as YouTube's name.
+
 The hotkeys, the buttons in *Tools → Scripts* and the docked chat are OBS's own. In other apps, use the chat window and `control.py`. With **Another app**, X can only go live on your word: CrossChat can't see whether your video is really going out.
 
 ## Mac
@@ -539,8 +558,8 @@ More detail, and how to report a problem privately: [SECURITY.md](SECURITY.md).
 
 ## Known limits
 
-- **Streamlabs Desktop:** checked on Windows with Streamlabs Desktop 1.21.9, signed out, streaming to a private RTMP receiver on the same PC: CrossChat finds it, follows a real stream from start to stop, the chat feed shows in its Browser Source and in the video it sends, and CrossChat closes when it closes. The other three widgets in its Browser Source, its Mac version, and going live to a real platform through it, aren't tested yet.
-- **Other streaming apps** (XSplit, vMix, Meld Studio and the rest) haven't been tested. The **Start stream** button was tested on its own, in the chat window, so CrossChat only knows what you tell it. The widgets are ordinary web pages, so an app that can show one should work.
+- **Streamlabs Desktop:** checked on Windows with Streamlabs Desktop 1.21.9, signed out, from the setup program and the **Open chat** shortcut, streaming to a private RTMP receiver on the same PC: CrossChat finds it whether it opens first or after CrossChat, follows a real stream from start to stop, all four widgets and custom logos show in the video it sends, and CrossChat closes when it closes. Its Mac version, and going live to a real platform through it, aren't tested yet.
+- **vMix, XSplit and Meld Studio:** checked on Windows (vMix 29.0.0.49, XSplit Broadcaster 4.6.2609.2802, Meld Studio 0.10.8.2): all four widgets and custom logos show in each app, and **Start stream** and **End stream** work in the chat window of an installed CrossChat. No video was sent from these three, and no real platform was used. Other streaming apps haven't been tested; the widgets are ordinary web pages, so one that can show a web page should work.
 - **Mac:** checked with OBS 33.0.1 on Intel Macs (macOS 15.7.4 and 15.7.9), read-aloud and the phone companion included, and on every change with OBS on an Apple-silicon Mac (macOS 26.6.2); see [Mac](#mac) for exactly what. Without the extension, CrossChat can't move or close its windows on a Mac (macOS refuses that to programs OBS starts, and doesn't ask); with it, it can. Away from home with Tailscale is Windows-only.
 - **Linux:** checked on Ubuntu 25.10 with Ubuntu's OBS 30.2.3 and OBS 33.0.1 from Flathub, the extension, read-aloud, the docked chat and the phone companion included, and on every change on Ubuntu 24.04 with OBS from the OBS Project's PPA and from Flathub; all of it on a virtual X11 display, with Google Chrome (see [Linux](#linux) for exactly what). Not seen yet on a desktop someone sits at: the chat window there. With the extension, CrossChat's windows were placed, moved and closed on X11, XWayland and Wayland (KWin, on a virtual screen), at a display scale of 100 % only; on Wayland the desktop chooses where they go. Without the extension, on Wayland CrossChat can move and close them only when the browser runs through XWayland. Other distributions, and browsers other than Google Chrome (Snap and Flatpak browsers too), are untested. Read-aloud needs speech-dispatcher, and Google Chrome started with `--enable-speech-dispatcher`. Ubuntu's and Debian's own OBS package has no Browser Source, so the widgets and the dock need OBS from Flathub or the OBS Project's PPA.
 - **CrossChat's windows on Windows** are placed Windows' own way, as before, whenever it can see them: the browser's window API counts Windows' invisible resize borders in (asked for a place, a browser window's visible edges were 7 px in at the left, right and bottom, on GitHub's Windows machines). The extension's part on Windows (closing the windows, and placing one Windows can't see) hasn't been run on a real Windows desktop: `scripts/window_e2e.py` runs on macOS and Linux.
