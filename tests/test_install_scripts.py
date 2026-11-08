@@ -295,7 +295,8 @@ def test_the_mac_and_linux_installer_saves_instagram_and_the_update_notice(tmp_p
     # Its questions, from the real script, as a person answering yes to each.
     app = tmp_path / "app"
     (app / "hub").mkdir(parents=True)
-    shutil.copy(os.path.join(ROOT, "hub", "setup_config.py"), app / "hub" / "setup_config.py")
+    for name in ("setup_config.py", "config_file.py"):        # (the installers copy all of hub/; this needs only these)
+        shutil.copy(os.path.join(ROOT, "hub", name), app / "hub" / name)
     shutil.copy(os.path.join(ROOT, "config.example.json"), app / "config.example.json")
     run = tmp_path / "questions.sh"
     run.write_text('set -eo pipefail\nsay() { :; }\nstep() { :; }\nfail() { echo "$1"; exit 1; }\nask() { printf yes; }\nconfirm() { return 0; }\n'
