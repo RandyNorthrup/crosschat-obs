@@ -30,6 +30,13 @@ def refusal(error):
     return "CrossChat couldn't encrypt the sign-in on this computer (%s), so it didn't keep it." % error
 
 
+def unreadable(error, what):
+    """What to tell the streamer when a saved secret can't be read back (a locked keyring, another account, a damaged file)."""
+    if isinstance(error, Unavailable):
+        return "CrossChat couldn't read its saved %s: your desktop keyring didn't answer. Unlock it and restart CrossChat." % what
+    return "CrossChat couldn't read its saved %s (%s). Connect again to replace it." % (what, error)
+
+
 # ---- Linux: the desktop keyring, through libsecret's secret-tool --------------------------------------------------
 # (Defined on every system so the tests check them anywhere; only Linux uses them.) The key goes to secret-tool on its
 # standard input and comes back on its standard output, never on a command line, where other users could see it.

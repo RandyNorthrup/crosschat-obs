@@ -15,7 +15,8 @@ import urllib.parse
 
 import requests
 
-from twitch_api import protect, refusal, unprotect
+from config_file import replace_file
+from vault import protect, refusal, unprotect, unreadable
 
 ID = "https://id.kick.com/oauth"
 API = "https://api.kick.com/public/v1"
@@ -38,8 +39,10 @@ class Kick:
             with open(path, "rb") as f:
                 saved = json.loads(unprotect(f.read()).decode())
             self.tokens, self.user = saved.get("tokens", {}), saved.get("user", {})
-        except (OSError, ValueError):
+        except FileNotFoundError:
             pass
+        except (OSError, ValueError, AttributeError) as error:
+            self.why = unreadable(error, "Kick sign-in")
 
     def state(self):
         if not self.client_id:
@@ -59,9 +62,7 @@ class Kick:
         except OSError as error:                 # not kept safely: not kept at all, not even until CrossChat closes
             self.tokens, self.user, self.why = {}, {}, refusal(error)
             raise KickError(self.why) from None
-        with open(self.path + ".tmp", "wb") as f:
-            f.write(data)
-        os.replace(self.path + ".tmp", self.path)
+        replace_file(self.path, data)
 
     def _client(self, form):
         form["client_id"] = self.client_id

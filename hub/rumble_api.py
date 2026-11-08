@@ -12,7 +12,8 @@ import urllib.parse
 
 import requests
 
-from twitch_api import protect, unprotect
+from config_file import replace_file
+from vault import protect, unprotect, unreadable
 
 ADDRESS = re.compile(r"https://rumble\.com/-livestream-api/get-data\?[^\s#]{8,600}")
 
@@ -29,8 +30,10 @@ class Rumble:
         try:
             with open(path, "rb") as f:
                 self.url = json.loads(unprotect(f.read()).decode()).get("url", "")
-        except (OSError, ValueError):
+        except FileNotFoundError:
             pass
+        except (OSError, ValueError, AttributeError) as error:
+            self.why = unreadable(error, "Rumble API address")
 
     def on(self):
         return bool(self.url)
@@ -43,10 +46,7 @@ class Rumble:
         parts = urllib.parse.urlsplit(url)
         if not ADDRESS.fullmatch(url) or not urllib.parse.parse_qs(parts.query).get("key"):
             raise RumbleError("That isn't a Rumble Live Stream API URL. Copy it from rumble.com/account/livestream-api.")
-        data = protect(json.dumps({"url": url}).encode())
-        with open(self.path + ".tmp", "wb") as f:
-            f.write(data)
-        os.replace(self.path + ".tmp", self.path)
+        replace_file(self.path, protect(json.dumps({"url": url}).encode()))
         self.url, self.why = url, ""
 
     def forget(self):

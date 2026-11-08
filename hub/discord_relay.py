@@ -17,11 +17,11 @@ import json
 import logging
 import os
 import re
-import urllib.parse
 
 import requests
 
-from twitch_api import protect, unprotect
+from config_file import replace_file
+from vault import protect, unprotect, unreadable
 
 ADDRESS = re.compile(r"https://(?:discord\.com|discordapp\.com|ptb\.discord\.com|canary\.discord\.com)/api/webhooks/(\d{15,22})/([\w-]{30,100})")
 CHOICES = {"live": True, "featured": True, "chat": False}     # what is posted, until the streamer picks
@@ -85,10 +85,10 @@ def line(m, names):
 
 
 class Discord:
-    """The streamer's webhook and what to post through it. base: a test server standing in for discord.com."""
+    """The streamer's webhook and what to post through it."""
 
-    def __init__(self, path, names, base="", changed=None):
-        self.path, self.names, self.base = path, names, base
+    def __init__(self, path, names, changed=None):
+        self.path, self.names = path, names
         self.changed = changed                   # called (in the hub's loop) when Discord drops the webhook
         self.url, self.name, self.why, self.choices = "", "", "", dict(CHOICES)
         self.waiting, self.lines, self.dropped, self.wake = collections.deque(), 0, 0, None
@@ -97,8 +97,10 @@ class Discord:
                 saved = json.loads(unprotect(f.read()).decode())
             self.url, self.name = saved.get("url", ""), str(saved.get("name") or "")[:80]
             self.choices = {k: saved.get(k, v) is True for k, v in CHOICES.items()}
-        except (OSError, ValueError, AttributeError):
+        except FileNotFoundError:
             pass
+        except (OSError, ValueError, AttributeError) as error:
+            self.why = unreadable(error, "Discord webhook")
 
     def on(self):
         return bool(self.url) and not self.why
@@ -107,15 +109,8 @@ class Discord:
         return {"state": "on" if self.on() else ("error" if self.why else "off"), "why": self.why, "name": self.name, **self.choices}
 
     # ---- connecting --------------------------------------------------------------------------------------------------
-    def target(self, url=None):
-        url = url or self.url
-        return self.base + urllib.parse.urlsplit(url).path if self.base else url
-
     def save(self):
-        data = protect(json.dumps({"url": self.url, "name": self.name, **self.choices}).encode())
-        with open(self.path + ".tmp", "wb") as f:
-            f.write(data)
-        os.replace(self.path + ".tmp", self.path)
+        replace_file(self.path, protect(json.dumps({"url": self.url, "name": self.name, **self.choices}).encode()))
 
     def set(self, url, choices=None):
         """Check the webhook with Discord, then keep it. Blocking: the hub runs it in a worker thread."""
@@ -137,7 +132,7 @@ class Discord:
     def ask(self, url):
         """Discord's description of the webhook (its name), which also proves it exists."""
         try:
-            r = requests.get(self.target(url), timeout=10, allow_redirects=False, headers={"User-Agent": "CrossChat"})
+            r = requests.get(url, timeout=10, allow_redirects=False, headers={"User-Agent": "CrossChat"})
         except requests.RequestException:
             raise DiscordError("Discord did not answer.") from None     # (the exception text would hold the URL)
         if r.status_code in (401, 403, 404):
@@ -220,7 +215,7 @@ class Discord:
         if not self.url:
             raise DiscordError("Discord is not connected.")
         try:
-            r = requests.post(self.target(), json=payload, timeout=10, allow_redirects=False, headers={"User-Agent": "CrossChat"})
+            r = requests.post(self.url, json=payload, timeout=10, allow_redirects=False, headers={"User-Agent": "CrossChat"})
         except requests.RequestException:
             raise DiscordError("Discord did not answer.") from None
         if r.status_code in (200, 204):

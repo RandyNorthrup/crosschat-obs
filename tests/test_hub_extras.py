@@ -4,6 +4,7 @@ import json
 import socket
 import sys
 import threading
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
@@ -262,8 +263,12 @@ class FakeDiscord:
 
 
 @pytest.fixture
-def discord():
+def discord(monkeypatch):
+    """Whatever is sent to discord.com goes to a stand-in on this PC instead."""
     fake = FakeDiscord()
+    for name in ("get", "post"):
+        real = getattr(requests, name)
+        monkeypatch.setattr(discord_relay.requests, name, lambda url, real=real, **kw: real(fake.base + urllib.parse.urlsplit(url).path, **kw))
     yield fake
     fake.close()
 
@@ -289,7 +294,7 @@ def test_chat_reaches_discord_as_plain_text_that_pings_nobody():
 
 @pytest.mark.keyring
 def test_webhook_url_is_checked_encrypted_and_never_shown(tmp_path, discord, monkeypatch):
-    d = discord_relay.Discord(str(tmp_path / "discord.bin"), hub.NAMES, base=discord.base)
+    d = discord_relay.Discord(str(tmp_path / "discord.bin"), hub.NAMES)
     for bad in ("http://discord.com/api/webhooks/%s/%s" % (HOOK_ID, HOOK_TOKEN), "https://evil.example/api/webhooks/%s/%s" % (HOOK_ID, HOOK_TOKEN),
                 "https://discord.com.evil.example/api/webhooks/%s/%s" % (HOOK_ID, HOOK_TOKEN), HOOK + "?x=1", HOOK + "/extra",
                 "https://discord.com/api/webhooks/abc/%s" % HOOK_TOKEN, "not a url"):
@@ -318,7 +323,7 @@ def test_webhook_url_is_checked_encrypted_and_never_shown(tmp_path, discord, mon
 @pytest.mark.keyring
 def test_posting_batches_waits_when_asked_and_stops_when_the_webhook_is_gone(tmp_path, discord):
     changed = []
-    d = discord_relay.Discord(str(tmp_path / "discord.bin"), hub.NAMES, base=discord.base, changed=lambda: changed.append(1))
+    d = discord_relay.Discord(str(tmp_path / "discord.bin"), hub.NAMES, changed=lambda: changed.append(1))
     d.set(HOOK, {"chat": True})
     for i in range(30):
         d.chat(chat("viewer%d" % i, "message %d" % i))
@@ -376,7 +381,6 @@ def test_chat_faster_than_discord_drops_the_oldest_lines_and_says_so(tmp_path):
 @pytest.mark.keyring
 def test_hub_posts_to_discord_only_during_a_real_stream(home, discord):
     home({"twitch": "me", "youtube": "@mychannel", "kick": "me-too"})
-    hub.DC.base = discord.base
     hub.DC.set(HOOK, {"chat": True})
     hub.streaming.clear()
 
@@ -409,7 +413,6 @@ def test_hub_posts_to_discord_only_during_a_real_stream(home, discord):
 @pytest.mark.keyring
 def test_discord_routes(home, discord):
     home({})
-    hub.DC.base = discord.base
 
     async def test(port):
         watcher = asyncio.Queue()

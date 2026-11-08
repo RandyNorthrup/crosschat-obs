@@ -16,8 +16,10 @@ import asyncio
 import json
 import os
 import subprocess
-import threading
 import time
+
+from config_file import on_the_side as _later
+from config_file import process_running as running  # noqa: F401  (the hub asks for macos.running)
 
 OBS_SETTINGS = os.path.expanduser("~/Library/Application Support/obs-studio")
 BROWSERS = {"chrome": "Google Chrome.app", "edge": "Microsoft Edge.app", "chromium": "Chromium.app"}
@@ -75,11 +77,6 @@ def _browser(app, *argv):
     if found is None:
         _refused["until"] = time.time() + BACK_OFF
     return found
-
-
-def _later(job, *argv):
-    """Moving and closing windows needs no answer: done on the side, so the hub never waits for it."""
-    threading.Thread(target=job, args=argv, daemon=True).start()
 
 
 def bundle(path):
@@ -181,16 +178,3 @@ def message_box(text):
                         "-e", "end run", str(text)], timeout=3600, **QUIET)
     except (OSError, subprocess.SubprocessError):
         pass
-
-
-def running(pid):
-    """True while process `pid` is there."""
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:                  # there, but someone else's
-        return True
-    except OSError:
-        return False
-    return True

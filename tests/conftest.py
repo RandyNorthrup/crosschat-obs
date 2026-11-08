@@ -1,3 +1,4 @@
+import asyncio
 import os
 import sys
 
@@ -54,6 +55,7 @@ def no_windows(monkeypatch):
         opened.append(url)
         return None
     monkeypatch.setattr(hub, "open_app", open_app)
+    monkeypatch.setattr(hub, "one_window", asyncio.Lock())           # (each test has an event loop of its own)
     monkeypatch.setattr(hub, "close_window", lambda: None)
     monkeypatch.setattr(hub, "close_handle", lambda handle: None)
     return opened

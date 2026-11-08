@@ -10,13 +10,11 @@ import os
 import secrets
 import sys
 
+import config_file
+
 
 def write(path, data):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path + ".tmp", "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-        f.write("\n")
-    os.replace(path + ".tmp", path)
+    config_file.replace_file(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
 
 def config(template, target):

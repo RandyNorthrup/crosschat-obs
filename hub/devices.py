@@ -11,6 +11,8 @@ import os
 import secrets
 import time
 
+import config_file
+
 CODE_SECONDS = 300
 CODE_TRIES = 5
 SEEN_EVERY = 60                              # last_seen is written to disk at most this often per device
@@ -21,20 +23,24 @@ def digest(token):
 
 
 class Devices:
-    def __init__(self, path):
+    def __init__(self, path, trouble=None):
+        """trouble: told, in words for the streamer, when the saved list can't be used."""
         self.path = path
         self.code = None                     # {"code", "expires", "tries"} while a pairing is open
+        self.devices = []
         try:
-            with open(path, encoding="utf-8") as f:
-                self.devices = [d for d in json.load(f).get("devices", []) if isinstance(d, dict) and d.get("hash")]
-        except (OSError, ValueError, AttributeError):
-            self.devices = []
+            with open(path, encoding="utf-8-sig") as f:
+                self.devices = [d for d in json.load(f)["devices"] if isinstance(d, dict) and isinstance(d.get("hash"), str)]
+        except FileNotFoundError:
+            pass
+        except (OSError, ValueError, KeyError, TypeError) as error:   # kept, or the next save would wipe it for good
+            kept = config_file.set_aside(path)
+            if trouble:
+                trouble("CrossChat couldn't read its list of paired devices (%s), so they need pairing again.%s" % (
+                    error, " The damaged file is kept as %s.bad." % os.path.basename(path) if kept else ""))
 
     def save(self):
-        os.makedirs(os.path.dirname(self.path), exist_ok=True)
-        with open(self.path + ".tmp", "w", encoding="utf-8") as f:
-            json.dump({"devices": self.devices}, f, indent=1)
-        os.replace(self.path + ".tmp", self.path)
+        config_file.replace_file(self.path, json.dumps({"devices": self.devices}, indent=1))
 
     def listing(self):
         return [{k: d.get(k) for k in ("id", "name", "created", "last_seen")} for d in self.devices]

@@ -5,10 +5,11 @@ editable() is what the window shows; save() checks every field, writes config.js
 old one as config.json.bak and every key it doesn't know about), and says which changes need OBS restarted;
 apply_live() puts the rest to work at once. Tokens, secrets, passwords and paths to other programs are never part of it.
 """
-import asyncio
 import json
 import os
 import re
+
+from config_file import replace_file
 
 # key -> (kind, detail, needs a restart). Dotted keys are one section deep, like config.json itself.
 FIELDS = {
@@ -178,8 +179,8 @@ def save(path, body, cfg, channel, port=None):
         if old_text is None:
             with open(path, "rb") as f:
                 old = f.read()
-            write(path + ".bak", old)
-        write(path, (json.dumps(raw, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
+            replace_file(path + ".bak", old)
+        replace_file(path, json.dumps(raw, indent=2, ensure_ascii=False) + "\n")
     except OSError as error:
         return {"ok": False, "why": "Could not save config.json (%s)." % (error.strerror or error)}, {}
     restart = [k for k in changes if FIELDS[k][2]]
@@ -187,15 +188,6 @@ def save(path, body, cfg, channel, port=None):
     how = "Restart OBS" if with_obs else "Close CrossChat and open it again"
     why = "Saved. %s to apply: %s." % (how, ", ".join(LABELS[k] for k in restart)) if restart else "Saved."
     return {"ok": True, "why": why, "restart_needed": bool(restart), "restart": restart}, changes
-
-
-def write(path, data):
-    """Replace a file in one step (a crash or a full disk can't leave half a config.json)."""
-    with open(path + ".tmp", "wb") as f:
-        f.write(data)
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(path + ".tmp", path)
 
 
 def apply_live(hub, changes):
@@ -212,21 +204,14 @@ def apply_live(hub, changes):
             hub.EMOTES.clear()
             hub.send({"type": "emotes", "emotes": {}})
         else:
-            spawn(hub.load_emotes(hub.state.get("twitch_room", "")))
+            hub.spawn(hub.load_emotes(hub.state.get("twitch_room", "")))
     if "logs.keep_days" in changes and hub.LOG:
         hub.LOG.keep_days = changes["logs.keep_days"]
     if "remote.enabled" in changes or "remote.port" in changes:
-        spawn(companion_again(hub))
+        hub.spawn(companion_again(hub))
 
 
 async def companion_again(hub):
     """The companion closed, then opened again on its (new) port when it is on and something is paired."""
     await hub.remote_off()
     await hub.remote_on()
-
-
-def spawn(job):
-    try:
-        asyncio.get_running_loop().create_task(job)
-    except RuntimeError:                          # no event loop (a test calling this directly): nothing to start
-        job.close()

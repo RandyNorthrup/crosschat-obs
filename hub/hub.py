@@ -137,6 +137,7 @@ DEMO = False                                 # --demo: a made-up live stream, fo
 TWITCH = YOUTUBE = KICK = TIKTOK = ""
 FACEBOOK = INSTAGRAM = False
 KICK_ROOM = 0
+problems = []                                # what went wrong before there was anywhere to say it: start_log writes it down, main shows it
 
 
 def arg(name, default):
@@ -144,7 +145,7 @@ def arg(name, default):
 
 
 def merged(base, over):
-    """`over` laid on top of `base`, one level of nested sections deep."""
+    """`over` laid on top of `base`, section by section."""
     out = {}
     for key, value in base.items():
         mine = over.get(key, value) if isinstance(over, dict) else value
@@ -168,10 +169,23 @@ def channel(value, platform):
     return value if re.fullmatch(pattern, value) else ""
 
 
+def number(name, given, default):
+    """A setting that has to be a whole number. Anything else is noted and `default` used: a slip in config.json must
+    not stop CrossChat."""
+    try:
+        return int(given)
+    except (TypeError, ValueError):
+        problems.append("config.json: \"%s\" should be a whole number, not %r. Using %s." % (name, given, default))
+        return default
+
+
 def configure(argv):
-    """Settings: the defaults, then config.json (or --config PATH, or the file CROSSCHAT_CONFIG names), then the command line."""
+    """Settings: the defaults, then config.json (or --config PATH, or the file CROSSCHAT_CONFIG names), then the command
+    line. What's wrong with them goes in `problems`: there is no log to tell yet."""
     global ARGV, CFG, X, HOME, CONFIG_PATH, TEST, DEMO, PORT, TWITCH, YOUTUBE, KICK, KICK_ROOM, TIKTOK, FACEBOOK, INSTAGRAM
     ARGV = list(argv)
+    problems.clear()
+    warned.clear()
     DEMO = "--demo" in ARGV
     path = os.path.abspath(arg("--config", os.environ.get("CROSSCHAT_CONFIG") or os.path.join(APP, "config.json")))
     HOME, CONFIG_PATH = os.path.dirname(path), path
@@ -181,25 +195,41 @@ def configure(argv):
     except FileNotFoundError:
         mine = {}
     except (OSError, ValueError) as error:
-        log.error("config.json could not be read (%s); the defaults are used", error)
+        problems.append("config.json could not be read (%s), so CrossChat is using its defaults, with no channels set. Fix or delete the file." % error)
         mine = {}
-    CFG = merged(DEFAULTS, mine if isinstance(mine, dict) else {})
+    if not isinstance(mine, dict):
+        problems.append("config.json isn't a settings file (it should be one { ... } block), so CrossChat is using its defaults.")
+        mine = {}
+    for name, value in DEFAULTS.items():
+        if isinstance(value, dict) and mine.get(name) and not isinstance(mine[name], dict):
+            problems.append("config.json: \"%s\" should be a { ... } section. Using its defaults." % name)
+            del mine[name]
+    CFG = merged(DEFAULTS, mine)
+    for name, value in DEFAULTS.items():
+        if isinstance(value, dict) and not CFG[name]:     # ("emotes": false and the like: that section is simply off)
+            CFG[name] = {}
     X = CFG["x"] if CFG["x"].get("enabled") else {}
     TEST = "--test" in ARGV or DEMO
-    PORT = int(arg("--port", CFG["port"]))
+    PORT = number("port", arg("--port", CFG["port"]), DEFAULTS["port"])
+    if not 0 < PORT < 65536:
+        problems.append("config.json: %d isn't a port. Using %d." % (PORT, DEFAULTS["port"]))
+        PORT = DEFAULTS["port"]
+    for section in ("obs", "remote"):
+        CFG[section]["port"] = number(section + ".port", CFG[section].get("port") or 0, DEFAULTS[section]["port"])
+    CFG["logs"]["keep_days"] = number("logs.keep_days", CFG["logs"].get("keep_days") or DEFAULTS["logs"]["keep_days"], DEFAULTS["logs"]["keep_days"])
     TWITCH = channel(arg("--twitch", CFG["twitch"]), "twitch")
     YOUTUBE = channel(arg("--youtube", CFG["youtube"]), "youtube")
-    KICK, KICK_ROOM = channel(CFG["kick"], "kick"), int(CFG["kick_chatroom"] or 0)
+    KICK, KICK_ROOM = channel(CFG["kick"], "kick"), number("kick_chatroom", CFG["kick_chatroom"] or 0, 0)
     if "--kick" in ARGV:
         slug, _, room = arg("--kick", "").partition(":")
-        KICK, KICK_ROOM = channel(slug, "kick"), int(room or 0)
+        KICK, KICK_ROOM = channel(slug, "kick"), number("--kick", room or 0, 0)
     TIKTOK = channel(CFG["tiktok"], "tiktok")
     FACEBOOK = CFG.get("facebook") is True or str(CFG.get("facebook")).lower() in ("on", "yes", "1")
     INSTAGRAM = CFG.get("instagram") is True or str(CFG.get("instagram")).lower() in ("on", "yes", "1")
     for name, given, used in (("twitch", CFG["twitch"], TWITCH), ("youtube", CFG["youtube"], YOUTUBE), ("kick", CFG["kick"], KICK),
                               ("tiktok", CFG["tiktok"], TIKTOK)):
         if given and not used:
-            log.warning("config.json: %r is not a %s channel I can use; leaving %s out", given, name, name)
+            problems.append("config.json: %r is not a %s channel CrossChat can use, so %s is left out." % (given, name, name))
 
 
 messages = collections.deque(maxlen=300)     # what a newly opened window is shown first
@@ -318,17 +348,30 @@ def not_saved(error):
     return str(error) if isinstance(error, vault.Unavailable) else "Could not save it in your CrossChat folder."
 
 
-def warn(text):
-    """Tell the person at the PC: in the log, in the chat window and once in a plain Windows message box (the hub has
-    no window of its own, so a problem would otherwise go unseen)."""
-    log.warning(text)
+warned = set()                               # what warn() has said already this stream
+
+
+def warn(text, logged=False):
+    """Tell the person at the PC: in the log, in the chat window and in a plain message box (the hub has no window of its
+    own, so a problem would otherwise go unseen). The same words only once a stream. logged: the log has it already.
+    Returns the message box's thread (None when there is no box to wait for)."""
+    if text in warned:
+        return None
+    warned.add(text)
+    if not logged:
+        log.warning(text)
     note(text)
-    if "--quiet" not in ARGV and MAC:
-        threading.Thread(target=macos.message_box, args=(text,), daemon=True).start()
-    elif "--quiet" not in ARGV and LINUX:
-        threading.Thread(target=linux.message_box, args=(text,), daemon=True).start()
-    elif "--quiet" not in ARGV:
-        threading.Thread(target=user32.MessageBoxW, args=(None, text, "CrossChat", 0x30 | 0x10000 | 0x40000), daemon=True).start()
+    if "--quiet" in ARGV:
+        return None
+    if MAC:
+        target, args = macos.message_box, (text,)
+    elif LINUX:
+        target, args = linux.message_box, (text,)
+    else:
+        target, args = user32.MessageBoxW, (None, text, "CrossChat", 0x30 | 0x10000 | 0x40000)
+    box = threading.Thread(target=target, args=args, daemon=True)
+    box.start()
+    return box
 
 
 # ---- Twitch: anonymous read-only IRC --------------------------------------------------------------
@@ -390,7 +433,7 @@ async def twitch(channel_name):
                         wait = 2
                         if tags.get("room-id") and tags["room-id"] != state.get("twitch_room"):
                             state["twitch_room"] = tags["room-id"]          # the channel's own 7TV/BTTV/FFZ sets come by this id
-                            asyncio.create_task(load_emotes(tags["room-id"]))
+                            spawn(load_emotes(tags["room-id"]))
                     elif command == "PRIVMSG" and len(parts) == 4:
                         text = parts[3][1:]
                         emotes = tags.get("emotes", "")
@@ -417,8 +460,8 @@ async def twitch(channel_name):
                         break
                 except (ValueError, KeyError, IndexError, TypeError, AttributeError) as error:
                     skipped("twitch", error)
-        except (OSError, asyncio.TimeoutError, asyncio.IncompleteReadError):
-            pass
+        except (OSError, asyncio.TimeoutError, asyncio.IncompleteReadError) as error:
+            skipped("twitch", error, "chat connection dropped")
         finally:
             if writer:
                 writer.close()
@@ -427,16 +470,31 @@ async def twitch(channel_name):
         wait = min(wait * 2, 60)
 
 
-def skipped(platform, error):
-    """A message a platform sent that CrossChat couldn't read: skipped (the rest of the chat carries on), and noted in
-    the log once per kind of problem, so a platform changing its format shows up there."""
-    key = (platform, type(error).__name__, str(error)[:80])
+def skipped(platform, error, doing="skipped a message CrossChat couldn't read"):
+    """Something a platform did that CrossChat couldn't follow (the rest carries on), noted in the log once per kind of
+    problem, so a platform changing its format shows up there."""
+    key = (platform, doing, type(error).__name__, str(error)[:80])
     if key not in skipped.seen:
         skipped.seen.add(key)
-        log.warning("%s: skipped a message CrossChat couldn't read (%s: %s)", platform, type(error).__name__, error)
+        log.warning("%s: %s (%s: %s)", platform, doing, type(error).__name__, str(error)[:300])
 
 
 skipped.seen = set()
+background = set()                           # the jobs nobody waits for, while they run (the event loop only keeps weak references)
+
+
+def spawn(job):
+    """Start a job nobody waits for: it is kept until it ends, so it can't be collected half way, and a failure goes in the log."""
+    task = asyncio.create_task(job)
+    background.add(task)
+    task.add_done_callback(spawned_done)
+    return task
+
+
+def spawned_done(task):
+    background.discard(task)
+    if not task.cancelled() and task.exception():
+        log.error("a background job failed", exc_info=task.exception())
 
 
 async def keep_running(name, job):
@@ -483,6 +541,19 @@ def yt_live_video(target):
     return found.group(1) if found and live else ""
 
 
+def yt_every_message(chat):
+    """The token for "Live chat" (every message) in the chat page's view menu, found by its name. '' when it isn't there:
+    then YouTube shows "Top chat", which holds some messages back."""
+    try:
+        for item in chat["header"]["liveChatHeaderRenderer"]["viewSelector"]["sortFilterSubMenuRenderer"]["subMenuItems"]:
+            title = item.get("title")
+            if (title if isinstance(title, str) else yt_text(title)).strip().lower().startswith("live chat"):
+                return item["continuation"]["reloadContinuationData"]["continuation"]
+    except (KeyError, TypeError, AttributeError):
+        pass
+    return ""
+
+
 def yt_open(video):
     html = web.get("https://www.youtube.com/live_chat?is_popout=1&v=" + video, timeout=15).text
     key = re.search(r'"INNERTUBE_API_KEY":"([^"]+)"', html)
@@ -491,13 +562,11 @@ def yt_open(video):
     chat = ((data or {}).get("contents") or {}).get("liveChatRenderer")
     if not (key and version and chat):
         return None
-    token = next(iter(chat["continuations"][0].values()))["continuation"]
-    try:      # the second entry of the menu is "Live chat": every message, not only "Top chat"
-        menu = chat["header"]["liveChatHeaderRenderer"]["viewSelector"]["sortFilterSubMenuRenderer"]["subMenuItems"]
-        token = menu[1]["continuation"]["reloadContinuationData"]["continuation"]
-    except (KeyError, IndexError):
-        pass
-    return {"key": key.group(1), "version": version.group(1), "token": token}
+    every = yt_every_message(chat)
+    opened = {"key": key.group(1), "version": version.group(1), "token": every or next(iter(chat["continuations"][0].values()))["continuation"]}
+    if not every:
+        opened["top_only"] = True
+    return opened
 
 
 def yt_text(message):
@@ -564,6 +633,7 @@ def yt_poll(chat):
 
 async def youtube(target):
     seen = collections.deque(maxlen=2000)
+    top_only_told = None                          # the stream the streamer was last told about Top chat
     while True:
         await streaming.wait()
         set_status("youtube", "waiting")
@@ -571,16 +641,20 @@ async def youtube(target):
         while streaming.is_set() and not video:       # YouTube takes a little while to notice the stream
             try:
                 video = await asyncio.to_thread(yt_live_video, target)
-            except (requests.RequestException, ValueError):
+            except (requests.RequestException, ValueError) as error:
                 video = ""
+                skipped("youtube", error, "couldn't look up the live video")
             if not video:
                 await asyncio.sleep(10 if time.time() - began < 300 else 30)
         chat = None
         while streaming.is_set() and video and not chat:
             try:
                 chat = await asyncio.to_thread(yt_open, video)
-            except (requests.RequestException, ValueError, KeyError):
+                if not chat:
+                    skipped("youtube", LookupError("no chat on the live chat page"), "couldn't open the chat")
+            except (requests.RequestException, ValueError, KeyError) as error:
                 chat = None
+                skipped("youtube", error, "couldn't open the chat")
             if not chat:
                 await asyncio.sleep(15)
         if not chat:
@@ -588,11 +662,16 @@ async def youtube(target):
             continue
         state["youtube_video"], state["youtube_chat"] = video, chat
         set_status("youtube", "on")
+        if chat.get("top_only") and top_only_told != state["since"]:
+            top_only_told = state["since"]
+            skipped("youtube", LookupError("no \"Live chat\" in its menu"), "showing Top chat only")
+            note("YouTube: showing Top chat, because its menu didn't offer Live chat. Top chat holds some messages back.")
         failures = 0
         while streaming.is_set() and failures < 6:
             try:
                 result = await asyncio.to_thread(yt_poll, chat)
-            except (requests.RequestException, ValueError, KeyError):
+            except (requests.RequestException, ValueError, KeyError) as error:
+                skipped("youtube", error, "couldn't read the chat")
                 failures += 1
                 await asyncio.sleep(5)
                 continue
@@ -646,8 +725,8 @@ def kick_feed(channel_id):
                         and re.fullmatch(r"[a-z0-9-]{2,20}", str(given.get("cluster", "")))):
                     key, cluster = given["app_key"], given["cluster"]
                     break
-        except (requests.RequestException, ValueError, AttributeError, TypeError):
-            pass
+        except (requests.RequestException, ValueError, AttributeError, TypeError) as error:
+            skipped("kick", error, "couldn't ask for the chat feed's address")
     return "wss://ws-%s.pusher.com/app/%s?protocol=7&client=js&version=8.4.0&flash=false" % (cluster, key)
 
 
@@ -656,11 +735,13 @@ async def kick(slug, room):
     while True:                                   # the channel and chat room numbers come from the channel's public record
         try:
             found = await asyncio.to_thread(requests.get, "https://kick.com/api/v2/channels/" + slug, headers=UA, timeout=12)
+            if found.status_code != 200:
+                skipped("kick", ValueError("HTTP %d" % found.status_code), "couldn't read the channel's record")
             record = found.json() if found.status_code == 200 else {}
             room = room or int((record.get("chatroom") or {}).get("id", 0) or 0)
             channel_id = int(record.get("id") or 0)
-        except (requests.RequestException, ValueError, AttributeError, TypeError):
-            pass
+        except (requests.RequestException, ValueError, AttributeError, TypeError) as error:
+            skipped("kick", error, "couldn't read the channel's record")
         if room:
             break
         set_status("kick", "retry")
@@ -669,7 +750,7 @@ async def kick(slug, room):
     while True:
         try:
             set_status("kick", "waiting")
-            url = CFG.get("kick_feed") or await asyncio.to_thread(kick_feed, channel_id)    # asked again on every reconnect
+            url = await asyncio.to_thread(kick_feed, channel_id)    # asked again on every reconnect
             async with connect(url, open_timeout=20, ping_interval=None) as ws:
                 await ws.send(json.dumps({"event": "pusher:subscribe", "data": {"auth": "", "channel": "chatrooms.%d.v2" % room}}))
                 while True:
@@ -756,8 +837,9 @@ async def audience():
             try:
                 count = await asyncio.to_thread(job)
                 viewers[name] = int(count) if str(count).isdigit() else None     # whatever else an API answers: unknown
-            except Exception:                   # a failed lookup just shows as unknown
+            except Exception as error:          # a failed lookup just shows as unknown
                 viewers[name] = None
+                skipped(name, error, "couldn't read the viewer count")
         send(viewer_event())
         await asyncio.sleep(10 if fresh else 30)
 
@@ -823,8 +905,9 @@ def work_area():
 
 
 def box(setting, part):
-    """(x, y, width, height) for the chat window (part "chat"), X's page ("x") or TikTok's ("tiktok"): the setting when
-    it is a rectangle, else a strip at the right edge of the main screen, the chat on top and those pages under it."""
+    """(x, y, width, height) for the chat window (part "chat") or a platform's page (part "x", "tiktok" and so on): the
+    setting when it is a rectangle, else a strip at the right edge of the main screen, the chat on top and those pages
+    under it."""
     if isinstance(setting, dict) and all(isinstance(setting.get(k), int) for k in ("x", "y", "width", "height")):
         return setting["x"], setting["y"], setting["width"], setting["height"]
     left, top, right, bottom = work_area()
@@ -875,20 +958,12 @@ PAGES = ("x", "tiktok", "facebook", "instagram", "rumble")
 WINDOW_WAIT = 30                             # seconds a new window may take to show up (a browser starting cold took 10 s in our tests)
 HANDLE_WAIT = 5                              # once the extension has placed a window: seconds the system may take to find it too
 pages = {}                                   # role -> {"url": address opened, "id": the browser's id for the window, "handle": the system's}
+one_window = asyncio.Lock()                  # one opens at a time: the system's way knows a new window by its not having been there before
 
 
 def system_places():
     """Whether the system's own way places a window it can see before the extension is asked (Windows)."""
     return not (MAC or LINUX)
-
-
-def opening():
-    """One window opens at a time, so each new window is told apart from the others (the system's way knows a new
-    window by its not having been there before)."""
-    loop = asyncio.get_running_loop()
-    if getattr(opening, "loop", None) is not loop:
-        opening.loop, opening.lock = loop, asyncio.Lock()
-    return opening.lock
 
 
 async def by_extension(action, role, url="", where=None, window=None, known=None, wait=0):
@@ -921,7 +996,7 @@ async def open_app(url, where, role=None):
     if not exe:
         warn("CrossChat could not find Chrome or Edge. Set \"browser\" in config.json to the full path of your browser.")
         return None
-    async with opening():
+    async with one_window:
         known = await by_extension("list", "") if role else {"ok": False}
         found = {}
         if not known["ok"]:
@@ -994,8 +1069,12 @@ async def show_window():
         place(found[0], *where)
         return
     state["chat_opened"] = (where, time.time())  # the extension puts it in its place once it's up (chat_connected)
-    if await open_app("http://127.0.0.1:%d/" % PORT, where) and system_places():
-        state.pop("chat_opened", None)           # (Windows: placed already, the system's way)
+    settled = state["chat_settled"] = asyncio.Event()
+    try:
+        if await open_app("http://127.0.0.1:%d/" % PORT, where) and system_places():
+            state.pop("chat_opened", None)       # (Windows: placed already, the system's way)
+    finally:
+        settled.set()
 
 
 async def chat_connected():
@@ -1004,9 +1083,8 @@ async def chat_connected():
     opened = state.get("chat_opened")
     if not opened or time.time() - opened[1] >= 2 * WINDOW_WAIT:
         return
-    async with opening():                        # (the system's way may be finding it this moment)
-        pass
-    await asyncio.sleep(0)
+    if "chat_settled" in state:                  # (the system's way may be finding it this moment)
+        await state["chat_settled"].wait()
     if state.pop("chat_opened", None):
         await by_extension("place", "chat", where=opened[0])
 
@@ -1084,7 +1162,6 @@ async def x_go(mode):
         mode = ""
     tail = {"live": "#golive", "private": "#golive-private", "dry": "#golive-dry"}.get(mode, "")
     state["x_armed"] = (mode, time.time()) if tail else None
-    state["x_last"] = None
     await open_page("x", "https://studio.x.com/live" + tail, box(X.get("window"), "x"))
     if mode == "live":
         note("X: starting the livestream there...")
@@ -1117,28 +1194,25 @@ def x_feed(first):
         publish("x", first("name")[:60], first("text")[:300], mid=mid, handle=re.sub(r"\W", "", first("handle"))[:30])
 
 
+# A page in a covered window has its timers throttled by Chrome, to once a minute after five minutes hidden: a page counts
+# as gone only after going quiet for longer than that.
+PAGE_QUIET = 90
+
+
 async def x_watch():
     """X, TikTok, Facebook and Instagram count as live only while their pages keep reporting in."""
     while True:
         await asyncio.sleep(5)
-        if X and time.time() - state.get("x_seen", 0) > 20:
+        if X and time.time() - state.get("x_seen", 0) > PAGE_QUIET:
             x_off()
-        if TIKTOK and status.get("tiktok") == "on" and time.time() - state.get("tiktok_seen", 0) > 20:
-            tiktok_off()
-            if streaming.is_set():
-                note("TikTok: its LIVE page stopped reporting (closed, or the LIVE ended). TikTok chat is paused.")
-        if FACEBOOK and status.get("facebook") == "on" and time.time() - state.get("facebook_seen", 0) > 20:
-            facebook_off()
-            if streaming.is_set():
-                note("Facebook: Live Producer stopped reporting (closed, or the live ended). Facebook comments are paused.")
-        if INSTAGRAM and status.get("instagram") == "on" and time.time() - state.get("instagram_seen", 0) > 20:
-            instagram_off()
-            if streaming.is_set():
-                note("Instagram: its Live producer stopped reporting (closed, or the live ended). Instagram comments are paused.")
+        for chat in PAGE_CHATS:
+            if chat.wanted() and status.get(chat.name) == "on" and time.time() - state.get(chat.name + "_seen", 0) > PAGE_QUIET:
+                chat.off()
+                if streaming.is_set():
+                    note(chat.stopped)
 
 
 def x_result(ok, mode, step):
-    state["x_last"] = {"ok": ok, "mode": mode, "step": step, "at": time.time()}
     log.info("X %s: %s (%s)", mode, "ok" if ok else "stopped", step)
     if mode == "end":
         state["x_end"] = False
@@ -1151,12 +1225,67 @@ def x_result(ok, mode, step):
         note("X test (%s): %s" % (mode, "worked" if ok else "stopped at: " + step))
 
 
+# ---- chat read off a platform's own page: one class for TikTok, Facebook and Instagram ---------------------------
+class PageChat:
+    """A platform whose chat comes from its own page in the streamer's browser, passed on by the extension: the page opens
+    when the stream starts, and the platform counts as live only while the page keeps reporting in (x_watch).
+
+    wanted says whether it is switched on, address gives the page, stopped is what to say when the page goes quiet. A
+    line's id is kept after prefix, without id_junk and at most id_most long; moderated: it doubles as the id to moderate by."""
+
+    def __init__(self, name, wanted, address, stopped, prefix, id_junk=r"\W", id_most=80, moderated=False):
+        self.name, self.wanted, self.address, self.stopped = name, wanted, address, stopped
+        self.prefix, self.id_junk, self.id_most, self.moderated = prefix, id_junk, id_most, moderated
+        self.told = collections.deque(maxlen=5000)      # lines already shown (a page shows them again after a reload)
+
+    async def open(self):
+        set_status(self.name, "waiting")
+        await open_page(self.name, self.address(), box(CFG.get(self.name + "_window"), self.name))
+
+    def off(self):
+        if status.get(self.name) in ("on", "waiting"):
+            viewers.pop(self.name, None)
+            set_status(self.name, "off")
+            send(viewer_event())
+
+    def mine(self, first):
+        """Whether the page that reported counts (anything from another page is ignored)."""
+        return bool(self.wanted())
+
+    def feed(self, first):
+        """The extension passes on what the page shows: new lines and the viewer count. Answers whether the page counts."""
+        if not self.mine(first):
+            return False
+        if first("over"):
+            self.off()
+            return True
+        state[self.name + "_seen"] = time.time()
+        set_status(self.name, "on")
+        if first("viewers").isdigit() and viewers.get(self.name) != int(first("viewers")):
+            viewers[self.name] = int(first("viewers"))
+            send(viewer_event())
+        try:
+            lines = json.loads(first("lines") or "[]")
+        except ValueError:
+            lines = []
+        for line in lines[:50] if isinstance(lines, list) else []:
+            if isinstance(line, dict):
+                self.take(line)
+        return True
+
+    def take(self, line):
+        mid = self.prefix + re.sub(self.id_junk, "", str(line.get("id", "")))[:self.id_most]
+        name, text = " ".join(str(line.get("name", "")).split())[:60], " ".join(str(line.get("text", "")).split())[:1000]
+        if name and text and mid != self.prefix and mid not in self.told:
+            self.told.append(mid)
+            publish(self.name, name, text, badges=["broadcaster"] if line.get("host") is True else [], mid=mid, raw=mid if self.moderated else "")
+
+
 # ---- TikTok LIVE: chat from the streamer's own LIVE page, through the extension ---------------------------
 # TikTok has no public chat API, and the unofficial ones send the streamer's TikTok session to an outside signing
 # service. CrossChat doesn't: when OBS goes live it opens the streamer's own LIVE page in their everyday browser, and
 # the extension passes on the chat lines shown there and types replies into TikTok's own chat box. On any other
 # TikTok page (someone else's LIVE, say) it reads nothing.
-tiktok_told = collections.deque(maxlen=5000)  # TikTok chat lines already shown (its page has no ids; see tiktok.js)
 tiktok_likes = {}                            # viewer -> likes not shown yet: one alert per viewer per burst of likes
 tiktok_once = {}                             # (kind, viewer) -> when last shown: a follow once a stream, a share once a minute
 TIKTOK_EVENTS = ("gift", "follow", "share", "like", "join")
@@ -1170,17 +1299,36 @@ def tiktok_page():
     return "https://www.tiktok.com/@%s/live" % TIKTOK
 
 
-async def tiktok_open():
-    set_status("tiktok", "waiting")
-    await open_page("tiktok", tiktok_page(), box(CFG.get("tiktok_window"), "tiktok"))
+class TikTokChat(PageChat):
+    """TikTok's page also shows gifts, follows, shares, likes and joins (its lines have no ids of their own; see
+    tiktok.js), and on any TikTok page but the streamer's own LIVE nothing counts."""
 
+    def mine(self, first):
+        return bool(TIKTOK) and first("page").lower().lstrip("@") == TIKTOK
 
-def tiktok_off():
-    if status.get("tiktok") in ("on", "waiting"):
-        tiktok_flush_likes(time.time(), everything=True)
-        viewers.pop("tiktok", None)
-        set_status("tiktok", "off")
-        send(viewer_event())
+    def off(self):
+        if status.get(self.name) in ("on", "waiting"):
+            tiktok_flush_likes(time.time(), everything=True)
+        super().off()
+
+    def feed(self, first):
+        mine = super().feed(first)
+        if mine and not first("over"):
+            tiktok_flush_likes(time.time())
+        return mine
+
+    def take(self, line):
+        mid = "tt-" + re.sub(r"\W", "", str(line.get("id", "")))[:80]
+        name, text = " ".join(str(line.get("name", "")).split())[:60], " ".join(str(line.get("text", "")).split())[:300]
+        kind = line.get("kind") or "chat"
+        if not name or mid == "tt-" or mid in self.told:
+            return
+        if kind == "chat" and text:
+            self.told.append(mid)
+            publish("tiktok", name, text, badges=["broadcaster"] if line.get("host") is True else [], mid=mid)
+        elif kind in TIKTOK_EVENTS and line.get("host") is not True:
+            self.told.append(mid)
+            tiktok_event(kind, name, line, mid)
 
 
 def tiktok_event(kind, name, line, mid):
@@ -1226,133 +1374,25 @@ def tiktok_flush_likes(now, everything=False, oldest=0):
                 mid="tt-like-%s" % hashlib.sha256(("%s\n%f" % (who.lower(), tally["first"])).encode()).hexdigest()[:16])
 
 
-def tiktok_feed(first):
-    """The extension passes on what the streamer's own TikTok LIVE page shows: new chat lines, gifts, follows, shares,
-    likes and joins, and the viewer count. Answers whether that page is the streamer's (anything from another page is
-    ignored)."""
-    if not TIKTOK or first("page").lower().lstrip("@") != TIKTOK:
-        return False
-    if first("over"):
-        tiktok_off()
-        return True
-    state["tiktok_seen"] = time.time()
-    set_status("tiktok", "on")
-    if first("viewers").isdigit() and viewers.get("tiktok") != int(first("viewers")):
-        viewers["tiktok"] = int(first("viewers"))
-        send(viewer_event())
-    try:
-        lines = json.loads(first("lines") or "[]")
-    except ValueError:
-        lines = []
-    for line in lines[:50] if isinstance(lines, list) else []:
-        if not isinstance(line, dict):
-            continue
-        mid = "tt-" + re.sub(r"\W", "", str(line.get("id", "")))[:80]
-        name, text = " ".join(str(line.get("name", "")).split())[:60], " ".join(str(line.get("text", "")).split())[:300]
-        kind = line.get("kind") or "chat"
-        if not name or mid == "tt-" or mid in tiktok_told:
-            continue
-        if kind == "chat" and text:
-            tiktok_told.append(mid)
-            publish("tiktok", name, text, badges=["broadcaster"] if line.get("host") is True else [], mid=mid)
-        elif kind in TIKTOK_EVENTS and line.get("host") is not True:
-            tiktok_told.append(mid)
-            tiktok_event(kind, name, line, mid)
-    tiktok_flush_likes(time.time())
-    return True
+tiktok_chat = TikTokChat("tiktok", lambda: TIKTOK, tiktok_page,
+                         "TikTok: its LIVE page stopped reporting (closed, or the LIVE ended). TikTok chat is paused.", "tt-")
 
 
-# ---- Facebook Live: comments from Live Producer, through the extension ---------------------------------------
+# ---- Facebook Live and Instagram Live: comments from their own Live producers, through the extension ---------------------
 # Live Producer is where a Facebook live is started and ended, and it only ever shows the signed-in streamer's own
-# broadcasts. When OBS goes live, CrossChat opens it; the extension passes on the comments shown there and types
-# replies into its comment box. Nothing else on Facebook is touched.
-facebook_told = collections.deque(maxlen=5000)
-
-
-async def facebook_open():
-    set_status("facebook", "waiting")
-    await open_page("facebook", "https://www.facebook.com/live/producer", box(CFG.get("facebook_window"), "facebook"))
-
-
-def facebook_off():
-    if status.get("facebook") in ("on", "waiting"):
-        viewers.pop("facebook", None)
-        set_status("facebook", "off")
-        send(viewer_event())
-
-
-def facebook_feed(first):
-    """The extension passes on what Live Producer shows while a live is running: new comments and the viewer count."""
-    if not FACEBOOK:
-        return False
-    if first("over"):
-        facebook_off()
-        return True
-    state["facebook_seen"] = time.time()
-    set_status("facebook", "on")
-    if first("viewers").isdigit() and viewers.get("facebook") != int(first("viewers")):
-        viewers["facebook"] = int(first("viewers"))
-        send(viewer_event())
-    try:
-        lines = json.loads(first("lines") or "[]")
-    except ValueError:
-        lines = []
-    for line in lines[:50] if isinstance(lines, list) else []:
-        if not isinstance(line, dict):
-            continue
-        mid = "fb-" + re.sub(r"[^\w=-]", "", str(line.get("id", "")))[:120]
-        name, text = " ".join(str(line.get("name", "")).split())[:60], " ".join(str(line.get("text", "")).split())[:1000]
-        if name and text and mid != "fb-" and mid not in facebook_told:
-            facebook_told.append(mid)
-            publish("facebook", name, text, badges=["broadcaster"] if line.get("host") is True else [], mid=mid, raw=mid)
-    return True
-
-
-# ---- Instagram Live: comments from its Live producer, through the extension ------------------------------------
-# Instagram's Live producer (Create → Live video on instagram.com) is where a live from OBS is started and ended, and
-# it only ever shows the signed-in streamer's own live. When OBS goes live, CrossChat opens instagram.com; the
-# extension passes on the comments the producer shows and types replies into its comment box. Nothing else on
-# Instagram is read.
-instagram_told = collections.deque(maxlen=5000)  # comments already shown (the page gives them no ids; see instagram.js)
-
-
-async def instagram_open():
-    set_status("instagram", "waiting")
-    await open_page("instagram", "https://www.instagram.com/", box(CFG.get("instagram_window"), "instagram"))
-
-
-def instagram_off():
-    if status.get("instagram") in ("on", "waiting"):
-        viewers.pop("instagram", None)
-        set_status("instagram", "off")
-        send(viewer_event())
-
-
-def instagram_feed(first):
-    """The extension passes on what the Live producer shows while a live is running: new comments and the viewer count."""
-    if not INSTAGRAM:
-        return False
-    if first("over"):
-        instagram_off()
-        return True
-    state["instagram_seen"] = time.time()
-    set_status("instagram", "on")
-    if first("viewers").isdigit() and viewers.get("instagram") != int(first("viewers")):
-        viewers["instagram"] = int(first("viewers"))
-        send(viewer_event())
-    try:
-        lines = json.loads(first("lines") or "[]")
-    except ValueError:
-        lines = []
-    for line in lines[:50] if isinstance(lines, list) else []:
-        if not isinstance(line, dict):
-            continue
-        mid = "ig-" + re.sub(r"\W", "", str(line.get("id", "")))[:80]
-        name, text = " ".join(str(line.get("name", "")).split())[:60], " ".join(str(line.get("text", "")).split())[:1000]
-        if name and text and mid != "ig-" and mid not in instagram_told:
-            instagram_told.append(mid)
-            publish("instagram", name, text, badges=["broadcaster"] if line.get("host") is True else [], mid=mid)
-    return True
+# broadcasts; Instagram's Live producer (Create → Live video on instagram.com) is the same for a live from OBS. When OBS
+# goes live, CrossChat opens them; the extension passes on the comments shown there and types replies into their comment
+# boxes. Nothing else on Facebook or Instagram is read.
+facebook_chat = PageChat("facebook", lambda: FACEBOOK, lambda: "https://www.facebook.com/live/producer",
+                         "Facebook: Live Producer stopped reporting (closed, or the live ended). Facebook comments are paused.",
+                         "fb-", id_junk=r"[^\w=-]", id_most=120, moderated=True)
+instagram_chat = PageChat("instagram", lambda: INSTAGRAM, lambda: "https://www.instagram.com/",
+                          "Instagram: its Live producer stopped reporting (closed, or the live ended). Instagram comments are paused.", "ig-")
+PAGE_CHATS = (tiktok_chat, facebook_chat, instagram_chat)
+PAGE_FEEDS = {"/%s/feed" % chat.name: chat for chat in PAGE_CHATS}
+tiktok_feed, tiktok_off, tiktok_told = tiktok_chat.feed, tiktok_chat.off, tiktok_chat.told
+facebook_feed, facebook_told = facebook_chat.feed, facebook_chat.told
+instagram_feed, instagram_told = instagram_chat.feed, instagram_chat.told
 
 
 # ---- Rumble: its official Live Stream API (read only) ----------------------------------------------------
@@ -1391,7 +1431,7 @@ def rumble_read(data, told, last):
     if chat_id and chat_id != state.get("rumble_chat"):
         state["rumble_chat"] = chat_id
         if not state.get("local") and not TEST:
-            asyncio.create_task(rumble_open(chat_id))
+            spawn(rumble_open(chat_id))
     if str(live.get("watching_now", "")).isdigit() and viewers.get("rumble") != int(live["watching_now"]):
         viewers["rumble"] = int(live["watching_now"])
         send(viewer_event())
@@ -1423,19 +1463,15 @@ def rumble_read(data, told, last):
             mid = new("s", sub, sub["username"], sub.get("subscribed_on"))
             if mid:
                 publish("rumble", str(sub["username"])[:60], "", kind="event", alert="sub", system="%s subscribed" % str(sub["username"])[:60], mid=mid)
-    gifts = data.get("gifted_subs") or {}
-    count = gifts.get("num_gifted_subs")
+    gifted = data.get("gifted_subs") or {}
+    count = gifted.get("num_gifted_subs")
     if isinstance(count, int):
         if last.get("gifts") is not None and count > last["gifts"]:
-            latest = gifts.get("latest_gifted_sub") or {}
+            latest = gifted.get("latest_gifted_sub") or {}
             who, n = str(latest.get("purchased_by") or "Someone")[:60], int(latest.get("total_gifts") or count - last["gifts"])
-            publish("rumble", who, "", kind="event", alert="gift", amount=gifts_text(n), system="%s gifted %s" % (who, gifts_text(n)),
-                    mid="rm-g-%d" % count)
+            amount = gifts(str(n), "sub")
+            publish("rumble", who, "", kind="event", alert="gift", amount=amount, system="%s gifted %s" % (who, amount), mid="rm-g-%d" % count)
         last["gifts"] = count
-
-
-def gifts_text(n):
-    return "%d sub%s" % (n, "" if n == 1 else "s")
 
 
 async def rumble_watch():
@@ -1476,28 +1512,27 @@ async def stream_started(local=False):
         return
     log.info("stream started%s", " (to this PC only)" if local else "")
     state["since"], state["local"], state["x_end"] = time.time(), local, False
+    warned.clear()
     messages.clear()
     x_told.clear()
-    tiktok_told.clear()
     tiktok_likes.clear()
     tiktok_once.clear()
-    facebook_told.clear()
-    instagram_told.clear()
+    for chat in PAGE_CHATS:
+        chat.told.clear()
     seen.clear()
     if LOG and not DEMO and (CFG.get("logs") or {}).get("enabled", True):
-        log.info("chat history: logs/%s.jsonl", LOG.start())
+        name = LOG.start()
+        if name:
+            log.info("chat history: logs/%s.jsonl", name)
     streaming.set()
     send({"type": "clear"})
     send(status_event())
     note("Test stream to this PC only." if local else "Stream started. Chat from every platform shows up here.")
     if CFG.get("open_window_on_stream_start", True) and "--no-window" not in ARGV:
         await show_window()
-    if TIKTOK and not local and not TEST:
-        asyncio.create_task(tiktok_open())
-    if FACEBOOK and not local and not TEST:
-        asyncio.create_task(facebook_open())
-    if INSTAGRAM and not local and not TEST:
-        asyncio.create_task(instagram_open())
+    for chat in PAGE_CHATS:
+        if chat.wanted() and not local and not TEST:
+            spawn(chat.open())
     if DC and not local and not TEST:
         DC.live(live_notice())
     if X.get("auto_go_live") and not local and not TEST:
@@ -1505,7 +1540,7 @@ async def stream_started(local=False):
             await asyncio.sleep(X.get("delay_seconds", 12))
             if streaming.is_set():
                 await x_go("live")
-        asyncio.create_task(soon())
+        spawn(soon())
 
 
 async def stream_stopped():
@@ -1527,16 +1562,15 @@ async def stream_stopped():
         if not streaming.is_set() and status.get("x") == "on":
             state["x_end"] = True
     if X.get("end_with_obs", True):
-        asyncio.create_task(end_x())
+        spawn(end_x())
 
     async def later():
         await asyncio.sleep(CFG.get("close_window_seconds_after_stream", 120))
-        tiktok_off()
-        facebook_off()
-        instagram_off()
+        for chat in PAGE_CHATS:
+            chat.off()
         state["rumble_chat"] = ""
         await close_windows()
-    closing = asyncio.create_task(later())
+    closing = spawn(later())
 
 
 # ---- OBS: its WebSocket server tells the hub when the stream starts and stops ----------------------
@@ -1611,7 +1645,6 @@ async def obs_session(ws, password):
 
 
 obs_gone = threading.Event()                 # --obs-stdin: OBS's end of our input has closed
-OBS_INPUT = 0                                # (standard input; the tests use a pipe of their own)
 
 
 def watch_stdin(fd):
@@ -1631,7 +1664,7 @@ async def obs_link():
     pid = int(arg("--obs-pid", "0") or 0)
     if "--obs-stdin" in ARGV:
         obs_gone.clear()
-        threading.Thread(target=watch_stdin, args=(OBS_INPUT,), daemon=True).start()
+        threading.Thread(target=watch_stdin, args=(0,), daemon=True).start()     # (0: standard input)
         following = lambda: not obs_gone.is_set()
     else:
         following = (lambda: obs_open(pid)) if pid else None
@@ -1661,10 +1694,11 @@ async def obs_link():
             async with ws:
                 await obs_session(ws, where["password"])
         except ConnectionClosed as closed:
-            if closed.rcvd and closed.rcvd.code == 4009 and "password" not in told:     # AuthenticationFailed
-                told.add("password")
-                warn("OBS refused CrossChat's WebSocket password. Leave \"password\" in config.json empty so CrossChat "
-                     "reads it from OBS, or copy it from Tools > WebSocket Server Settings > Show Connect Info.")
+            if closed.rcvd and closed.rcvd.code == 4009:                                 # AuthenticationFailed
+                if "password" not in told:
+                    told.add("password")
+                    warn("OBS refused CrossChat's WebSocket password. Leave \"password\" in config.json empty so CrossChat "
+                         "reads it from OBS, or copy it from Tools > WebSocket Server Settings > Show Connect Info.")
                 await asyncio.sleep(RETRY_AFTER_REFUSAL)
         except (OSError, ValueError, KeyError) as error:
             log.warning("OBS connection: %s", error)
@@ -1675,8 +1709,7 @@ async def obs_link():
             break
         await asyncio.sleep(2)
     log.info("OBS closed")
-    await close_page("x")
-    await close_chat()
+    await close_windows()
 
 
 # ---- other streaming apps: when OBS isn't the one streaming -------------------------------------------
@@ -1807,8 +1840,7 @@ async def follow_app():
     else:
         link.cancel()
     await stream_stopped()
-    await close_page("x")
-    await close_chat()
+    await close_windows()
 
 
 # ---- themes: how the on-stream widgets look ----------------------------------------------------------
@@ -1868,14 +1900,6 @@ def default_theme():
     return "classic"
 
 
-def write_file(path, text):
-    """Replace a file in one step, so a crash can't leave half a theme."""
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path + ".tmp", "w", encoding="utf-8") as f:
-        f.write(text)
-    os.replace(path + ".tmp", path)
-
-
 def theme_change(body, what):
     """Save, delete or pick a theme for the Studio. Returns the answer it shows."""
     name = str(body.get("name") or "")
@@ -1886,7 +1910,7 @@ def theme_change(body, what):
     if what == "default":
         if not theme_path(name):
             return {"ok": False, "why": "There is no theme called %s." % name}
-        write_file(os.path.join(themes_dir(), "default.txt"), name)
+        config_file.replace_file(os.path.join(themes_dir(), "default.txt"), name)
     elif builtin:
         return {"ok": False, "why": "%s comes with CrossChat and can't be changed. Save it under a new name." % name}
     elif what == "save":
@@ -1894,7 +1918,7 @@ def theme_change(body, what):
         text = json.dumps(theme, indent=2, ensure_ascii=False)
         if not isinstance(theme, dict) or len(text.encode()) > THEME_MOST:
             return {"ok": False, "why": "A theme is a JSON object of at most %d KB." % (THEME_MOST // 1024)}
-        write_file(mine, text + "\n")
+        config_file.replace_file(mine, text + "\n")
     elif os.path.isfile(mine):
         os.remove(mine)
     log.info("theme %s: %s", what, name)
@@ -1953,9 +1977,9 @@ async def test_event(kind):
 
 
 # ---- replies and moderation, from the chat window or a paired device --------------------------------------
-# Every reply and moderation goes through here. Twitch is done by the hub itself with Twitch's API once the streamer
-# has connected Twitch; YouTube and X (and Twitch without that) are handed to the "executor": the chat window on this
-# PC that has the CrossChat extension, which posts as the accounts signed in to that browser.
+# Every reply and moderation goes through here. Twitch and Kick are done by the hub itself with their own APIs, once
+# the streamer has connected them; the other platforms are handed to the "executor": the chat window on this PC that
+# has the CrossChat extension, which posts as the accounts signed in to that browser.
 LIMIT = {"twitch": 500, "youtube": 200, "x": 140, "kick": 500, "tiktok": 150, "facebook": 8000, "instagram": 2200, "rumble": 200}
 NAMES = {"twitch": "Twitch", "youtube": "YouTube", "x": "X", "kick": "Kick", "tiktok": "TikTok", "facebook": "Facebook",
          "instagram": "Instagram", "rumble": "Rumble"}
@@ -2069,7 +2093,7 @@ async def update_watch():
             except updates.UpdateError as error:
                 log.info("update check: %s", error)
             try:
-                write_file(settings_path("update-check.json"), json.dumps({"checked": update_state["checked"], "found": update_state["found"]}))
+                config_file.replace_file(settings_path("update-check.json"), json.dumps({"checked": update_state["checked"], "found": update_state["found"]}))
             except OSError:
                 pass
             send(update_event(), only=local_clients)
@@ -2085,13 +2109,33 @@ def settings_path(name):
     return os.path.join(HOME, name.replace(".json", "-demo.json") if DEMO else name)
 
 
-def settings_file(name, defaults):
-    """Those settings, laid over their defaults."""
+def trouble(text):
+    """For companion_setup, which runs in a worker thread: in the log now, and on screen once the hub is up (main)."""
+    log.warning(text)
+    problems.append(text)
+
+
+def damaged(path, what, error):
+    """Keep a settings file that can't be used as <name>.bad. Says so, in words for the streamer."""
+    kept = config_file.set_aside(path)
+    return "CrossChat couldn't read %s (%s), so the defaults are in use until you set them again.%s" % (
+        what, error, " The damaged file is kept as %s.bad." % os.path.basename(path) if kept else "")
+
+
+def settings_file(name, defaults, clean, what):
+    """Those settings, laid over their defaults and checked the way the app checks them. A damaged file is kept and the
+    streamer told: a filters.json that can't be read means no filtering, so hidden words would reach the stream."""
+    path = settings_path(name)
     try:
-        with open(settings_path(name), encoding="utf-8") as f:
+        with open(path, encoding="utf-8-sig") as f:
             saved = json.load(f)
-        return {**defaults, **{k: v for k, v in saved.items() if k in defaults}} if isinstance(saved, dict) else dict(defaults)
-    except (OSError, ValueError):
+        if not isinstance(saved, dict):
+            raise ValueError("not a settings file")
+        return clean({**defaults, **{k: v for k, v in saved.items() if k in defaults}})
+    except FileNotFoundError:
+        return dict(defaults)
+    except (OSError, TypeError, ValueError) as error:
+        trouble(damaged(path, what, error))
         return dict(defaults)
 
 
@@ -2242,10 +2286,15 @@ def quick_path():
 
 def quick_replies():
     try:
-        with open(quick_path(), encoding="utf-8") as f:
+        with open(quick_path(), encoding="utf-8-sig") as f:
             found = json.load(f)
-        return [str(r)[:100] for r in found][:30] if isinstance(found, list) else QUICK_DEFAULTS
-    except (OSError, ValueError):
+        if not isinstance(found, list):
+            raise ValueError("not a list of replies")
+        return [str(r)[:100] for r in found][:30]
+    except FileNotFoundError:
+        return QUICK_DEFAULTS
+    except (OSError, ValueError) as error:
+        warn(damaged(quick_path(), "your quick replies", error))
         return QUICK_DEFAULTS
 
 
@@ -2368,7 +2417,7 @@ def new_send(body):
         return {"ok": False, "why": "too long for " + ", ".join(too_long)}
     reply_to = body.get("reply") if isinstance(body.get("reply"), dict) else None
     job = {"id": secrets.token_hex(8), "kind": "send", "to": to, "text": text, "reply": reply_to, "dry": bool(body.get("dry"))}
-    asyncio.create_task(run_send(job))
+    spawn(run_send(job))
     return {"ok": True, "job_id": job["id"]}
 
 
@@ -2390,7 +2439,7 @@ def new_mod(body):
         job["name"], job["text"] = said["name"][:60], said["text"][:500]
         if action == "timeout":
             job["seconds"] = 300                 # Rumble's only timed mute
-    asyncio.create_task(run_mod(job))
+    spawn(run_mod(job))
     return {"ok": True, "job_id": job["id"]}
 
 
@@ -2668,19 +2717,23 @@ DEMO_PEOPLE = {
     "kick": [("turbo_kat", "#53fc18", []), ("glitchfox", "#f5a623", [])],
     "x": [("Dev Daily", "", []), ("Lena Park", "", []), ("byte bandit", "", [])],
     "tiktok": [("sunny.daze", "", []), ("lofi.leo", "", []), ("mira_makes", "", [])],
+    "facebook": [("Ines Moreau", "", []), ("Tom Okafor", "", []), ("June Alvarez", "", [])],
+    "instagram": [("ines.draws", "", []), ("kai.on.film", "", []), ("noor.studio", "", [])],
+    "rumble": [("GrizzlyGrant", "", ["premium"]), ("mapleleaf_mo", "", []), ("DeepDiveDan", "", [])],
 }
 DEMO_LINES = ["hello from Lisbon 👋", "what are we building today?", "this overlay looks so clean", "W stream", "first time catching this live!",
               "how long have you been streaming today?", "can you explain that last part again?", "lol that bug 😂", "is this open source?",
               "gg that was close", "which font is that?", "the audio sounds great", "drop the settings pls 🙏", "chat is moving fast today",
               "love the theme", "does it work with Kick too?", "back from lunch, what did I miss?", "LET'S GO", "huge fan of the new layout",
               "how do replies reach every platform?"]
-DEMO_PREFIX = {"twitch": "tw", "youtube": "yt", "kick": "kk", "x": "x", "tiktok": "tt"}
+DEMO_PREFIX = {"twitch": "tw", "youtube": "yt", "kick": "kk", "x": "x", "tiktok": "tt", "facebook": "fb", "instagram": "ig", "rumble": "rm"}
+DEMO_WEIGHTS = {"twitch": 4, "youtube": 3, "kick": 1, "x": 2, "tiktok": 3, "facebook": 2, "instagram": 2, "rumble": 1}    # who talks most
 
 
 async def demo_stream():
-    """A believable live stream on all four platforms, so CrossChat can be tried (and filmed) without going live."""
+    """A believable live stream on every platform, so CrossChat can be tried (and filmed) without going live."""
     rng = random.Random(7)
-    counts = {"twitch": 128, "youtube": 342, "kick": 41, "x": 87, "tiktok": 263}
+    counts = {"twitch": 128, "youtube": 342, "kick": 41, "x": 87, "tiktok": 263, "facebook": 58, "instagram": 94, "rumble": 36}
     status.update({p: "on" for p in counts})
     now = int(time.time() * 1000)
     health.update({p: {"since": now - (i + 1) * 754000, "last": now, "reconnects": 1 if p == "kick" else 0} for i, p in enumerate(counts)})
@@ -2691,13 +2744,11 @@ async def demo_stream():
     while True:
         await asyncio.sleep(rng.uniform(1.4, 3.4))
         n += 1
-        state["x_seen"] = time.time()             # as if X's livestream page were reporting in
-        set_status("x", "on")
         if n % 9 == 0:
             platform, name, text, system, alert, amount = rng.choice(SAMPLES["alert"])
             publish(platform, name, text, kind="event", alert=alert, amount=amount, system=system, mid="demo-%d" % time.time_ns())
         else:
-            platform = rng.choices(list(DEMO_PEOPLE), weights=[4, 3, 1, 2, 3])[0]
+            platform = rng.choices(list(DEMO_PEOPLE), weights=[DEMO_WEIGHTS[p] for p in DEMO_PEOPLE])[0]
             name, color, badges = rng.choice(DEMO_PEOPLE[platform])
             raw, handle = "demo%d" % time.time_ns(), re.sub(r"\W", "", name.lower())
             publish(platform, name, rng.choice(DEMO_LINES), color, badges, mid=DEMO_PREFIX[platform] + "-" + raw, raw=raw,
@@ -2846,7 +2897,17 @@ def remote_refused(method, headers, path, device):
 HEAD_LIMIT, HEAD_LINES, HEAD_SECONDS = 16 * 1024, 100, 10   # a request's first line and headers
 REMOTE_CONNECTIONS = 64                      # at once on the companion port: more are turned away
 remote_open = 0
-VIEWER_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="viewer")   # viewer cards, one at a time
+VIEWER_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="viewer")   # viewer cards and chat history, one at a time
+
+
+def log_export(name, kind):
+    """One stream's chat history as a file (None: no such stream). Reads the whole stream, so it runs in VIEWER_POOL."""
+    if kind == "csv":
+        return LOG.csv(name)
+    if kind == "html":
+        return LOG.html(name)
+    rows = LOG.messages(name)
+    return json.dumps(rows, ensure_ascii=False).encode() if rows is not None else None
 
 
 async def read_head(reader):
@@ -2889,6 +2950,8 @@ async def serve(reader, writer, remote=False):
         method = request[0]
         url = urllib.parse.urlsplit(request[1])
         query = urllib.parse.parse_qs(url.query)
+        if ready and url.path != "/version":       # (still reading the sign-ins: nothing but "who are you" works yet)
+            await ready.wait()
         device = DEV.check(cookie_token(headers)) if remote and DEV else None
         why = remote_refused(method, headers, url.path, device) if remote else refused(method, headers, url.path)
         if remote and method == "GET" and why != "not this address" and (url.path == "/pair" or (url.path == "/" and not device)):
@@ -2915,14 +2978,11 @@ async def serve(reader, writer, remote=False):
         elif re.fullmatch(r"/web/(vendor/)?[\w-]+\.(js|css|svg|ico|png|webmanifest)", url.path):
             await reply(writer, "200 OK", TYPES[os.path.splitext(url.path)[1]], page(WEB, url.path[5:]), OPEN)
         elif url.path == "/logs" and LOG:               # chat history (this PC only)
-            await reply(writer, "200 OK", TYPES[".json"], json.dumps({"logs": LOG.listing()}).encode())
+            listing = await asyncio.get_running_loop().run_in_executor(VIEWER_POOL, LOG.listing)     # (every line of every file: not on the loop)
+            await reply(writer, "200 OK", TYPES[".json"], json.dumps({"logs": listing}).encode())
         elif re.fullmatch(r"/logs/[\w-]+\.(json|csv|html)", url.path) and LOG:
             name, kind = url.path[6:].rsplit(".", 1)
-            if kind == "json":
-                rows = LOG.messages(name)
-                body = json.dumps(rows, ensure_ascii=False).encode() if rows is not None else None
-            else:
-                body = LOG.csv(name) if kind == "csv" else LOG.html(name)
+            body = await asyncio.get_running_loop().run_in_executor(VIEWER_POOL, log_export, name, kind)
             if body is None:
                 await reply(writer, "404 Not Found", "text/plain", b"no such chat history")
             else:
@@ -3006,7 +3066,7 @@ async def serve(reader, writer, remote=False):
                 if query.get("executor") == ["1"]:           # the chat window with the extension: it posts for everyone
                     take_role("executor", queue)
                     send(executor_event())
-                    asyncio.create_task(chat_connected())   # (and puts itself in its place, if CrossChat has just opened it)
+                    spawn(chat_connected())                 # (and puts itself in its place, if CrossChat has just opened it)
                 if query.get("speaker") == ["1"]:            # the chat window on this PC (not in OBS): it reads chat aloud
                     take_role("speaker", queue)
             queue.put_nowait(executor_event())        # (not to a PublicFeed)
@@ -3053,17 +3113,9 @@ async def serve(reader, writer, remote=False):
             x_feed(lambda k: (query.get(k) or [""])[0])
             # the answer tells the page when OBS has stopped, so it can end the livestream on X too
             await reply(writer, "200 OK", "application/json", json.dumps({"end": bool(state.get("x_end"))}).encode())
-        elif url.path == "/tiktok/feed":           # the extension passes on the streamer's own TikTok LIVE chat
-            mine = tiktok_feed(lambda k: (query.get(k) or [""])[0])
+        elif url.path in PAGE_FEEDS:               # the extension passes on the chat shown on a platform's own page
+            mine = PAGE_FEEDS[url.path].feed(lambda k: (query.get(k) or [""])[0])
             await reply(writer, "200 OK", "application/json", json.dumps({"mine": mine}).encode())
-        elif url.path == "/facebook/feed":         # the extension passes on Facebook Live comments from Live Producer
-            mine = facebook_feed(lambda k: (query.get(k) or [""])[0])
-            await reply(writer, "200 OK", "application/json", json.dumps({"mine": mine}).encode())
-        elif url.path == "/instagram/feed":        # the extension passes on Instagram Live comments from its Live producer
-            mine = instagram_feed(lambda k: (query.get(k) or [""])[0])
-            await reply(writer, "200 OK", "application/json", json.dumps({"mine": mine}).encode())
-        elif url.path == "/x/last":
-            await reply(writer, "200 OK", "application/json", json.dumps(state.get("x_last")).encode())
         else:
             await reply(writer, "404 Not Found", "text/plain", b"not found")
     except FileNotFoundError:
@@ -3115,7 +3167,7 @@ async def serve_post(reader, writer, headers, path, remote=False):
         if not isinstance(replies, list) or len(replies) > 30 or any(not isinstance(r, str) or not r.strip() or len(r) > 100 for r in replies):
             result = {"ok": False, "why": "Quick replies are up to 30 lines of up to 100 characters."}
         else:
-            write_file(quick_path(), json.dumps([" ".join(r.split()) for r in replies], ensure_ascii=False, indent=1))
+            config_file.replace_file(quick_path(), json.dumps([" ".join(r.split()) for r in replies], ensure_ascii=False, indent=1))
             send({"type": "quick", "replies": quick_replies()})
             result = {"ok": True}
     elif path == "/outbox/result" and not remote:          # the executor's answer to a job
@@ -3155,12 +3207,12 @@ async def serve_post(reader, writer, headers, path, remote=False):
         if not TW.client_id:
             result = {"ok": False, "why": "This CrossChat has no Twitch app Client ID (\"twitch_client_id\" in config.json)."}
         else:
-            asyncio.create_task(twitch_connect())
+            spawn(twitch_connect())
             result = {"ok": True}
     elif path == "/tts" and not remote:
         try:
             TTS = clean_tts(body.get("settings") if isinstance(body.get("settings"), dict) else body)
-            write_file(settings_path("tts.json"), json.dumps(TTS, indent=1))
+            config_file.replace_file(settings_path("tts.json"), json.dumps(TTS, indent=1))
             send({"type": "tts", "settings": TTS})
             result = {"ok": True}
         except (TypeError, ValueError) as error:
@@ -3182,7 +3234,7 @@ async def serve_post(reader, writer, headers, path, remote=False):
     elif path == "/filters" and not remote:
         try:
             FILTERS = clean_filters(body.get("settings") if isinstance(body.get("settings"), dict) else body)
-            write_file(settings_path("filters.json"), json.dumps(FILTERS, indent=1, ensure_ascii=False))
+            config_file.replace_file(settings_path("filters.json"), json.dumps(FILTERS, indent=1, ensure_ascii=False))
             send({"type": "filters", "settings": FILTERS})
             hide_earlier()
             result = {"ok": True}
@@ -3275,7 +3327,7 @@ async def serve_post(reader, writer, headers, path, remote=False):
         result = {"ok": True}
         kind = str(body.get("kind") or "")
         if kind in ("chat", "alert", "featured", "viewers"):
-            asyncio.create_task(test_event(kind))
+            spawn(test_event(kind))
         else:
             result = {"ok": False, "why": "unknown test"}
     else:
@@ -3291,34 +3343,72 @@ def start_log():
     except OSError:
         handler = logging.NullHandler()
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-    log.addHandler(handler)
+    root = logging.getLogger()                   # the root, so asyncio's and the libraries' errors land here too: under pythonw nothing else shows them
+    root.addHandler(handler)
     if TEST and sys.stderr:
-        log.addHandler(logging.StreamHandler())
+        root.addHandler(logging.StreamHandler())
     log.setLevel(logging.INFO)
+    for text in problems:                        # what configure found, now that there's a log to tell
+        log.warning(text)
+
+
+def loop_problem(loop, context):
+    """Whatever the event loop can't hand back to anyone (a request's job that failed, say): in the log, where it can be found."""
+    log.error("unexpected: %s", context.get("message", "no details"), exc_info=context.get("exception"))
 
 
 def companion_setup():
     """Paired devices and the Twitch connection, kept in your folder."""
     global DEV, TW, KK, RB, DC, LOG, FILTERS, TTS
-    DEV = Devices(settings_path("devices.json"))
+    DEV = Devices(settings_path("devices.json"), trouble)
     TW = Twitch(CFG.get("twitch_client_id") or TWITCH_CLIENT_ID, os.path.join(HOME, "twitch.bin"))
     own = bool(CFG.get("kick_client_id"))            # your own Kick app replaces CrossChat's, id and secret together
     KK = Kick(CFG["kick_client_id"] if own else KICK_CLIENT_ID, CFG.get("kick_client_secret", "") if own else KICK_CLIENT_SECRET,
               os.path.join(HOME, "kick.bin"), "http://localhost:%d/kick/callback" % PORT)
     RB = Rumble(os.path.join(HOME, "rumble.bin"))
     DC = Discord(os.path.join(HOME, "discord.bin"), NAMES, changed=lambda: send(discord_event()))
-    LOG = ChatLog(os.path.join(HOME, "logs"), int((CFG.get("logs") or {}).get("keep_days") or 90))
-    FILTERS = settings_file("filters.json", FILTER_DEFAULTS)
-    TTS = settings_file("tts.json", TTS_DEFAULTS)
+    LOG = ChatLog(os.path.join(HOME, "logs"), int((CFG.get("logs") or {}).get("keep_days") or 90), warn)
+    FILTERS = settings_file("filters.json", FILTER_DEFAULTS, clean_filters, "your chat filters")
+    TTS = settings_file("tts.json", TTS_DEFAULTS, clean_tts, "your text-to-speech settings")
+
+
+ALREADY_RUNNING = 3                          # the exit code that says so: the OBS script's watchdog then starts no hub of its own
+ready = None                                 # set once companion_setup is done (main makes it); requests but /version wait for it
+
+
+def other_hub_answers():
+    """Whether what holds our port is a CrossChat hub: only one answers /version like this."""
+    with requests.Session() as direct:
+        direct.trust_env = False                 # (this PC asking itself: never through a proxy)
+        try:
+            return isinstance(direct.get("http://127.0.0.1:%d/version" % PORT, timeout=5).json().get("version"), str)
+        except (requests.RequestException, ValueError, AttributeError):
+            return False
 
 
 async def main():
+    global ready
+    asyncio.get_running_loop().set_exception_handler(loop_problem)
     try:
         server = await asyncio.start_server(serve, "127.0.0.1", PORT)
-    except OSError:
-        log.info("port %d is taken: another CrossChat hub is already running", PORT)
-        return
-    companion_setup()
+    except OSError as error:
+        if await asyncio.to_thread(other_hub_answers):
+            log.info("port %d is taken: another CrossChat hub is already running", PORT)
+            return ALREADY_RUNNING
+        box = warn("CrossChat can't use port %d (%s), so it can't run. Close the program that is using it, then start CrossChat again."
+                   % (PORT, error.strerror or error))
+        if box:
+            await asyncio.to_thread(box.join)    # (leaving now would take the message box with it)
+        return 1
+    ready = asyncio.Event()
+    await asyncio.to_thread(companion_setup)     # (a locked keyring can take its time: chat and the pages must not wait for it)
+    ready.set()
+    for text in problems:
+        warn(text, logged=True)
+    problems.clear()
+    if PORT != DEFAULTS["port"] and not DEMO:
+        warn("CrossChat is on port %d, but the browser extension only talks to %d: replies, going live on X and the TikTok, Facebook and "
+             "Instagram chats need it, and so does Connect Kick. Remove \"port\" from config.json to use them." % (PORT, DEFAULTS["port"]))
     if not DEMO:                                 # the demo stays on this PC
         await remote_on()
     log.info("CrossChat %s on http://127.0.0.1:%d (Twitch %r, YouTube %r, Kick %r, X %s; Python %s in %s)", VERSION, PORT, TWITCH, YOUTUBE,
@@ -3331,13 +3421,10 @@ async def main():
             tasks.append(asyncio.create_task(keep_running(name, job)))
     if X:
         status["x"] = "off"
-    if TIKTOK and not DEMO:
-        status["tiktok"] = "off"
-    if FACEBOOK and not DEMO:
-        status["facebook"] = "off"
-    if INSTAGRAM and not DEMO:
-        status["instagram"] = "off"
-    if X or TIKTOK or FACEBOOK or INSTAGRAM:
+    for chat in PAGE_CHATS:
+        if chat.wanted() and not DEMO:
+            status[chat.name] = "off"
+    if (X or any(chat.wanted() for chat in PAGE_CHATS)) and not DEMO:     # (the demo has no pages to wait for)
         tasks.append(asyncio.create_task(keep_running("pages", x_watch)))
     if RB and RB.on() and not DEMO:
         status["rumble"] = "off"
@@ -3366,4 +3453,8 @@ async def main():
 if __name__ == "__main__":
     configure(sys.argv[1:])
     start_log()
-    asyncio.run(main())
+    try:
+        sys.exit(asyncio.run(main()))
+    except Exception:
+        log.exception("CrossChat stopped on something unexpected")
+        sys.exit(1)

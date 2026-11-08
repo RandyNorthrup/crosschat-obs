@@ -341,6 +341,92 @@ def test_when_obs_closes_its_x_page_and_the_chat_window_close(system, monkeypatc
     assert system == []
 
 
+def every_page_open():
+    hub.pages.update({role: {"url": "https://example.com/" + role, "id": i, "handle": 60 + i} for i, role in enumerate(hub.PAGES)})
+
+
+def test_when_obs_closes_every_platform_page_closes_too(system, monkeypatch):
+    """OBS closing while live, or within two minutes of the stream ending, must not leave TikTok, Facebook, Instagram or
+    Rumble open: the hub leaves with OBS, and the two minutes with it."""
+    every_page_open()
+
+    async def test():
+        seen = extension(lambda job: {"ok": True})
+        await hub.obs_link()
+        return seen
+    monkeypatch.setattr(hub, "obs_settings", lambda: {"host": "127.0.0.1", "port": 1, "password": "", "enabled": True})
+    monkeypatch.setattr(hub, "connect", lambda *a, **k: (_ for _ in ()).throw(OSError("no OBS")))
+    monkeypatch.setattr(hub, "warn", lambda text: None)
+
+    async def no_wait(seconds):
+        return None
+    monkeypatch.setattr(hub.asyncio, "sleep", no_wait)
+    assert jobs(run(test())) == [("close", role) for role in hub.PAGES] + [("close", "chat")]
+    assert hub.pages == {}
+
+
+def test_when_crosschat_is_closed_every_platform_page_closes_too(system, monkeypatch):
+    hub.CFG["broadcaster"] = "manual"
+    every_page_open()
+
+    async def test():
+        seen = extension(lambda job: {"ok": True})
+        following = asyncio.create_task(hub.follow_app())
+        await asyncio.sleep(0.05)
+        hub.state["leave"].set()
+        await asyncio.wait_for(following, 5)
+        return seen
+    assert jobs(run(test())) == [("close", role) for role in hub.PAGES] + [("close", "chat")]
+
+
+def test_a_chat_window_still_opening_is_left_to_the_system_until_it_is_there(system, monkeypatch):
+    """The chat page can connect before the system's way has found its window: the extension waits to see whether it
+    still has anything to do, however the window was opened."""
+    release = asyncio.Event()
+
+    async def open_app(url, where, role=None):
+        await release.wait()
+        return 55
+
+    monkeypatch.setattr(hub, "open_app", open_app)
+
+    async def test():
+        seen = extension(lambda job: {"ok": False, "why": "no chat window is open", "none": True})
+        showing = asyncio.create_task(hub.show_window())
+        await asyncio.sleep(0.02)
+        connected = asyncio.create_task(hub.chat_connected())
+        await asyncio.sleep(0.02)
+        asked_while_opening = jobs(seen)
+        release.set()
+        await asyncio.wait_for(asyncio.gather(showing, connected), 5)
+        return asked_while_opening, jobs(seen)
+    while_opening, after = run(test())
+    assert while_opening == [("place", "chat")] and after == [("place", "chat")]     # only the first question, before it opened
+    assert "chat_opened" not in hub.state
+
+
+def test_no_browser_at_all_is_one_message_box_a_stream(system, monkeypatch):
+    """One stream start can open five windows, and each would have said the same thing."""
+    monkeypatch.setattr(hub, "open_app", REAL_OPEN_APP)
+    monkeypatch.setattr(hub, "browser_exe", lambda: None)
+    monkeypatch.setattr(hub, "streaming", asyncio.Event())
+    hub.ARGV.remove("--quiet")
+    boxes = []
+    monkeypatch.setattr(hub, "user32", type("User32", (), {"MessageBoxW": staticmethod(lambda *a: boxes.append(a[1]))}), raising=False)
+
+    async def test():
+        for role in hub.PAGES:
+            await hub.open_page(role, "https://example.com/", (0, 0, 1, 1))
+        await asyncio.sleep(0.05)                                     # (each box is shown from a thread of its own)
+        said_once = len(boxes)
+        await hub.stream_started(local=True)                         # a new stream: told again if it is still so
+        await hub.open_page("x", "https://example.com/", (0, 0, 1, 1))
+        await asyncio.sleep(0.05)
+        return said_once, len(boxes)
+    assert run(test()) == (1, 2) and all("Chrome or Edge" in text for text in boxes)
+    assert sum("Chrome or Edge" in m["text"] for m in hub.messages) == 1            # (a new stream starts a new chat)
+
+
 def test_the_hub_leaves_when_obs_closes_even_with_a_chat_page_still_open(home, monkeypatch):
     """A chat page's live feed never ends by itself; the hub doesn't wait for it once OBS has closed (on Python 3.12.1
     and newer, leaving "async with server" did)."""

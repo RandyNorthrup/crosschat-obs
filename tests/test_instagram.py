@@ -71,7 +71,7 @@ def test_instagram_goes_quiet_when_the_producer_stops_reporting(home):
     home({"instagram": True})
     hub.status["instagram"] = "on"
     hub.viewers["instagram"] = 5
-    hub.state["instagram_seen"] = time.time() - 60
+    hub.state["instagram_seen"] = time.time() - hub.PAGE_QUIET - 1
 
     async def watch():
         task = hub.asyncio.create_task(hub.x_watch())
