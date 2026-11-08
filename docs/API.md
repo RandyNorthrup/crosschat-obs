@@ -105,7 +105,6 @@ Your own overlay pages get the chat as viewers see it: `msg`, `delete`, `purge`,
 | `GET /themes` | `{"default", "themes": [...]}` |
 | `GET /themes/<name>` | One theme |
 | `GET /targets` | Where a typed reply goes: `{"twitch", "youtube_video", "tiktok", "facebook", "instagram", "rumble_chat", "live", "tiktok_joins"}` |
-| `GET /x/last` | X Live's last result |
 | `GET /logs` | Chat history: `{"logs": [{"name", "started", "ended", "messages", "bytes"}]}`. This PC's own pages only |
 | `GET /logs/<name>.json` | One stream's messages, with deleted ones marked `"gone": true` |
 | `GET /logs/<name>.csv` | The same as a spreadsheet (UTF-8, opens in Excel). Lines starting with `= + - @` get a leading `'` so they stay text |

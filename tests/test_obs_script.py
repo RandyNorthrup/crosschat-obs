@@ -177,6 +177,12 @@ def test_a_hub_that_finds_another_one_running_is_left_alone(obs):
     assert any("already running" in line for line in obs.log) and obs.alerts() == []
 
 
+def test_a_hub_whose_port_another_program_has_is_not_started_again(obs):
+    obs.run(exit_code=4, extra=2)                     # (the hub has shown its own message: five more would help nobody)
+    assert len(obs.runs()) == 1 and not any("starting it again" in line for line in obs.log)
+    assert any("another program" in line for line in obs.log) and obs.alerts() == []
+
+
 def test_starting_the_hub_again_keeps_watching_the_running_one(obs):
     # The first hub is up; the button's hub finds it and leaves with code 3. The first one is still the one watched:
     # when it crashes it is started again, and the button's hub was never a crash.

@@ -3373,6 +3373,7 @@ def companion_setup():
 
 
 ALREADY_RUNNING = 3                          # the exit code that says so: the OBS script's watchdog then starts no hub of its own
+PORT_TAKEN = 4                               # another program has the port: the streamer has been told, and starting again wouldn't help
 ready = None                                 # set once companion_setup is done (main makes it); requests but /version wait for it
 
 
@@ -3399,7 +3400,7 @@ async def main():
                    % (PORT, error.strerror or error))
         if box:
             await asyncio.to_thread(box.join)    # (leaving now would take the message box with it)
-        return 1
+        return PORT_TAKEN
     ready = asyncio.Event()
     await asyncio.to_thread(companion_setup)     # (a locked keyring can take its time: chat and the pages must not wait for it)
     ready.set()

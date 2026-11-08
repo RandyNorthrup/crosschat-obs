@@ -217,7 +217,7 @@ def test_anything_else_on_the_port_is_reported_and_ends_with_code_1(home, monkey
             return await hub.main()
         finally:
             other.close()
-    assert asyncio.run(test()) == 1
+    assert asyncio.run(test()) == hub.PORT_TAKEN
     assert len(told) == 1 and "port" in told[0] and "another CrossChat" not in told[0]
 
 
@@ -243,7 +243,7 @@ def test_the_message_box_stays_up_until_it_is_answered(home, monkeypatch):
             return await hub.main()
         finally:
             other.close()
-    assert asyncio.run(test()) == 1 and answered == [1]
+    assert asyncio.run(test()) == hub.PORT_TAKEN and answered == [1]
 
 
 def holder(reply):
@@ -265,7 +265,7 @@ def holder(reply):
     return listener.getsockname()[1], listener.close
 
 
-@pytest.mark.parametrize("body, code", [(b'{"version": "1.8.0"}', 3), (b"<html>someone else</html>", 1)])
+@pytest.mark.parametrize("body, code", [(b'{"version": "1.8.0"}', 3), (b"<html>someone else</html>", 4)])
 def test_the_exit_code_is_what_the_obs_script_reads(tmp_path, body, code):
     """The real thing, as a process of its own: the OBS script's watchdog goes by this code."""
     port, stop = holder(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s" % (len(body), body))

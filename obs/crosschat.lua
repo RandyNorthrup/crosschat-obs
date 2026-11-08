@@ -72,6 +72,7 @@ local second_hub = nil        -- one started while that one runs ("Start the hub
 local restarts = {}           -- when it was restarted, to give up on a hub that can't stay up
 local STILL_ACTIVE = 259
 local ALREADY_RUNNING = 3     -- the hub's exit code when another CrossChat hub already answers on its port
+local PORT_TAKEN = 4          -- ... and when another program has that port: the hub has told the streamer, and a restart can't help
 
 -- Windows wants UTF-16; OBS and Lua speak UTF-8 (so folders with accents or other scripts work).
 local function wide(text)
@@ -455,6 +456,10 @@ local function watch_hub()
   end
   if code == ALREADY_RUNNING then
     obs.script_log(obs.LOG_INFO, "another CrossChat hub is already running: leaving it as it is")
+    return
+  end
+  if code == PORT_TAKEN then
+    obs.script_log(obs.LOG_WARNING, "another program is using CrossChat's port: the hub said so and stopped")
     return
   end
   if code == 0 or not exists(app_folder() .. SEP .. "hub" .. SEP .. "hub.py") then
