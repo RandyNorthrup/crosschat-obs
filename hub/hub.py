@@ -823,7 +823,14 @@ def kick_viewers(slug):
     return live.get("viewer_count") if live else None
 
 
+TEST_VIEWERS = {"twitch": 128, "youtube": 342, "kick": 41, "x": 87, "tiktok": 263, "facebook": 57, "instagram": 96, "rumble": 38}
+TEST_VIEWERS_SECONDS = 8
+test_viewers_until = 0                       # while the viewer counter's test runs: the regular count updates mustn't cut it short
+
+
 def viewer_event():
+    if time.monotonic() < test_viewers_until:
+        return {"type": "viewers", "counts": dict(TEST_VIEWERS), "total": sum(TEST_VIEWERS.values()), "test": True}
     return {"type": "viewers", "counts": dict(viewers), "total": sum(v for v in viewers.values() if v)}
 
 
@@ -1955,7 +1962,8 @@ SAMPLES = {
 
 
 async def test_event(kind):
-    """Made-up events marked test, so the overlays in OBS can be checked without being live."""
+    """Made-up events marked test, so the overlays in your streaming app can be checked without being live."""
+    global test_viewers_until
     if kind == "chat":
         for platform, name, text, color in SAMPLES["chat"]:
             publish(platform, name, text, color, mid="test-%d" % time.time_ns(), test=True)
@@ -1968,8 +1976,10 @@ async def test_event(kind):
         publish(platform, name, text, color, mid="test-%d" % time.time_ns(), test=True)
         feature(messages[-1]["id"])
     elif kind == "viewers":
-        send({"type": "viewers", "counts": {"twitch": 128, "youtube": 342, "kick": 41, "x": 87}, "total": 598, "test": True})
-        await asyncio.sleep(8)
+        test_viewers_until = time.monotonic() + TEST_VIEWERS_SECONDS
+        send(viewer_event())
+        await asyncio.sleep(TEST_VIEWERS_SECONDS)
+        test_viewers_until = 0
         send(viewer_event())                     # back to the real numbers
     else:
         return False

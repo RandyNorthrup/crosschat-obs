@@ -738,3 +738,34 @@ def test_a_single_rumble_gift_reads_like_the_others(home):
     gift = {"num_gifted_subs": 1, "latest_gifted_sub": {"total_gifts": 1, "purchased_by": "Gifter"}}
     hub.rumble_read({"livestreams": [{"id": "7ho8uk", "is_live": True}], "gifted_subs": gift}, [], last)
     assert hub.messages[-1]["amount"] == "a sub" and hub.messages[-1]["system"] == "Gifter gifted a sub"
+
+
+# ---- Send test on the viewer counter -----------------------------------------------------------------------------------
+def test_a_regular_count_does_not_cut_the_viewer_test_short(home, monkeypatch):
+    home({})
+    sent = []
+    monkeypatch.setattr(hub, "send", sent.append)
+    monkeypatch.setattr(hub, "test_viewers_until", 0)
+    hub.viewers.clear()
+    hub.viewers["twitch"] = 5
+
+    async def run():
+        test = asyncio.create_task(hub.test_event("viewers"))
+        await asyncio.sleep(0)
+        hub.send(hub.viewer_event())              # the regular update, landing while the test is up
+        test.cancel()
+    asyncio.run(run())
+    assert [e["total"] for e in sent] == [sum(hub.TEST_VIEWERS.values())] * 2
+    assert set(hub.TEST_VIEWERS) == set(hub.NAMES)      # every platform shows in the test
+
+
+def test_the_real_count_comes_back_after_the_viewer_test(home, monkeypatch):
+    home({})
+    sent = []
+    monkeypatch.setattr(hub, "send", sent.append)
+    monkeypatch.setattr(hub, "test_viewers_until", 0)
+    monkeypatch.setattr(hub, "TEST_VIEWERS_SECONDS", 0.01)
+    hub.viewers.clear()
+    hub.viewers["twitch"] = 5
+    asyncio.run(hub.test_event("viewers"))
+    assert sent[-1]["total"] == 5 and "test" not in sent[-1]
