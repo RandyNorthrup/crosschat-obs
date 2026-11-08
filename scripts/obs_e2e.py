@@ -441,7 +441,22 @@ def linux_settings(home, flatpak, crosschat):
     if os.path.exists(FLATPAK_SETTINGS):
         shutil.move(FLATPAK_SETTINGS, os.path.join(home, "your-flatpak-obs-settings"))
         print("Your OBS (Flathub) settings wait in %s and are put back at the end." % os.path.join(home, "your-flatpak-obs-settings"))
-    return FLATPAK_SETTINGS, ["run", "--env=CROSSCHAT_CONFIG=" + os.path.join(home, "config.json"), FLATPAK], env
+    return FLATPAK_SETTINGS, ["run", "--env=PATH=%s:/app/bin:/usr/bin" % flatpak_stand_in(home), FLATPAK], env
+
+
+def flatpak_stand_in_folder(home):
+    return os.path.expanduser("~/.%s" % os.path.basename(home))
+
+
+def flatpak_stand_in(home):
+    """The CrossChat script runs the hub on the computer itself, through flatpak-spawn, and the test's config.json must
+    reach it there. This stand-in for flatpak-spawn, first on the sandbox's PATH, names that file, then runs the real one.
+    It lives in a folder of your home folder, where the sandbox can see it (this test's `home` is in /tmp)."""
+    folder = flatpak_stand_in_folder(home)
+    write(os.path.join(folder, "flatpak-spawn"), '#!/bin/sh\nPATH="${PATH#*:}"\nexec flatpak-spawn "--env=CROSSCHAT_CONFIG=%s" "$@"\n'
+          % os.path.join(home, "config.json"))
+    os.chmod(os.path.join(folder, "flatpak-spawn"), 0o755)
+    return folder
 
 
 def linux_restore(home):
@@ -450,6 +465,7 @@ def linux_restore(home):
         shutil.move(FLATPAK_SETTINGS, os.path.join(home, "test-flatpak-obs-settings"))
     if os.path.exists(os.path.join(home, "your-flatpak-obs-settings")):
         shutil.move(os.path.join(home, "your-flatpak-obs-settings"), FLATPAK_SETTINGS)
+    shutil.rmtree(flatpak_stand_in_folder(home), ignore_errors=True)
 
 
 LINUX_SCREENS = []                           # the Xvfb displays started here, stopped at the end

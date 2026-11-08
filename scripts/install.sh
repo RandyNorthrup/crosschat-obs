@@ -170,7 +170,8 @@ fi
 step 'Privacy'
 say "CrossChat runs only on this $MACHINE. It has no server, no account and no telemetry."
 say 'It connects only to the chat platforms you set up, and, unless you turn them off, to 7TV, BetterTTV and'
-say "FrankerFaceZ for emote pictures (they get your Twitch channel's public id)."
+say "FrankerFaceZ for emote pictures (they get your Twitch channel's public id). If you want it, it also asks GitHub"
+say 'once a day whether a newer CrossChat is out (off unless you say yes below).'
 say 'Every connection and what it sends: https://github.com/RandyNorthrup/crosschat-obs/blob/main/SECURITY.md#what-leaves-your-pc'
 
 # ---- your channels ----------------------------------------------------------------------------------------
@@ -185,11 +186,17 @@ else
     CROSSCHAT_KICK="$(ask 'Kick channel')"
     CROSSCHAT_TIKTOK="$(ask 'TikTok @name (if you go LIVE on TikTok)')"
     if confirm 'Do you go live on Facebook?' n; then CROSSCHAT_FACEBOOK=1; else CROSSCHAT_FACEBOOK=0; fi
+    if confirm 'Do you go live on Instagram from OBS (Create, then Live video, on instagram.com)?' n; then CROSSCHAT_INSTAGRAM=1; else CROSSCHAT_INSTAGRAM=0; fi
     if confirm 'Do you stream to X (it needs X Premium and Live Studio)?' n; then CROSSCHAT_X=1; else CROSSCHAT_X=0; fi
     if confirm "Show 7TV, BetterTTV and FrankerFaceZ emotes (asks those services for your channel's emotes)?"; then
         CROSSCHAT_EMOTES=1
     else
         CROSSCHAT_EMOTES=0
+    fi
+    if confirm 'Tell you when a new CrossChat is out (asks GitHub once a day; sends nothing about you, downloads nothing)?' n; then
+        CROSSCHAT_UPDATES=1
+    else
+        CROSSCHAT_UPDATES=0
     fi
     CROSSCHAT_X_AUTO="" CROSSCHAT_X_SOURCE="" CROSSCHAT_X_TITLE=""
     if [ "$CROSSCHAT_X" = 1 ]; then
@@ -197,8 +204,8 @@ else
         CROSSCHAT_X_SOURCE="$(ask 'Name of the source in X Live Studio that OBS streams to' 'OBS')"
         CROSSCHAT_X_TITLE="$(ask 'Title for your X livestreams' 'Live now')"
     fi
-    export CROSSCHAT_TWITCH CROSSCHAT_YOUTUBE CROSSCHAT_KICK CROSSCHAT_TIKTOK CROSSCHAT_FACEBOOK CROSSCHAT_X CROSSCHAT_EMOTES \
-           CROSSCHAT_X_AUTO CROSSCHAT_X_SOURCE CROSSCHAT_X_TITLE
+    export CROSSCHAT_TWITCH CROSSCHAT_YOUTUBE CROSSCHAT_KICK CROSSCHAT_TIKTOK CROSSCHAT_FACEBOOK CROSSCHAT_INSTAGRAM CROSSCHAT_X \
+           CROSSCHAT_EMOTES CROSSCHAT_UPDATES CROSSCHAT_X_AUTO CROSSCHAT_X_SOURCE CROSSCHAT_X_TITLE
     "$VENV_PY" "$APP/hub/setup_config.py" config "$APP/config.example.json" "$CONFIG" || fail 'Could not write config.json.'
     say "Saved to $CONFIG (edit it any time; restart OBS afterwards)."
 fi
