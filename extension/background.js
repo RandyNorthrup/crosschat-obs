@@ -6,7 +6,7 @@
 //      sites' own chat boxes, as the accounts logged in to this browser. (Twitch and Kick replies go through their official APIs in
 //      the hub; the extension never reads any login, cookie or token.)
 //   3. place, move and close CrossChat's own windows for the hub (windows.js says which windows, and how).
-if (typeof importScripts === 'function') importScripts('windows.js');     // (the service worker; Node, in the tests, has none)
+importScripts('windows.js');
 const HUB = 'http://127.0.0.1:4466';
 const LIMIT = { youtube: 200, x: 140, tiktok: 150, facebook: 8000, instagram: 2200, rumble: 200 };
 const NAME = { youtube: 'YouTube', x: 'X', tiktok: 'TikTok', facebook: 'Facebook', instagram: 'Instagram', rumble: 'Rumble' };
@@ -41,6 +41,10 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   if (message.type === 'yt-check' && from.startsWith(YT_CHAT)) {     // is the YouTube chat pop-out CrossChat opened still needed?
     stillNeeded(message, sender).then(respond, () => respond({ keep: true }));
     return true;
+  }
+  if (message.type === 'yt-chat-ready' && from.startsWith(YT_CHAT) && sender.tab) {     // a chat pop-out's chat has come
+    chatCame(sender.tab.id, (message.data || {}).video);
+    return;
   }
   if (message.type === 'rm-check' && from.startsWith(RUMBLE_CHAT)) {     // which Rumble chat is the streamer's live?
     hub('/targets').then((t) => respond({ chat: t.live ? String(t.rumble_chat || '') : '' }), () => respond(null));
@@ -85,10 +89,10 @@ async function post(data, tab) {
   };
   const out = {};
   await Promise.all([...new Set(data.to || [])].map(async (p) => {
-    if (!jobs[p]) out[p] = { ok: false, why: p === 'twitch' ? 'Connect Twitch in Settings to reply on Twitch' : 'not through the extension' };
+    if (!jobs[p]) out[p] = { ok: false, why: 'not through the extension' };
     else if (!text) out[p] = { ok: false, why: 'nothing to send' };
     else if (data.dry && p !== 'youtube') out[p] = { ok: false, why: 'test mode, nothing is posted' };
-    else if (text.length > LIMIT[p]) out[p] = { ok: false, why: NAME[p] + ' takes ' + LIMIT[p] + ' characters at most' };
+    else if ([...text].length > LIMIT[p]) out[p] = { ok: false, why: NAME[p] + ' takes ' + LIMIT[p] + ' characters at most' };
     else out[p] = await jobs[p]().catch(() => ({ ok: false, why: 'it failed' }));
   }));
   return out;
@@ -118,8 +122,9 @@ async function moderate(data, tab) {
 // marked with crosschat=1 in its address. That tab is used for every moderation of the live, and it closes itself
 // once the live is over or CrossChat has closed (see yt-check); one for an earlier live is closed straight away.
 const YT_CHAT = 'https://www.youtube.com/live_chat';
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const CHAT_WAIT = 25000;                       // ms a pop-out just opened gets to show its chat (a service worker lasts 30 s idle)
 let opening = null;                            // { video, tabs }: the pop-out being opened, so two clicks open one
+const coming = new Map();                      // tab id -> { video, done }: the pop-outs whose chat is being waited for
 
 function chatPageFor(url, video) {
   try {
@@ -134,16 +139,31 @@ function chatPageFor(url, video) {
 // One CrossChat opened (not one the streamer opened by hand, which is never closed).
 const ours = (url) => chatPageFor(url) && new URL(url).searchParams.get('crosschat') === '1';
 
-function youtubeChatPage(video, wait = 1000, tries = 30) {
+function youtubeChatPage(video, wait = CHAT_WAIT) {
   if (opening && opening.video === video) return opening.tabs;
-  const tabs = findOrOpenChatPage(video, wait, tries);
+  const tabs = findOrOpenChatPage(video, wait);
   opening = { video, tabs };
   const done = () => { if (opening && opening.tabs === tabs) opening = null; };
   tabs.then(done, done);
   return tabs;
 }
 
-async function findOrOpenChatPage(video, wait, tries) {
+function chatCame(tabId, video) {
+  const waiting = coming.get(tabId);
+  if (waiting && waiting.video === video) waiting.done();
+}
+
+// Until youtube.js says YouTube's chat is on the page, or the time is up. It is asked too: its word may have come first.
+function chatOn(tabId, video, wait) {
+  return new Promise((resolve) => {
+    const done = () => { clearTimeout(timer); coming.delete(tabId); resolve(); };
+    const timer = setTimeout(done, wait);
+    coming.set(tabId, { video, done });
+    chrome.tabs.sendMessage(tabId, { type: 'yt-ready', video }).then((ready) => { if (ready && ready.ok) done(); }, () => {});
+  });
+}
+
+async function findOrOpenChatPage(video, wait) {
   const found = await chrome.tabs.query({ url: YT_CHAT + '*' });
   const stale = found.filter((t) => ours(t.url || '') && !chatPageFor(t.url, video)).map((t) => t.id);
   if (stale.length) await chrome.tabs.remove(stale).catch(() => {});
@@ -163,11 +183,7 @@ async function findOrOpenChatPage(video, wait, tries) {
     tab = where ? await chrome.tabs.create({ windowId: where.id, url, active: false })
       : (await chrome.windows.create({ url, focused: false, state: 'minimized' })).tabs[0];
   }
-  for (let i = 0; i < tries; i++) {          // until YouTube's chat is on the page
-    await sleep(wait);
-    const ready = await chrome.tabs.sendMessage(tab.id, { type: 'yt-ready', video }).catch(() => null);
-    if (ready && ready.ok) break;
-  }
+  await chatOn(tab.id, video, wait);
   return [tab];
 }
 
@@ -180,8 +196,6 @@ async function stillNeeded(message, sender) {
   if (!keep) await chrome.tabs.remove(sender.tab.id).catch(() => {});
   return { keep, reached: !!t };
 }
-
-if (typeof module === 'object' && module.exports) module.exports = { moderate, chatPageFor, youtubeChatPage, stillNeeded };   // Node (the tests)
 
 // Hand the message to the page script in one of these tabs; the first one that manages it wins.
 async function ask(tabs, message, nobody) {

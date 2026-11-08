@@ -78,6 +78,13 @@ test('chat platform filter', () => {
   assert.deepEqual(T.wanted(['twitch'], 'youtube,x'), ['youtube', 'x']);
   assert.deepEqual(T.wanted(['twitch'], null), ['twitch']);
   assert.equal(T.wanted('all', ''), 'all');
+  // then the theme's own list, then overlay.platforms in config.json
+  assert.deepEqual(T.wanted('all', null, ['twitch']), ['twitch']);
+  assert.deepEqual(T.wanted(['kick'], null, ['twitch']), ['kick']);
+  assert.deepEqual(T.wanted(['kick'], 'youtube', ['twitch']), ['youtube']);
+  assert.deepEqual(T.wanted('all', '', 'twitch'), ['twitch']);
+  assert.equal(T.wanted('all', null, undefined), 'all');
+  assert.equal(T.wanted('all', null, 'all'), 'all');
   assert.equal(T.shows('all', 'kick'), true);
   assert.equal(T.shows(['twitch'], 'kick'), false);
 });
@@ -94,11 +101,13 @@ test('emote ranges count code points', () => {
   assert.deepEqual(T.emotePieces('hi', 'a.b:0-1'), [{ text: 'hi' }]);
   assert.deepEqual(T.emotePieces('hello', '25:0-2,1-3'), [{ emote: '25', alt: 'hel' }, { text: 'lo' }]);
   assert.deepEqual(T.emotePieces('', ''), []);
+  assert.deepEqual(T.emotePieces('😀 Kappa', '25:2-6'), [{ text: '😀 ' }, { emote: '25', alt: 'Kappa' }]);
+  assert.deepEqual(T.emotePieces('hi Kappa', '25:3-7'), [{ text: 'hi ' }, { emote: '25', alt: 'Kappa' }]);
+  assert.deepEqual(T.emotePieces('plain', ''), [{ text: 'plain' }]);
+  assert.deepEqual(T.emotePieces('x', '<bad>:0-0'), [{ text: 'x' }]);
 });
 
 test('alert wording', () => {
-  assert.equal(T.fill('{name} gifted {amount}!', { name: 'Ana', amount: '5 subs' }), 'Ana gifted 5 subs!');
-  assert.equal(T.fill('{name} {missing}', { name: 'Ana' }), 'Ana {missing}');
   assert.deepEqual(T.fillParts('{name} cheered {amount}!', { name: 'Ana', amount: '100 bits' }),
     [{ key: 'name', value: 'Ana' }, { text: ' cheered ' }, { key: 'amount', value: '100 bits' }, { text: '!' }]);
   assert.deepEqual(T.fillParts('{name} resubscribed! {amount}', { name: 'Ana', amount: '' }), [{ key: 'name', value: 'Ana' }, { text: ' resubscribed! ' }]);
@@ -117,13 +126,6 @@ test('viewer colours stay readable', () => {
   const fixed = T.merge({ colors: { name: 'fixed', nameColor: '#123456' } });
   assert.equal(T.nameColor({ p: 'twitch', color: '#ff0000' }, fixed), '#123456');
   assert.equal(T.nameColor({ p: 'kick', color: '' }, dark), T.readable(dark.colors.kick, dark));
-});
-
-test('a theme file keeps only what differs', () => {
-  const t = T.merge({ label: 'Mine', font: { size: 30 }, chat: { platforms: ['twitch'] } });
-  const small = T.diff(t);
-  assert.deepEqual(small, { label: 'Mine', font: { size: 30 }, chat: { platforms: ['twitch'] } });
-  assert.deepEqual(T.merge(small), t);
 });
 
 test('theme names', () => {

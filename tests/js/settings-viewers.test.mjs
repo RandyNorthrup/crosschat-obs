@@ -48,6 +48,14 @@ test('a viewer card address is built from checked, encoded parts', () => {
   assert.equal(A.viewerPath({ p: 'kick', name: 'n'.repeat(300) }).length, '/viewer?p=kick&name='.length + 100);
 });
 
+test('a name or search is cut as the hub counts it, and never in the middle of an emoji', () => {
+  const names = (path) => decodeURIComponent(path.split('name=')[1].split('&')[0]);
+  assert.equal([...names(A.viewerPath({ p: 'kick', name: '😀'.repeat(300) }))].length, 100);
+  assert.equal([...names(A.viewerPath({ p: 'kick', name: 'x' + '😀'.repeat(300) }))].length, 100);   // (a cut in the middle of a pair would throw here)
+  const q = A.viewerPath({ p: 'kick', name: 'ann' }, 'x' + '😀'.repeat(300)).split('q=')[1];
+  assert.equal([...decodeURIComponent(q)].length, 100);
+});
+
 test('a viewer card says what matters in plain words', () => {
   const at = () => '7:05 PM';
   assert.deepEqual(A.viewerFacts({ ok: true, first_ever: true, first_seen: 1, count: 1, past_streams: 0 }, at),

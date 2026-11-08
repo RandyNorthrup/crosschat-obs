@@ -7,11 +7,8 @@
 // Live Producer only ever shows the signed-in streamer's own broadcasts. The extension may touch no other part of
 // Facebook, and it never touches the Facebook login.
 (() => {
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const ask = (type, data) => new Promise((r) => {
-    try { chrome.runtime.sendMessage({ type, data }, (a) => r(chrome.runtime.lastError ? null : a)); } catch (e) { r(null); }
-  });
-  const clean = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+  const { sleep, clean, ask, waitFor, sendLines } = globalThis.CrossChatCommon;
+  const { nameLink, words } = globalThis.CrossChatFacebookComments;
   const told = new WeakSet();                 // comments already passed on
   let on = false, checkedAt = 0, wasLive = false, busy = false;
 
@@ -26,15 +23,6 @@
     }
     return on && live();
   }
-
-  // The link with the commenter's name. Facebook marks each comment as an article whose links carry the comment's own
-  // id; a viewer's comment starts with their picture, a link too (hidden from screen readers, no text), so the first
-  // link with text is the name.
-  const nameLink = (article) => [...article.querySelectorAll('a[href*="comment_id="]')].find((a) => clean(a.textContent)) || null;
-
-  // The words of a comment, from the text around the links: without the "·" Facebook puts between the name and the
-  // comment, and without its own "Posting…" under a fresh comment.
-  const words = (raw) => clean(raw).replace(/^[·•]\s*/, '').replace(/\s*Posting(…|\.\.\.)$/i, '');
 
   // One comment: its id (from the name link), the commenter's name and the words.
   function comment(article) {
@@ -98,16 +86,7 @@
         return;
       }
       wasLive = true;
-      const lines = fresh();
-      do {                                     // in batches small enough for one request
-        const batch = [];
-        while (lines.length && (!batch.length || encodeURIComponent(JSON.stringify(batch.concat(lines[0]).map(({ node, ...l }) => l))).length < 6000)) {
-          batch.push(lines.shift());
-        }
-        const answer = await ask('fb-feed', { viewers: viewers(), lines: JSON.stringify(batch.map(({ node, ...l }) => l)) });
-        if (!answer || !answer.reached || !answer.data || !answer.data.mine) break;   // tried again next time
-        batch.forEach((l) => told.add(l.node));
-      } while (lines.length);
+      await sendLines('fb-feed', { viewers: viewers() }, fresh(), (l) => told.add(l.node));
     } finally {
       busy = false;
     }
@@ -124,22 +103,9 @@
     const post = document.querySelector('[aria-label="Post comment"]');
     if (post && post.getAttribute('aria-disabled') !== 'true') post.click();
     else box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
-    for (let i = 0; i < 25; i++) {
-      await sleep(200);
-      if (!box.isConnected || clean(box.textContent) === '') return { ok: true };
-    }
-    return { ok: false, why: 'Facebook did not post it' };
+    return (await waitFor(() => !box.isConnected || clean(box.textContent) === '', 5000, 200)) ? { ok: true } : { ok: false, why: 'Facebook did not post it' };
   }
 
-  // Waits up to ms for find() to give something.
-  async function until(find, ms) {
-    for (let waited = 0; waited <= ms; waited += 100) {
-      const found = find();
-      if (found) return found;
-      await sleep(100);
-    }
-    return null;
-  }
   const named = (root, selector, pattern) => [...root.querySelectorAll(selector)].find((b) => pattern.test(clean(b.getAttribute('aria-label') || b.textContent)));
 
   // Deletes one comment the way the streamer would: its "..." menu, Delete, then Delete again in Facebook's question.
@@ -154,34 +120,29 @@
     const menu = named(article, '[role="button"], button', /report this/i);     // "Edit, delete or report this"
     if (!menu) return { ok: false, why: 'Facebook shows no menu for that comment' };
     menu.click();
-    const del = await until(() => {
+    const del = await waitFor(() => {
       for (const list of document.querySelectorAll('[role="menu"]')) {
         const item = named(list, '[role="menuitem"], [role="button"]', /^Delete( comment)?$/i);
         if (item) return item;
       }
       return null;
-    }, 3000);
+    }, 3000, 100);
     if (!del) {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
       return { ok: false, why: "Facebook didn't offer Delete for that comment" };
     }
     del.click();
-    const confirm = await until(() => {
+    const confirm = await waitFor(() => {
       for (const box of document.querySelectorAll('[role="dialog"]')) {
         if (!/Delete Comment\?/i.test(clean(box.textContent))) continue;
         const yes = named(box, '[role="button"], button', /^Delete$/i);
         if (yes) return yes;
       }
       return null;
-    }, 3000);
+    }, 3000, 100);
     if (!confirm) return { ok: false, why: "Facebook didn't ask to confirm the delete" };
     confirm.click();
-    return (await until(() => !article.isConnected || !comment(article), 5000)) ? { ok: true } : { ok: false, why: 'Facebook did not delete it' };
-  }
-
-  if (typeof module === 'object' && module.exports) {      // Node (the tests): the parts above, nothing else
-    module.exports = { nameLink, words };
-    return;
+    return (await waitFor(() => !article.isConnected || !comment(article), 5000, 100)) ? { ok: true } : { ok: false, why: 'Facebook did not delete it' };
   }
 
   chrome.runtime.onMessage.addListener((message, sender, respond) => {

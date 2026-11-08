@@ -1,11 +1,11 @@
-// Tests for extension/youtube.js: which button opens a chat message's own menu.
-// Run: node --test "tests/js/*.test.mjs"
+// Tests for extension/youtube-menu.js and youtube.js: which button opens a chat message's own menu, and telling the
+// extension when YouTube's chat has come. Run: node --test "tests/js/*.test.mjs"
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
+import { openPage } from './fake-page.mjs';
+import { loadExtension } from './extension-files.mjs';
 
-const require = createRequire(import.meta.url);
-const YT = require('../../extension/youtube.js');
+const YT = loadExtension('common.js', 'youtube-menu.js').CrossChatYouTubeMenu;
 
 // A chat row's buttons in page order, each with the selectors it matches. querySelector behaves like the browser's:
 // with a selector list, the first button in the row that matches any of them.
@@ -85,14 +85,6 @@ test("a menu entry or dialog counts as open by YouTube's own aria-hidden, not by
   assert.equal(YT.shown(null), false);
 });
 
-test('waiting goes by the clock and returns what was found', async () => {
-  let n = 0;
-  assert.equal(await YT.waitFor(() => (++n >= 2 ? 'menu' : null), 2000), 'menu');
-  const started = Date.now();
-  assert.equal(await YT.waitFor(() => null, 300), null);
-  assert.ok(Date.now() - started >= 300);
-});
-
 test('the menu entries CrossChat picks are the ones YouTube shows the channel owner', () => {
   // the owner's menu on that live: Channel Activity, Go to channel, Pin message, Report, Remove, Put user in timeout,
   // Hide user on this channel, Add as moderator
@@ -101,4 +93,34 @@ test('the menu entries CrossChat picks are the ones YouTube shows the channel ow
   assert.deepEqual(shown.filter((t) => YT.MENU.delete.test(t)), ['Remove']);
   assert.deepEqual(shown.filter((t) => YT.MENU.timeout.test(t)), ['Put user in timeout']);
   assert.deepEqual(shown.filter((t) => YT.MENU.ban.test(t)), ['Hide user on this channel']);
+});
+
+// youtube.js on its page, with `chat` saying whether YouTube's chat list is there yet.
+async function chatPage(search) {
+  const told = [];
+  const page = await openPage('tests/js/blank.html', [], { url: 'https://www.youtube.com/live_chat' + search });
+  page.window.chrome = { runtime: { lastError: null, onMessage: { addListener() {} }, sendMessage: (m, r) => { told.push(m); r({}); } } };
+  ['extension/common.js', 'extension/youtube-menu.js', 'extension/youtube.js'].forEach(page.script);
+  await page.settle();
+  return { page, told, chatComes: () => page.document.body.append(page.document.createElement('yt-live-chat-item-list-renderer')) };
+}
+const READY = { type: 'yt-chat-ready', data: { video: 'abc123def45' } };
+
+test('a chat pop-out says when YouTube\'s chat is on the page, once', async () => {
+  const { page, told, chatComes } = await chatPage('?is_popout=1&v=abc123def45&crosschat=1');
+  assert.deepEqual(told, []);                                 // nothing to say yet
+  await page.advance(1000);
+  assert.deepEqual(told, []);
+  chatComes();
+  await page.advance(500);
+  assert.deepEqual(JSON.parse(JSON.stringify(told)), [READY]);
+  await page.advance(5000);
+  assert.equal(told.length, 1);
+});
+
+test('the copy embedded in the CrossChat window says nothing: the extension never moderates there', async () => {
+  const { page, told, chatComes } = await chatPage('?v=abc123def45&embed_domain=127.0.0.1');
+  chatComes();
+  await page.advance(1000);
+  assert.deepEqual(told, []);
 });

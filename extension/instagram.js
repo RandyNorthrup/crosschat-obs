@@ -6,11 +6,7 @@
 // The Live producer only ever shows the signed-in streamer's own live. The script reads nothing else on Instagram
 // (no feed, no messages, no profiles) and never touches the Instagram login.
 (() => {
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const ask = (type, data) => new Promise((r) => {
-    try { chrome.runtime.sendMessage({ type, data }, (a) => r(chrome.runtime.lastError ? null : a)); } catch (e) { r(null); }
-  });
-  const clean = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+  const { sleep, clean, ask, hash, waitFor, sendLines } = globalThis.CrossChatCommon;
   const told = new WeakSet();                 // comments already passed on
   let on = false, checkedAt = 0, wasLive = false, busy = false;
 
@@ -25,12 +21,6 @@
       on = !!(answer && answer.instagram && answer.live);
     }
     return on && !!producer();
-  }
-
-  function hash(s) {
-    let h = 5381;
-    for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
-    return h.toString(36);
   }
 
   // One comment: a button holding the commenter's picture, then their name, then what they wrote.
@@ -97,16 +87,7 @@
       }
       wasLive = true;
       const dialog = producer();
-      const lines = fresh(dialog);
-      do {                                     // in batches small enough for one request
-        const batch = [];
-        while (lines.length && (!batch.length || encodeURIComponent(JSON.stringify(batch.concat(lines[0]).map(({ node, ...l }) => l))).length < 6000)) {
-          batch.push(lines.shift());
-        }
-        const answer = await ask('ig-feed', { viewers: viewers(dialog), lines: JSON.stringify(batch.map(({ node, ...l }) => l)) });
-        if (!answer || !answer.reached || !answer.data || !answer.data.mine) break;   // tried again next time
-        batch.forEach((l) => told.add(l.node));
-      } while (lines.length);
+      await sendLines('ig-feed', { viewers: viewers(dialog) }, fresh(dialog), (l) => told.add(l.node));
     } finally {
       busy = false;
     }
@@ -127,11 +108,7 @@
     for (const type of ['keydown', 'keypress', 'keyup']) {
       box.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
     }
-    for (let i = 0; i < 25; i++) {
-      await sleep(200);
-      if (!box.isConnected || box.value === '') return { ok: true };
-    }
-    return { ok: false, why: 'Instagram did not post it' };
+    return (await waitFor(() => !box.isConnected || box.value === '', 5000, 200)) ? { ok: true } : { ok: false, why: 'Instagram did not post it' };
   }
 
   chrome.runtime.onMessage.addListener((message, sender, respond) => {

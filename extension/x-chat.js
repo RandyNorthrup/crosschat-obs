@@ -5,11 +5,8 @@
 //   - ends the livestream when the hub says OBS has stopped streaming.
 // It does nothing on any other page, and nothing when no livestream is running.
 (() => {
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const text = (el) => (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
-  const ask = (type, data) => new Promise((r) => {
-    try { chrome.runtime.sendMessage({ type, data }, (a) => r(chrome.runtime.lastError ? null : a)); } catch (e) { r(null); }
-  });
+  const { sleep, clean, ask, hash, waitFor } = globalThis.CrossChatCommon;
+  const text = (el) => clean(el.innerText || el.textContent);
   const endButton = () => document.querySelector('button[aria-label="End livestream"]');
   const live = () => /^\/live\/\w/.test(location.pathname) && !!endButton();       // that button exists only while live
   const told = new WeakSet();                 // chat lines already passed on
@@ -30,12 +27,6 @@
       if (n) return n;
     }
     return '';
-  }
-
-  function hash(s) {
-    let h = 5381;
-    for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
-    return h.toString(36);
   }
 
   // Chat lines not passed on yet. X gives them no ids, so one is made from who said what and which time
@@ -79,13 +70,13 @@
   async function end() {
     ending = true;
     endButton().click();
-    for (let i = 0; i < 40 && live(); i++) {        // X asks "are you sure?": press the End button in that box
-      await sleep(250);
+    const yes = await waitFor(() => {               // X asks "are you sure?": press the End button in that box
+      if (!live()) return true;
       const box = [...document.querySelectorAll('[role="dialog"], [role="alertdialog"]')].pop();
-      const yes = box && [...box.querySelectorAll('button')].find((b) => /^end\b/i.test(text(b)));
-      if (yes) { yes.click(); break; }
-    }
-    for (let i = 0; i < 80 && live(); i++) await sleep(250);
+      return box && [...box.querySelectorAll('button')].find((b) => /^end\b/i.test(text(b)));
+    }, 10000);
+    if (yes && yes !== true) yes.click();
+    await waitFor(() => !live(), 20000);
     await ask('result', { ok: live() ? 0 : 1, mode: 'end', step: 'the End livestream button' });
     ending = false;
   }
@@ -99,11 +90,7 @@
     await sleep(200);
     if (!send() || send().disabled) return { ok: false, why: 'X would not take the message' };
     send().click();
-    for (let i = 0; i < 25; i++) {
-      await sleep(200);
-      if (!box.isConnected || box.value === '') return { ok: true };
-    }
-    return { ok: false, why: 'X did not send it' };
+    return (await waitFor(() => !box.isConnected || box.value === '', 5000, 200)) ? { ok: true } : { ok: false, why: 'X did not send it' };
   }
 
   chrome.runtime.onMessage.addListener((message, sender, respond) => {

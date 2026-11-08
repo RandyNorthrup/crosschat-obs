@@ -9,7 +9,7 @@ try { ({ chromium } = require(process.env.PLAYWRIGHT || 'playwright')); } catch 
   process.exit(0);
 }
 const ROOT = path.join(__dirname, '..', '..');
-const SCRIPT = fs.readFileSync(path.join(ROOT, 'extension', 'tiktok.js'), 'utf8');
+const SCRIPTS = ['common.js', 'tiktok-rows.js', 'tiktok.js'].map((f) => fs.readFileSync(path.join(ROOT, 'extension', f), 'utf8'));
 const ROWS = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'fixtures', 'tiktok_rows.json'), 'utf8')).rows;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let failed = 0;
@@ -50,7 +50,7 @@ async function open(ctx, where, hub) {
   }, [hub.check]);
   await page.route('https://www.tiktok.com/**', (route) => route.fulfill({ contentType: 'text/html', body: PAGE }));
   await page.goto('https://www.tiktok.com' + where);
-  await page.addScriptTag({ content: SCRIPT });
+  for (const content of SCRIPTS) await page.addScriptTag({ content });
   return { page, feeds, items: () => feeds.flatMap((f) => JSON.parse(f.lines || '[]')) };
 }
 

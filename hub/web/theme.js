@@ -228,22 +228,6 @@
     return issues;
   }
 
-  // Only the keys that differ from DEFAULTS: what a theme file needs to hold.
-  function diff(theme, base) {
-    base = base || DEFAULTS;
-    const out = {};
-    for (const key of Object.keys(base)) {
-      if (!(key in theme)) continue;
-      if (isObject(base[key]) && isObject(theme[key])) {
-        const inner = diff(theme[key], base[key]);
-        if (Object.keys(inner).length) out[key] = inner;
-      } else if (JSON.stringify(theme[key]) !== JSON.stringify(base[key])) {
-        out[key] = clone(theme[key]);
-      }
-    }
-    return out;
-  }
-
   const validName = (name) => typeof name === 'string' && /^[a-z0-9][a-z0-9-]{0,39}$/.test(name);
   const slug = (text) => String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'my-theme';
 
@@ -282,9 +266,12 @@
     return readable(m.color, t) || readable(own, t) || own;
   }
 
-  // The platforms a chat overlay shows: ?platforms= wins over the theme. Returns "all" or a list.
-  function wanted(themePlatforms, param) {
-    return param != null && param !== '' ? platforms(param) : platforms(themePlatforms);
+  // The platforms a chat overlay shows: ?platforms= wins, then the theme's own list, then overlay.platforms in config.json.
+  // Returns "all" or a list.
+  function wanted(themePlatforms, param, configured) {
+    if (param != null && param !== '') return platforms(param);
+    const own = platforms(themePlatforms);
+    return own !== 'all' ? own : platforms(configured);
   }
   const shows = (list, p) => list === 'all' || list.includes(p);
 
@@ -344,10 +331,8 @@
     return out;
   }
 
-  // "{name} gifted {amount}" filled in; unknown {words} stay as they are.
-  const fill = (template, vars) => String(template || '').replace(/\{(\w+)\}/g, (all, k) => (vars[k] != null ? String(vars[k]) : all)).replace(/\s+/g, ' ').trim();
-
-  // The same, as pieces: [{text}] and [{key, value}] for the filled-in words, so a page can style them.
+  // "{name} gifted {amount}" filled in, as pieces: [{text}] and [{key, value}] for the filled-in words, so a page can
+  // style them. Unknown {words} are left out.
   function fillParts(template, vars) {
     const out = [];
     String(template || '').split(/(\{\w+\})/).forEach((bit) => {
@@ -493,7 +478,7 @@
   return {
     SCHEMA, PLATFORMS, ALERTS, QUIET_ALERTS, DEFAULTS, RANGES, ENUMS, TEXTS, LOGO_KEYS, BUBBLE, NO_NAME, LOGO_MOST, THEME_MOST,
     logoFor, platformName, platformTag, shrinkLogo, logoBox,
-    merge, problems, diff, validName, slug, color, platforms, wanted, shows, emotePieces, fill, fillParts,
+    merge, problems, validName, slug, color, platforms, wanted, shows, emotePieces, fillParts,
     alertKind, alertParts, alertLine,
     luminance, contrast, readable, ink, nameColor, lightSurface, cssVars, switches, apply, clone,
   };

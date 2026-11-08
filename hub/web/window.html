@@ -57,7 +57,7 @@
   <div id="reading" hidden><span class="ico" aria-hidden="true">🔊</span><span id="reading-text"></span><em id="reading-more"></em><button id="reading-stop" type="button" title="Stop reading and skip what is waiting">Stop</button></div>
   <div id="replying"><span></span><button id="cancel" type="button" title="Stop replying to this message (Esc)" aria-label="Stop replying">✕</button></div>
   <div class="entry">
-    <input id="say" type="text" maxlength="500" autocomplete="off" enterkeyhint="send" aria-label="Message to chat" placeholder="Say something to chat. Enter sends it.">
+    <input id="say" type="text" autocomplete="off" enterkeyhint="send" aria-label="Message to chat" placeholder="Say something to chat. Enter sends it.">
     <button id="send" type="button" aria-label="Send">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.4 20.4 21 12 3.4 3.6l-.02 6.5L15 12 3.38 13.9z"/></svg>
     </button>
@@ -240,7 +240,7 @@
         </div>
       </div>
       <p class="hint" id="firewall-hint">The first time, Windows asks whether CrossChat may use the network: allow it on <b>private networks</b>.</p>
-      <label class="switch">Away from home too, with Tailscale <input id="tailscale-switch" type="checkbox"></label>
+      <label class="switch" id="tailscale-row">Away from home too, with Tailscale <input id="tailscale-switch" type="checkbox"></label>
       <p class="hint" id="tailscale-hint"></p>
     </section>
     <section class="section" id="history-section">

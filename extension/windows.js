@@ -12,11 +12,7 @@
 //   - a platform page: the window the hub recorded when it opened it, or else one at the exact address the hub opened
 //     that wasn't open before the hub opened it (`known`: the windows open just before).
 // A tab of yours at any of these addresses is in an ordinary window (type "normal") and is never moved or closed.
-(function (root, factory) {
-  const api = factory();
-  if (typeof module === 'object' && module.exports) module.exports = api;   // Node (the tests)
-  else root.CrossChatWindows = api;
-})(typeof self !== 'undefined' ? self : globalThis, function () {
+globalThis.CrossChatWindows = (() => {
   const HUB = 'http://127.0.0.1:4466';
   const PLACES = {
     chat: (u) => u.origin === HUB && u.pathname === '/',
@@ -28,7 +24,7 @@
   };
   const TYPES = ['normal', 'popup', 'app'];   // every kind of window a person uses (not DevTools)
   const LONGEST_WAIT = 30;                     // seconds a window the hub has just opened is looked for
-  const CLOSE_DELAY = 800;                     // ms: the chat window closes once its answer has left it
+  const CLOSE_LATEST = 5000;                   // ms the chat window gets to say its answer reached the hub
   const SETTLE = 400, PLACE_TRIES = 3;         // ms before a placed window is looked at again; placings at most
   const FAR = 100000, SMALLEST = 50;
 
@@ -128,8 +124,22 @@
     }
   }
 
-  // One job from the hub: { action: "list" | "place" | "find" | "close", role, url, box, window, known, wait }. `tab` is the
-  // chat page's tab that passed it on; `windows` is chrome.windows. Answers { ok, window } or { ok: false, why }.
+  // The chat window carries the answer to its own closing, so it goes once its page says that answer has reached the
+  // hub (the job "answered"). A page that can't say so (an older one, or one that lost the hub) gets CLOSE_LATEST.
+  let closeChat = null;                        // what closes them, from the asking until it is done
+  function closeOnceAnswered(windows, wins, sleep) {
+    const close = () => {
+      if (closeChat !== close) return undefined;
+      closeChat = null;
+      return Promise.all(wins.map((w) => windows.remove(w.id).catch(() => null)));
+    };
+    closeChat = close;
+    sleep(CLOSE_LATEST).then(close);
+  }
+
+  // One job from the hub: { action: "list" | "place" | "find" | "close", role, url, box, window, known, wait }, or the chat
+  // page's "answered". `tab` is the chat page's tab that passed it on; `windows` is chrome.windows. Answers { ok, window } or
+  // { ok: false, why }.
   async function job(data, tab, windows, sleep = pause) {
     const action = String(data.action || ''), role = String(data.role || '');
     try {
@@ -151,7 +161,7 @@
       if (action === 'close') {
         if (role === 'chat') {
           const wins = (await all(windows)).filter((w) => ours(w, 'chat'));
-          sleep(CLOSE_DELAY).then(() => Promise.all(wins.map((w) => windows.remove(w.id).catch(() => null))));
+          closeOnceAnswered(windows, wins, sleep);
           return { ok: true, windows: wins.map((w) => w.id) };
         }
         const win = await pageWindow(data, role, windows, sleep, false);
@@ -159,11 +169,15 @@
         await windows.remove(win.id);
         return { ok: true, window: win.id };
       }
+      if (action === 'answered') {                      // from the chat window itself, after the job above
+        if (closeChat) await closeChat();
+        return { ok: true };
+      }
       return { ok: false, why: 'unknown window job' };
     } catch (e) {
       return { ok: false, why: String((e && e.message) || e).slice(0, 200) };   // the browser's reason (a place off every screen, say)
     }
   }
 
-  return { job, ours, opened, bounds, PLACES, TYPES, LONGEST_WAIT, CLOSE_DELAY, PLACE_TRIES };
-});
+  return { job, ours, opened, bounds, PLACES, TYPES, LONGEST_WAIT, CLOSE_LATEST, PLACE_TRIES };
+})();

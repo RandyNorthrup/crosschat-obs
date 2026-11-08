@@ -30,6 +30,7 @@
         "https://studio.x.com/live*"
       ],
       "js": [
+        "common.js",
         "content.js",
         "x-chat.js"
       ],
@@ -49,6 +50,8 @@
         "https://www.youtube.com/live_chat*"
       ],
       "js": [
+        "common.js",
+        "youtube-menu.js",
         "youtube.js"
       ],
       "all_frames": true,
@@ -59,6 +62,8 @@
         "https://www.tiktok.com/*"
       ],
       "js": [
+        "common.js",
+        "tiktok-rows.js",
         "tiktok.js"
       ],
       "run_at": "document_idle"
@@ -68,6 +73,8 @@
         "https://www.facebook.com/live/producer*"
       ],
       "js": [
+        "common.js",
+        "facebook-comments.js",
         "facebook.js"
       ],
       "run_at": "document_idle"
@@ -77,6 +84,7 @@
         "https://www.instagram.com/"
       ],
       "js": [
+        "common.js",
         "instagram.js"
       ],
       "run_at": "document_idle"
@@ -86,6 +94,7 @@
         "https://rumble.com/chat/popup/*"
       ],
       "js": [
+        "common.js",
         "rumble.js"
       ],
       "run_at": "document_idle"

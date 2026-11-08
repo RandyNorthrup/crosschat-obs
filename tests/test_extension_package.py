@@ -41,6 +41,17 @@ def test_the_real_extension_is_ready_and_its_zip_has_the_manifest_at_the_top(tmp
     assert names == sorted(names) and not any("\\" in n or n.endswith("/") or "__pycache__" in n for n in names)
 
 
+def test_the_page_scripts_get_their_shared_helpers_first():
+    with open(os.path.join(EXTENSION, "manifest.json"), encoding="utf-8") as f:
+        manifest = json.load(f)
+    for entry in manifest["content_scripts"]:
+        uses = [name for name in entry["js"] if "CrossChatCommon" in open(os.path.join(EXTENSION, name), encoding="utf-8").read()]
+        if any(name != "common.js" for name in uses):
+            assert entry["js"][0] == "common.js", entry["js"]
+        if entry.get("world") == "MAIN":               # the helpers stay out of the platform's own page
+            assert "common.js" not in entry["js"]
+
+
 def test_the_same_sources_make_the_same_zip(tmp_path):
     one = package.build(EXTENSION, str(tmp_path / "a"))
     two = package.build(EXTENSION, str(tmp_path / "b"))

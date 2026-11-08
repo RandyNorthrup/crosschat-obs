@@ -1,11 +1,10 @@
-// Tests for extension/facebook.js: which link of a Live Producer comment gives its id and the commenter's name.
+// Tests for extension/facebook-comments.js: which link of a Live Producer comment gives its id and the commenter's name.
 // Run: node --test "tests/js/*.test.mjs"
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
+import { loadExtension } from './extension-files.mjs';
 
-const require = createRequire(import.meta.url);
-const FB = require('../../extension/facebook.js');
+const FB = loadExtension('common.js', 'facebook-comments.js').CrossChatFacebookComments;
 
 const link = (text, id) => ({ textContent: text, href: 'https://www.facebook.com/profile.php?id=1&comment_id=' + id });
 const article = (links) => ({ querySelectorAll: (s) => (s === 'a[href*="comment_id="]' ? links : []) });
