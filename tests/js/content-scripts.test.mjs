@@ -10,7 +10,7 @@ const manifest = JSON.parse(readFileSync(new URL('../../extension/manifest.json'
 
 for (const entry of manifest.content_scripts) {
   test('loads from its manifest entry: ' + entry.js.join(' + '), async () => {
-    const url = entry.matches[0].replace('*', '');
+    const url = entry.matches[0].replaceAll('*', '');
     const page = await openPage('tests/js/blank.html', [], { url });
     const listeners = [];
     page.window.chrome = { runtime: {

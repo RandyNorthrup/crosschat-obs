@@ -124,7 +124,7 @@ function makeDocument(html) {
   };
   doc.documentElement = new Element('html', doc);
   const stack = [doc.documentElement];
-  const tags = /<!--[\s\S]*?-->|<!doctype[^>]*>|<(script|style)\b[^>]*>[\s\S]*?<\/\1>|<\/([\w-]+)\s*>|<([\w-]+)((?:\s+[\w:-]+(?:=(?:"[^"]*"|'[^']*'|[^\s>]*))?)*)\s*(\/?)>|([^<]+)/gi;
+  const tags = /<!--[\s\S]*?-->|<!doctype[^>]*>|<(script|style)\b[^>]*>[\s\S]*?<\/\1>|<\/([\w-]+)\s*>|<([\w-]+)((?:\s+[\w:-]+(?:=(?:"[^"]*"|'[^']*'|[^\s>"'][^\s>]*))?)*)\s*(\/?)>|([^<]+)/gi;
   for (const [, raw, close, open, attrs, self, text] of html.matchAll(tags)) {
     if (raw) continue;
     const top = stack[stack.length - 1];
