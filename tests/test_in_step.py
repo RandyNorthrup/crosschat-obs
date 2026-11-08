@@ -137,7 +137,7 @@ def test_the_overlay_may_load_every_emote_picture_it_can_be_given():
 
 def test_a_feed_request_holds_no_more_lines_than_the_hub_reads():
     reads = re.findall(r"for line in lines\[:(\d+)\]", HUB)
-    assert len(reads) == 3 and {int(n) for n in reads} == {number(COMMON, "BATCH_MOST")}   # TikTok, Facebook, Instagram
+    assert reads and {int(n) for n in reads} == {number(COMMON, "BATCH_MOST")}     # every page feed reads through PageChat
 
 
 def test_every_part_carries_the_same_version():
