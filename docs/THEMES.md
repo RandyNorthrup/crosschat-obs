@@ -53,6 +53,8 @@ Glass blurs only what is inside the browser source. OBS does not show a browser 
 
 Open **Platform logos and names** in the Studio, to brand the widgets your way or to hide which platform a message came from.
 
+![The Platform logos and names section, with custom logos on all four widgets in the preview](../assets/screenshots/studio-logos.png)
+
 - **Every platform** sets one logo or name for all of them. A row for one platform beats it, and with neither set you get the built-in one.
 - **Choose…** takes a PNG, JPEG, WebP or SVG of up to 8 MB. The Studio redraws it as a small picture inside the theme, so anything else inside the file is left behind, and exporting a theme takes its logos along.
 - **Bubble** uses CrossChat's plain speech bubble. **Clear** goes back to the built-in logo.

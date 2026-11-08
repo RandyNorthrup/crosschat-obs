@@ -1842,11 +1842,11 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
 
   // ?demo settings: placeholder channels, nothing real.
   const demoConfig = {
-    settings: { twitch: 'your_channel', youtube: '@yourchannel', kick: 'your_channel', tiktok: '', facebook: false, 'x.enabled': true, 'x.auto_go_live': false,
+    settings: { twitch: 'your_channel', youtube: '@yourchannel', kick: 'your_channel', tiktok: '', facebook: false, instagram: false, broadcaster: 'auto', 'x.enabled': true, 'x.auto_go_live': false,
                 'x.title': 'Building a chat app live', 'x.title_file': '', 'x.source': 'OBS', window: 'auto', open_window_on_stream_start: true,
                 close_window_seconds_after_stream: 120, 'emotes.bttv': true, 'emotes.ffz': true, 'emotes.7tv': true, 'logs.enabled': true, 'logs.keep_days': 90,
                 'remote.enabled': true, 'remote.port': 4467 },
-    restart: ['twitch', 'youtube', 'kick', 'tiktok', 'facebook', 'x.enabled'], custom_window: false, first_run: false,
+    restart: ['twitch', 'youtube', 'kick', 'tiktok', 'facebook', 'instagram', 'broadcaster', 'x.enabled'], custom_window: false, first_run: false,
   };
   if (DEMO_KIND === 'firstrun') {
     Object.assign(demoConfig.settings, { twitch: '', youtube: '', kick: '', 'x.enabled': false, 'x.title': 'Live now' });

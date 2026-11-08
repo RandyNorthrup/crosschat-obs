@@ -125,6 +125,10 @@
 
 <img src="assets/screenshots/studio.png" alt="The Theme Studio: theme list, settings and a live preview of all four widgets">
 
+**Your own logos and names:** one logo for every platform, a different one for Twitch here, and YouTube renamed "Main stream".
+
+<img src="assets/screenshots/studio-logos.png" alt="The Theme Studio's Platform logos and names section, with custom logos on all four widgets in the preview">
+
 **Inside OBS 33.0.1:** the four widgets added as Browser Sources.
 
 <img src="assets/screenshots/obs-window.png" alt="OBS Studio 33.0.1 with the CrossChat chat, featured, viewers and alerts sources in a scene">
@@ -199,6 +203,8 @@ CrossChat needs to know one thing from your streaming app: when you are live. Ch
 | **Anything else** (XSplit, vMix, Meld Studio...) | Choose **Another app**. A **Start stream** button appears at the top of the chat window: press it when you go live and **End stream** when you stop. A Stream Deck or hotkey can do the same with `control.py stream-start` and `control.py stream-end`. |
 
 Without OBS there is no script to start CrossChat, so open it before you stream: **CrossChat → Open chat** in the Start menu (on a Mac or Linux, the CrossChat app entries). Skip step 3 of Install. Add the widgets in your app the way it adds a web page (in Streamlabs: *Sources → + → Browser Source*). When CrossChat follows Streamlabs or nothing, **Settings → Channels & options → Close CrossChat** stops it.
+
+<p align="center"><img src="assets/screenshots/start-stream.png" alt="The top of the chat window with Another app chosen: OFF AIR with a Start stream button, then LIVE with an End stream button" width="460"></p>
 
 The hotkeys, the buttons in *Tools → Scripts* and the docked chat are OBS's own. In other apps, use the chat window and `control.py`. With **Another app**, X can only go live on your word: CrossChat can't see whether your video is really going out.
 
