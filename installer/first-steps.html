@@ -31,23 +31,23 @@
       <h2>Add the script to OBS</h2>
       In OBS: <b>Tools → Scripts → +</b>, then pick<br>
       <code>%LOCALAPPDATA%\CrossChat\obs\crosschat.lua</code><br>
-      <span class="note">Setup put this path on your clipboard: paste it into the file box. From then on, CrossChat starts and stops with OBS.</span>
+      <span class="note">Setup put this path on your clipboard: paste it into the file box. From then on, CrossChat starts and stops with OBS. Using Streamlabs Desktop or another app? Skip this step and choose it in Settings → Channels &amp; options → Streaming app.</span>
     </li>
     <li>
       <h2>Set your channels</h2>
       Open CrossChat (Start menu → CrossChat → <b>Open chat</b>), then <b>Settings</b>, and enter your Twitch, YouTube, Kick, TikTok,
-      Facebook, Rumble and X details. Connect Twitch and Kick there to reply and moderate through their official APIs.
+      Facebook, Instagram, Rumble and X details. Connect Twitch and Kick there to reply and moderate through their official APIs.
     </li>
     <li>
       <h2>Add the browser extension</h2>
       In Chrome or Edge: open <code>chrome://extensions</code> (or <code>edge://extensions</code>), switch on <b>Developer mode</b>,
       press <b>Load unpacked</b> and pick<br>
       <code>%LOCALAPPDATA%\CrossChat\extension</code><br>
-      <span class="note">Reading chat and the on-stream widgets work without it. Replying to YouTube, X, TikTok, Facebook and Rumble, and X Live, need it. It reads no logins.</span>
+      <span class="note">Twitch, YouTube, Kick and Rumble chat and the on-stream widgets work without it. Reading X, TikTok, Facebook and Instagram needs it, as do replies everywhere except Twitch and Kick, and X Live. It reads no logins.</span>
     </li>
     <li>
       <h2>Put chat on your stream</h2>
-      In OBS, add a <b>Browser Source</b> for each widget you want:
+      In your streaming app, add a <b>Browser Source</b> for each widget you want:
       <table>
         <tr><td>Chat feed</td><td><code>http://127.0.0.1:4466/overlay/chat</code></td><td>450 × 800</td></tr>
         <tr><td>Featured message</td><td><code>http://127.0.0.1:4466/overlay/featured</code></td><td>900 × 260</td></tr>

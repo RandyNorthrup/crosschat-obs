@@ -21,7 +21,7 @@ Nothing is installed on the other device: it's a web page, and you can add it to
 1. On the streaming PC, open the CrossChat window and press the **gear** (Settings) → **Pair a device**.
 2. A QR code, a 6-digit code and an address appear. The code works for **5 minutes**.
 3. On the phone, scan the QR code with the camera. On another PC, type the address into its browser. Either way the device is paired and opens the chat.
-4. The first time, Windows asks whether CrossChat may use the network. Choose **Allow** for **private networks**.
+4. The first time, Windows asks whether CrossChat may use the network. Choose **Allow** for **private networks**. On a Mac or Linux, pairing stays off until you set `"remote": {"bind": "<your computer's address>"}` in `config.json`.
 
 <p align="center"><img src="../assets/screenshots/companion-pair.png" alt="Settings on the streaming PC: paired devices and the pairing QR code" width="360"></p>
 
@@ -46,15 +46,15 @@ A second PC works the same way as a phone, in any modern browser. It's handy for
 
 ## What works when
 
-The companion talks to the CrossChat hub on the streaming PC, so that PC must be on, with OBS (and so the hub) running.
+The companion talks to the CrossChat hub on the streaming PC, so that PC must be on, with CrossChat running.
 
 | | Needs |
 |---|---|
-| Reading chat, viewer counts, live status | The hub running (it starts with OBS) |
+| Reading chat, viewer counts, live status | The hub running (it starts with OBS; with another app, open it first) |
 | Show on stream, Answer later, quick-reply editing, test events | The hub running |
 | Replies and moderation on **Twitch** | **Twitch connected** in Settings on the streaming PC |
 | Replies and moderation on **Kick** | **Kick connected** in Settings on the streaming PC |
-| Replies and moderation on **YouTube**, replies on **X** | The **CrossChat window open on the streaming PC**, in Chrome or Edge with the CrossChat extension. It opens by itself when you go live. |
+| Replies on **YouTube, X, TikTok, Facebook, Instagram and Rumble**; moderation on **YouTube, Facebook and Rumble** | The **CrossChat window open on the streaming PC**, in Chrome or Edge with the CrossChat extension. It opens by itself when you go live. |
 | **Read aloud** | The CrossChat window open on the streaming PC, in Chrome or Edge (the copy docked inside OBS doesn't speak). It reads through that PC's speakers. |
 | Text-to-speech settings, filters, chat history | Only on the streaming PC (Settings there) |
 
@@ -80,7 +80,7 @@ When something isn't available, the companion says why: in the bar under the hea
   - **↑ ↓** move between messages, and **Enter** opens the actions;
   - **r** replies, and **s** stars;
   - **Esc** cancels a reply.
-- **The box** sends to every live chat that takes replies. Use **only:** to send to one platform. The counter warns when a message is too long for a platform: X takes 140 characters, YouTube 200, Twitch and Kick 500.
+- **The box** sends to every live chat that takes replies. Use **only:** to send to one platform. The counter warns when a message is too long for a platform: X takes 140 characters, TikTok 150, YouTube and Rumble 200, Twitch and Kick 500, Instagram 2200, Facebook 8000.
 
 ### Viewer cards
 
@@ -117,7 +117,9 @@ The list is kept by the hub, so every device and the streaming PC share it.
 | **Twitch** (Twitch connected) | ✓ | 10 minutes, 1 hour, or any length up to 14 days | ✓ (and unban) |
 | **Kick** (Kick connected) | ✓ | 10 minutes, 1 hour, or any length up to 7 days, in whole minutes | ✓ (and unban) |
 | **YouTube** (CrossChat window open on the streaming PC) | ✓ (remove) | 5 minutes | Hide user on this channel |
-| **X** | — | — | — |
+| **Rumble** (CrossChat window open on the streaming PC) | ✓ | Mute 5 minutes, or for this stream | Mute forever |
+| **Facebook** (CrossChat window open on the streaming PC) | ✓ (delete comment) | — | — |
+| **X**, **TikTok**, **Instagram** | — | — | — |
 
 - A ban always asks first.
 - On YouTube, CrossChat uses YouTube's own chat menu, in YouTube's chat pop-out, which the browser running the CrossChat window on the streaming PC opens in a background tab (YouTube offers these actions only there). The YouTube account signed in there must own the channel or be a moderator.
@@ -145,7 +147,7 @@ These are set up on the streaming PC, in Settings there.
 
 | | |
 |---|---|
-| **Channels & options** | Your Twitch, YouTube, Kick and TikTok channels, Facebook and X on or off, X's title, the window, emotes, chat history and the companion, each with a line on what it does (on the streaming PC). **Save** checks every value and says which changes wait for OBS to restart. The first time CrossChat runs without any channel, Settings opens here. |
+| **Channels & options** | Your Twitch, YouTube, Kick and TikTok channels, Facebook, Instagram and X on or off, the streaming app, X's title, the window, emotes, chat history and the companion, each with a line on what it does (on the streaming PC). **Save** checks every value and says which changes wait for OBS or CrossChat to restart, and has **Close CrossChat** when it follows Streamlabs or nothing. The first time CrossChat runs without any channel, Settings opens here. |
 | **Look and sound** | Auto (follows the device), Light or Dark; a ding when a message arrives. Each device remembers its own. |
 | **Text to speech** | What to read, voice, speed, volume (on the streaming PC). **Stop reading** works from any device. |
 | **Filters** | Words, viewers, `!commands`, bots (on the streaming PC). |
@@ -169,7 +171,7 @@ These are set up on the streaming PC, in Settings there.
   1. Install Tailscale on the streaming PC and on the phone, and sign in to the same account on both.
   2. On the streaming PC: Settings → Paired devices → switch on **Away from home too, with Tailscale**. It shows the PC's Tailscale address, or says what's missing.
   3. **Pair a device** and scan the QR code. With Tailscale on, the code uses the PC's Tailscale address, so it works at home and away while Tailscale runs on the phone. A phone paired before needs pairing once more.
-  - Pairing is still required. The companion listens only on the address Windows has on Tailscale's own adapter, and stops listening there when Tailscale stops.
+  - Pairing is still required. The companion listens only on the address Windows has on Tailscale's own adapter (on Linux, `tailscale0`), and stops listening there when Tailscale stops.
 - Removing a device in Settings takes effect immediately. The device then says it is no longer paired.
 
 ## Troubleshooting

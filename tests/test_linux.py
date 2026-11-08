@@ -187,9 +187,27 @@ def throwaway_browser(tmp_path):
         return None
     wrapper = tmp_path / "browser"
     wrapper.write_text('#!/bin/sh\nexec "%s" --user-data-dir="%s" --no-first-run --no-default-browser-check --disable-gpu '
-                       '--password-store=basic "$@"\n' % (real, tmp_path / "profile"))
+                       '--password-store=basic --enable-logging=stderr "$@" 2>"%s"\n' % (real, tmp_path / "profile", tmp_path / "browser.log"))
     wrapper.chmod(0o755)
     return str(wrapper)
+
+
+def browser_log(tmp_path):
+    try:
+        return (tmp_path / "browser.log").read_text(errors="replace")[-4000:]
+    except OSError:
+        return "(no log)"
+
+
+def what_x_shows():
+    """Every top-level window X knows, for a test that couldn't find the browser's."""
+    import ctypes
+    with linux._display() as (lib, display):
+        parent, children, count = ctypes.c_ulong(), ctypes.c_void_p(), ctypes.c_uint()
+        lib.XQueryTree(display, lib.XDefaultRootWindow(display), ctypes.byref(ctypes.c_ulong()), ctypes.byref(parent), ctypes.byref(children),
+                       ctypes.byref(count))
+        found = list((ctypes.c_ulong * count.value).from_address(children.value)) if children.value else []
+        return [(hex(w), linux._property(lib, display, w, "WM_CLASS"), linux._title(lib, display, w), linux._shown(lib, display, w)) for w in found]
 
 
 @linux_only
@@ -205,7 +223,8 @@ def test_a_real_browser_window_opens_moves_and_closes(tmp_path):
     handle = asyncio.run(linux.open_app(browser, page.as_uri(), (40, 50, 420, 500)))
     print("the new window was found %.1f s after the browser was started" % (time.monotonic() - started))   # (a cold start took 10)
     try:
-        assert handle, "the new window wasn't found"
+        assert handle, "the new window wasn't found\nX shows: %r\nthe browser said:\n%s" % (what_x_shows(), browser_log(tmp_path))
+        assert what_x_shows() and browser_log(tmp_path) != "(no log)"     # the report above must work when it's needed
         deadline = time.time() + 15
         while time.time() < deadline and not linux.windows(browser, "CrossChat window test"):
             time.sleep(0.25)

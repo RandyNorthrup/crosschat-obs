@@ -2,7 +2,7 @@
 
 The CrossChat hub is a small web server on your PC. The chat window, the Theme Studio, the OBS widgets and the companion all use it, and so can your own overlays and tools.
 
-- **Base address:** `http://127.0.0.1:4466` (the `"port"` in `config.json`). The demo (`crosschat --demo`) runs on `4477`.
+- **Base address:** `http://127.0.0.1:4466` (the `"port"` in `config.json`). The demo (**Try the demo**, or `control.py demo`) runs on `4477`.
 - **Live updates:** one [Server-Sent Events](https://developer.mozilla.org/docs/Web/API/Server-sent_events) stream, `GET /events`.
 - **Changes:** `POST` with a JSON body, from the hub's own pages.
 
@@ -11,9 +11,9 @@ The CrossChat hub is a small web server on your PC. The chat window, the Theme S
 | Caller | Can |
 |---|---|
 | The CrossChat window, the Theme Studio and the widgets (`http://127.0.0.1:4466/…`) | Everything below |
-| **Your own overlay pages** (`http://localhost:4466/custom/…`) | Their own files, and the public chat: `/events` (public types only), `/settings`, `/version`, `/themes`. Nothing else |
+| **Your own overlay pages** (`http://localhost:4466/custom/…`) | Their own files, and the public chat: `/events` (public types only), `/settings`, `/version`, `/themes`, `/themes/<name>`, and the page files under `/web/` and `/overlay/`. Nothing else |
 | A program on this PC (no browser `Origin`) | Every `GET`. `POST` needs `Content-Type: application/json` |
-| A paired companion device (port 4467) | `/events`, `/viewer`, and `POST` to `/send`, `/mod`, `/feature`, `/star`, `/quick`, `/test`, `/tts/say`, `/tts/skip` |
+| A paired companion device (port 4467) | `/`, `/whoami`, `/version`, `/events`, `/viewer`, and `POST` to `/send`, `/mod`, `/feature`, `/star`, `/quick`, `/test`, `/tts/say`, `/tts/skip` |
 | A page from any other website, or a local file | Nothing |
 
 Put your own overlay pages in the folder named by `"custom_overlays"` in `config.json`. The hub serves them at `http://localhost:4466/custom/<file>` (an old `http://127.0.0.1:4466/custom/…` address is sent there). That address is kept apart from the CrossChat window's by the browser, so an overlay page you downloaded can show chat but can't reply, moderate or change anything as you. Inside one, `/events` and the other public addresses work as relative URLs; `http://127.0.0.1:4466/events` works too. See [SECURITY.md](../SECURITY.md) for the rules in full.
@@ -59,7 +59,7 @@ Your own overlay pages get the chat as viewers see it: `msg`, `delete`, `purge`,
 | `text` | What they wrote |
 | `kind` | `chat`, `event` (a sub, gift, raid, cheer, Super Chat or membership) or `note` (a message from CrossChat itself) |
 | `color` | The name colour the platform gave the viewer, or `""` |
-| `badges` | For example `["moderator", "subscriber"]`. The streamer's own lines carry `broadcaster` (Twitch, Kick) or `owner` (YouTube) |
+| `badges` | For example `["moderator", "subscriber"]`. The streamer's own lines carry `broadcaster` (Twitch, Kick, TikTok, Facebook, Instagram) or `owner` (YouTube) |
 | `emotes` | Twitch only: Twitch's own `id:from-to,…` list |
 | `question` | `true` when the line looks like a question |
 | `first` | `"ever"` for the viewer's first message in the channel (Twitch says so), `"stream"` for their first this stream |
@@ -84,11 +84,12 @@ Your own overlay pages get the chat as viewers see it: `msg`, `delete`, `purge`,
 | `viewers` | `counts` (platform → number or `null`), `total` | Every 10 to 30 seconds while live |
 | `feature` | `msg` (a `msg` event, or `null`) | The featured message changed |
 | `emotes` | `emotes` (name → picture URL) | 7TV, BetterTTV and FrankerFaceZ emotes loaded. Show a word as a picture when it matches a name exactly |
-| `theme` | `theme` | The default theme changed |
+| `theme` | `name`, `default` | A theme was saved or deleted, or the default changed |
 | `starred` | `ids` | Messages put aside to answer later |
 | `quick` | `replies` | The quick replies changed |
 | `sent` | `job_id`, `answer` (platform → `{ok, why}`) | A reply or moderation finished |
-| `executor` | `present` | Whether the chat window with the extension is open (it posts to YouTube and X) |
+| `rumble_auth` | `state` | Whether Rumble is connected |
+| `executor` | `present` | Whether the chat window with the extension is open (it posts to YouTube, X, TikTok, Facebook, Instagram and Rumble) |
 | `twitch_auth`, `kick_auth` | `state` (`off`, `pending`, `on`, `error`), `login`, `why` | Sign-in state |
 | `tts`, `filters` | `settings` | Text-to-speech or filter settings changed |
 | `config` | the same fields as `GET /config/editable` | Settings → Channels & options was saved. Sent to pages on this PC only |
@@ -99,11 +100,11 @@ Your own overlay pages get the chat as viewers see it: `msg`, `delete`, `purge`,
 
 | Request | Answer |
 |---|---|
-| `GET /version` | `{"version": "1.4.0"}` |
-| `GET /settings` | The chat widget's settings from `config.json` and the default theme |
+| `GET /version` | `{"version": "1.9.0"}` |
+| `GET /settings` | `overlay` from `config.json` (the chat widget uses `overlay.platforms`) and the default theme's name |
 | `GET /themes` | `{"default", "themes": [...]}` |
-| `GET /themes/<name>.json` | One theme |
-| `GET /targets` | Where a typed reply goes: `{"twitch", "youtube_video"}` |
+| `GET /themes/<name>` | One theme |
+| `GET /targets` | Where a typed reply goes: `{"twitch", "youtube_video", "tiktok", "facebook", "instagram", "rumble_chat", "live", "tiktok_joins"}` |
 | `GET /x/last` | X Live's last result |
 | `GET /logs` | Chat history: `{"logs": [{"name", "started", "ended", "messages", "bytes"}]}`. This PC's own pages only |
 | `GET /logs/<name>.json` | One stream's messages, with deleted ones marked `"gone": true` |
@@ -135,12 +136,12 @@ One viewer's messages, newest first: this stream's (from its chat history file, 
 The settings the CrossChat window may change, so nobody has to edit `config.json` by hand. Both answer only the hub's own pages on this PC: not paired devices, not your overlay pages, not other websites.
 
 ```json
-{"settings": {"twitch": "your_channel", "youtube": "@yourchannel", "kick": "", "tiktok": "", "facebook": false,
+{"settings": {"twitch": "your_channel", "youtube": "@yourchannel", "kick": "", "tiktok": "", "facebook": false, "instagram": false, "broadcaster": "auto",
               "x.enabled": true, "x.auto_go_live": false, "x.title": "Live now", "x.title_file": "", "x.source": "OBS",
               "window": "auto", "open_window_on_stream_start": true, "close_window_seconds_after_stream": 120,
               "emotes.bttv": true, "emotes.ffz": true, "emotes.7tv": true, "logs.enabled": true, "logs.keep_days": 90,
               "remote.enabled": true, "remote.port": 4467},
- "restart": ["twitch", "youtube", "kick", "tiktok", "facebook", "x.enabled"], "custom_window": false, "first_run": false}
+ "restart": ["twitch", "youtube", "kick", "tiktok", "facebook", "instagram", "broadcaster", "x.enabled"], "custom_window": false, "first_run": false}
 ```
 
 Tokens, client ids and secrets, the OBS password, `browser` and `custom_overlays` are never part of it.
@@ -155,7 +156,7 @@ The answer says what happens next:
 {"ok": true, "why": "Saved. Restart OBS to apply: Twitch channel.", "restart_needed": true, "restart": ["twitch"]}
 ```
 
-The channels, Facebook and X on or off and the streaming app apply when OBS restarts (or, when CrossChat follows Streamlabs or nothing, when it opens again); everything else at once (emotes, chat history, the window, X's title and source, and the companion, which reopens on its new port).
+The channels, Facebook, Instagram and X on or off and the streaming app apply when OBS restarts (or, when CrossChat follows Streamlabs or nothing, when it opens again); everything else at once (emotes, chat history, the window, X's title and source, and the companion, which reopens on its new port).
 
 ## Doing
 
@@ -168,11 +169,11 @@ Replies and moderation are jobs: the answer comes at once with a `job_id`, and t
 `POST /send`
 
 ```json
-{"to": ["twitch", "youtube", "kick", "x"], "text": "Thanks for the raid!", "reply": {"p": "twitch", "id": "…", "mid": "…"}}
+{"to": ["twitch", "youtube", "kick", "x"], "text": "Thanks for the raid!", "reply": {"p": "twitch", "id": "<the message's mid>", "name": "<their name>"}}
 ```
 
-- `text` becomes one line. Limits: Facebook 8000 characters, Twitch and Kick 500, YouTube and Rumble 200, TikTok 150, X 140.
-- Twitch and Kick replies go through their APIs and need **Connect Twitch** / **Connect Kick** in Settings. YouTube, X and TikTok replies need the chat window with the extension open (and, for TikTok, your TikTok LIVE page).
+- `text` becomes one line. Limits: Facebook 8000 characters, Instagram 2200, Twitch and Kick 500, YouTube and Rumble 200, TikTok 150, X 140.
+- Twitch and Kick replies go through their APIs and need **Connect Twitch** / **Connect Kick** in Settings. YouTube, X, TikTok, Facebook, Instagram and Rumble replies need the chat window with the extension open (and each platform's own live page, for those that have one).
 - `"dry": true` checks everything and posts nothing.
 
 `POST /mod`
@@ -186,6 +187,8 @@ Replies and moderation are jobs: the answer comes at once with a `job_id`, and t
 | Twitch | `delete`, `timeout`, `ban`, `unban` |
 | Kick | `delete`, `timeout` (rounded up to whole minutes, 1 minute to 7 days), `ban`, `unban` |
 | YouTube | `delete`, `timeout`, `ban` |
+| Facebook | `delete` |
+| Rumble | `delete`, `timeout` (5 minutes), `mute` (this stream), `ban` (forever) |
 
 ### Featured message, stars, quick replies
 
@@ -210,10 +213,10 @@ The CrossChat window on this PC does the speaking, with the voices Windows and t
 `POST /filters`, this PC only:
 
 ```json
-{"words": ["spoiler"], "users": ["@someone"], "bots": ["nightbot"], "hide_commands": true}
+{"words": ["spoiler"], "users": ["@someone"], "bots": true, "hide_commands": true, "joins": false}
 ```
 
-Each list holds up to 200 entries of up to 50 characters. Words match whole words, ignoring case. Filtered messages arrive with `hidden` set; nothing is deleted on the platform.
+`words` and `users` each hold up to 200 entries of up to 50 characters. Words match whole words, ignoring case. Filtered messages arrive with `hidden` set; nothing is deleted on the platform.
 
 ### Test events
 
@@ -240,4 +243,4 @@ Also this PC only:
 
 `GET /tiktok/feed`, `GET /facebook/feed` and `GET /instagram/feed` are how the extension passes on your TikTok LIVE chat (with its gifts, follows, shares, likes and joins), Facebook Live comments and Instagram Live comments. It accepts lines only for your own TikTok name, and only from the extension or a program on this PC.
 
-`GET /show` opens the chat window. `GET /x/go` goes live on X (`?mode=private` or `?mode=dry` for a test). Both refuse other websites.
+`GET /show` opens the chat window. `GET /x/go` goes live on X (`?mode=private` or `?mode=dry` for a test). `GET /stream?go=start` or `?go=end` says the stream has started or ended (only with `"broadcaster": "manual"`). `GET /leave` closes CrossChat (only when it follows Streamlabs or nothing). `GET /whoami` says how this page is connected, including the streaming app it follows. All refuse other websites.

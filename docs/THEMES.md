@@ -13,7 +13,7 @@ The widgets are transparent, so whatever is behind them in your scene shows thro
 
 ## Theme Studio
 
-Open **http://127.0.0.1:4466/studio** in your browser while OBS is running.
+Open **http://127.0.0.1:4466/studio** in your browser while CrossChat is running.
 
 ![Theme Studio](../assets/screenshots/studio.png)
 
@@ -29,7 +29,7 @@ Other buttons:
 - **New** starts from the default look. **Duplicate** copies the open theme.
 - **Set as default** makes the theme the one used by sources without `?theme=`.
 - **Import…** opens a theme file someone shared; **Export** saves the open theme as a `.json` file.
-- **Delete** removes one of your themes. Sources that used it fall back to the default theme.
+- **Delete** removes one of your themes. Sources that named it with `?theme=` go back to CrossChat's built-in look. Sources without `?theme=` follow the default theme.
 - The ◐ button switches the Studio between light, dark and following Windows. (It does not change your theme.)
 
 Leaving the page with unsaved changes asks first.
@@ -79,7 +79,7 @@ These override the theme for one source. Combine them with `&`.
 | Option | Example | Does |
 |---|---|---|
 | `theme` | `theme=neon` | Theme file name. |
-| `platforms` | `platforms=twitch,youtube` | Chat feed: only these platforms (`twitch`, `youtube`, `kick`, `x`, or `all`). |
+| `platforms` | `platforms=twitch,youtube` | Chat feed: only these platforms (`twitch`, `youtube`, `kick`, `x`, `tiktok`, `facebook`, `instagram`, `rumble`, or `all`). |
 | `size` | `size=26` | Text size in pixels. |
 | `layout` | `layout=compact` | `card`, `bubble`, `line` or `compact`. |
 | `icons` | `icons=text` | Platform shown as `icon`, `text`, `bar` or `none`. |
@@ -135,7 +135,7 @@ Your themes live in **`%LOCALAPPDATA%\CrossChat\themes\`**, one `<file name>.jso
 | `colors.outline` | colour | | `#000000` |
 | `colors.outlineWidth` | px | 0 – 6 | `0` |
 | `colors.shadow` | number | 0 – 1 | `0.35` |
-| `colors.twitch` / `youtube` / `kick` / `x` | colour | | `#9146ff` / `#ff0033` / `#53fc18` / `#e7e9ea` |
+| `colors.twitch` / `youtube` / `kick` / `x` / `tiktok` / `facebook` / `instagram` / `rumble` | colour | | `#9146ff` / `#ff0033` / `#53fc18` / `#e7e9ea` / `#fe2c55` / `#0866ff` / `#ff0069` / `#85c742` |
 | **message** | | | |
 | `message.layout` | choice | `card`, `bubble`, `line`, `compact` | `card` |
 | `message.radius` | px | 0 – 40 | `12` |
@@ -155,7 +155,7 @@ Your themes live in **`%LOCALAPPDATA%\CrossChat\themes\`**, one `<file name>.jso
 | `chat.seconds` | seconds | 0 – 3600 (0 = stays) | `120` |
 | `chat.animationIn` | choice | `slide`, `fade`, `pop`, `none` | `slide` |
 | `chat.animationOut` | choice | `fade`, `slide`, `none` | `fade` |
-| `chat.platforms` | `"all"` or list | `twitch`, `youtube`, `kick`, `x` | `"all"` |
+| `chat.platforms` | `"all"` or list | `twitch`, `youtube`, `kick`, `x`, `tiktok`, `facebook`, `instagram`, `rumble` | `"all"` |
 | `chat.events` | true/false | subs, raids and the like as highlighted lines | `true` |
 | `chat.delay` | seconds | 0 – 60; each message waits this long before it shows, so you can delete it first | `0` |
 | **featured** | | | |
@@ -175,7 +175,7 @@ Your themes live in **`%LOCALAPPDATA%\CrossChat\themes\`**, one `<file name>.jso
 | `alerts.sound` | true/false | a short chime made in the page | `true` |
 | `alerts.volume` | number | 0 – 1 | `0.35` |
 | `alerts.showText` | true/false | the viewer's own message under the title | `true` |
-| `alerts.types.<type>` | true/false | types: `sub`, `resub`, `gift`, `raid`, `cheer`, `member`, `superchat`, `follow`, `other` | all `true` |
+| `alerts.types.<type>` | true/false | types: `sub`, `resub`, `gift`, `raid`, `cheer`, `member`, `superchat`, `sticker`, `rant`, `follow`, `share`, `like`, `join`, `other` | all `true` except `like` and `join` |
 | `alerts.labels.<type>` | text | up to 140 characters; `{name}`, `{amount}`, `{text}`, `{platform}` are filled in | e.g. `"{name} gifted {amount}!"` |
 | `logos.all`, `logos.<platform>` | logo | `""` (built-in), `"chat"` (plain bubble), or a `data:image/png`, `webp` or `jpeg` base64 picture of up to 20,000 characters. No SVG and no web addresses | `""` |
 | `names.all`, `names.<platform>` | text | up to 24 characters; `""` built-in, `"-"` no name | `""` |
@@ -207,7 +207,7 @@ For anything the settings don't cover, write CSS: in the theme (the Studio's **C
 | `.cc-msg` | one chat message (`data-platform`, `data-kind="chat"` or `"event"`, `data-id`; `data-first="ever"` or `"stream"` on a viewer's first message in your channel, or this stream) |
 | `.cc-first`, `.cc-first-tag` | a first-time chatter's message (when `message.firstHighlight` is on), and its NEW tag |
 | `.cc-icon` | platform icon (an `<svg>` inside) |
-| `.cc-tag` | platform text tag (TW, YT, K, X) |
+| `.cc-tag` | platform text tag (TW, YT, K, X, TT, FB, IG, RM) |
 | `.cc-main` | name and text of a message |
 | `.cc-head` | badges and name |
 | `.cc-badge` | one badge (host, mod, vip, sub, member, ✓) |
@@ -231,7 +231,7 @@ For anything the settings don't cover, write CSS: in the theme (the Studio's **C
 | `--cc-bg` (with opacity), `--cc-bg-solid` | background |
 | `--cc-text-shadow`, `--cc-icon-filter`, `--cc-shadow` | outline and shadow |
 | `--cc-radius`, `--cc-pad`, `--cc-gap`, `--cc-bar`, `--cc-emote` | message shape |
-| `--cc-twitch`, `--cc-youtube`, `--cc-kick`, `--cc-x` | platform colours |
+| `--cc-twitch`, `--cc-youtube`, `--cc-kick`, `--cc-x`, `--cc-tiktok`, `--cc-facebook`, `--cc-instagram`, `--cc-rumble` | platform colours |
 | `--cc-featured-scale`, `--cc-alert-seconds` | featured size, alert time |
 | `--cc-p`, `--cc-ink`, `--cc-name` | on each message, viewer pill and alert: its platform colour, black/white on that colour, and the name colour in use |
 

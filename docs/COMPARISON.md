@@ -27,6 +27,6 @@ CrossChat next to six other tools streamers use to merge chat. Every other tool'
 ## How this was checked
 
 - Prices and features change. The source links show today's details.
-- CrossChat's cells link to its README and licence.
+- CrossChat's cells link to its README, licence and companion guide.
 - Product names are trademarks of their owners. CrossChat isn't affiliated with any of these products.
 - Found a mistake? Open an issue with a link to the product's own page and it will be corrected.

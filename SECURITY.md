@@ -18,7 +18,7 @@ CrossChat has no server of its own. It makes no analytics or crash-report connec
 | YouTube (`www.youtube.com`) | Your channel or video id, signed out, to read chat | A YouTube channel is set |
 | Kick (`kick.com`, `web.kick.com`, Pusher) | Your channel name and its public channel number, signed out, to read chat; to `web.kick.com` also a random id made for that request, to get the address of Kick's chat feed | A Kick channel is set |
 | Kick API (`id.kick.com`, `api.kick.com`) | Your Kick token, your replies, your moderation actions | You pressed **Connect Kick** |
-| X, YouTube and TikTok, in your browser | The reply you typed, typed into the site's own chat box by the extension | You reply or moderate there |
+| X, YouTube, TikTok, Facebook, Instagram and Rumble, in your browser | The reply you typed, typed into the site's own chat box by the extension | You reply or moderate there |
 | TikTok (`www.tiktok.com`), in your browser | Nothing beyond what your browser already does: CrossChat reads chat, gifts, follows, shares, likes (and joins, if you turn them on) from your own TikTok LIVE page there | A TikTok name is set and you're live |
 | Facebook Live Producer, in your browser | Nothing beyond what your browser already does: CrossChat reads comments from Live Producer there | `"facebook": true` and you're live |
 | Instagram's Live producer (`www.instagram.com`), in your browser | Nothing beyond what your browser already does: CrossChat reads comments from your own live there, and types your replies | `"instagram": true` and you're live |
@@ -45,8 +45,8 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 - One exception lets the CrossChat window itself open: **Click here to retry** in OBS's dock. When the CrossChat dock in OBS loaded before CrossChat answered, OBS shows its own error page, which counts as another site. So the hub opens the chat window for a click on a link to it, as a whole page, in OBS's own browser (its User-Agent says `OBS/`, which no website can make a browser say). That only opens the window, as you'd open it yourself; nothing is read or done for the page that had the link.
 - Changes are accepted only as JSON from the hub's own pages. A page elsewhere can't send that without the browser checking first, and the hub refuses those checks.
 - If a second CrossChat window takes over posting replies or reading aloud and then closes, the job goes back to the window that had it.
-- Requests are limited: headers to 16 KB, bodies to 256 KB, theme files to 64 KB.
-- Theme and history names are restricted to letters, digits and dashes, so a request can't reach other files.
+- Requests are limited: headers to 16 KB, bodies to 256 KB, theme files to 224 KB.
+- Theme and history names are restricted to letters, digits, dashes and, for history, underscores, so a request can't reach other files.
 
 **Your own overlay pages can't act as you.**
 
@@ -130,9 +130,9 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
   - `www.tiktok.com`, for your own TikTok LIVE page. It first asks CrossChat which TikTok account is yours, and on every other TikTok page, someone else's LIVE included, it reads nothing and sends nothing;
   - `www.facebook.com/live/producer`, Facebook's Live Producer, which only ever shows your own broadcasts. No other part of Facebook;
   - `www.instagram.com/` (the home page only, where CrossChat opens it), for Instagram's Live producer, which opens over that page and only ever shows your own live. The extension reads only that live's comments and viewer count, and only while CrossChat says Instagram is on and you're live: never the feed, messages or profiles. It never presses the share button beside the comment box;
-  - `rumble.com/chat/popup/`, Rumble's chat window, only to type your replies in your own live's chat (CrossChat tells it which one). It never presses the paid Rant button.
+  - `rumble.com/chat/popup/`, Rumble's chat window, only to type your replies in your own live's chat and carry out the deletes and mutes you ask for (CrossChat tells it which one). It never presses the paid Rant button.
 - TikTok has no public chat API. Tools that connect to TikTok LIVE chat directly usually go through an outside "signing" service, which learns which live you're reading (and gets your TikTok session too if you sign in through it to send messages). CrossChat uses no outside service: it reads chat only from your own LIVE page, in your own browser.
-- On YouTube and X it types your reply into the site's own chat box, as the account already signed in there. YouTube moderation goes through YouTube's own message menu.
+- On YouTube, X, TikTok, Facebook, Instagram and Rumble it types your reply into the site's own chat box, as the account already signed in there. Moderation on YouTube, Facebook and Rumble goes through the site's own message menu.
 - Twitch and Kick replies don't use the extension at all: they go through those platforms' official APIs, from the hub.
 
 **CrossChat's windows.** The extension places, moves and closes the windows CrossChat opens (the chat window, and the platform pages: X Live Studio, your TikTok LIVE page, Live Producer, Instagram and Rumble's chat), through the browser's own window API (`chrome.windows`). That API needs no extension permission, so the extension still asks for none. On Windows the hub still places a window it can see itself, with Windows' own window functions (they put the visible edges exactly in place); the extension closes them there too. Otherwise the hub uses the system's way (Windows' own window functions, AppleScript on a Mac, X11 on Linux) only when the extension isn't there or can't.
@@ -188,10 +188,10 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 Every release zip (and the Linux `.tar.gz`) comes with a `.sha256` file and a signed build provenance attestation. The attestation proves the download was built by this repository's release workflow from the tagged source. With the GitHub CLI:
 
 ```powershell
-gh attestation verify CrossChat-1.4.0-windows.zip --repo RandyNorthrup/crosschat-obs
+gh attestation verify CrossChat-<version>-windows.zip --repo RandyNorthrup/crosschat-obs
 ```
 
-From 1.7.2 the Windows setup program also carries an Authenticode signature by **Randy Northrup** (Azure Artifact Signing), timestamped. To check it: right-click the file → Properties → Digital Signatures, or in PowerShell `Get-AuthenticodeSignature .\CrossChat-Setup-1.7.2.exe` (Status should be `Valid`, the signer `CN=Randy Northrup, …`).
+From 1.7.2 the Windows setup program also carries an Authenticode signature by **Randy Northrup** (Azure Artifact Signing), timestamped. To check it: right-click the file → Properties → Digital Signatures, or in PowerShell `Get-AuthenticodeSignature .\CrossChat-Setup-<version>.exe` (Status should be `Valid`, the signer `CN=Randy Northrup, …`).
 
 How releases are made:
 

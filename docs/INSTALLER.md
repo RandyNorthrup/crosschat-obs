@@ -31,7 +31,7 @@ Two things only you can remove: the script in OBS (*Tools → Scripts*, select i
 ## Silent install, for scripts
 
 ```powershell
-.\CrossChat-Setup-1.7.1.exe /S                        # installs; switches on OBS's WebSocket server if it's off
+.\CrossChat-Setup-<version>.exe /S                        # installs; switches on OBS's WebSocket server if it's off
 & "$env:LOCALAPPDATA\CrossChat\uninstall.exe" /S       # removes; keeps settings and themes in Documents\CrossChat backup
 ```
 
@@ -40,7 +40,7 @@ Two things only you can remove: the script in OBS (*Tools → Scripts*, select i
 Each setup program comes with a `.sha256` file and a signed build provenance attestation:
 
 ```powershell
-gh attestation verify CrossChat-Setup-1.6.0.exe --repo RandyNorthrup/crosschat-obs
+gh attestation verify CrossChat-Setup-<version>.exe --repo RandyNorthrup/crosschat-obs
 ```
 
 From 1.7.2 the setup program is code-signed by Randy Northrup through Azure Artifact Signing (see the README's code signing policy). A newly signed program can still get a "Windows protected your PC" notice until Windows has seen enough downloads of it: choose **More info**, check the publisher says Randy Northrup, then **Run anyway**. Earlier setup programs (1.7.1 and before) aren't signed. The bundled `python.exe` and `pythonw.exe` are signed by the Python Software Foundation.

@@ -8,9 +8,9 @@ Link: https://github.com/RandyNorthrup/crosschat-obs
 
 **Attach:** `assets/video/overview.mp4` (1920×1080, 48 s).
 
-> Streaming to Twitch, YouTube, Kick, X, TikTok, Facebook or Rumble at once? CrossChat puts every chat in one window, and one reply goes to all of them.
+> Streaming to Twitch, YouTube, Kick, X, TikTok, Facebook, Instagram or Rumble at once? CrossChat puts every chat in one window, and one reply goes to all of them.
 >
-> Feature questions on stream, alerts, moderation, a phone companion, and X Live that starts with OBS.
+> Feature questions on stream, alerts, moderation, a phone companion, and X Live that starts when your stream does.
 >
 > Free and open source 👇
 > github.com/RandyNorthrup/crosschat-obs
@@ -19,7 +19,7 @@ Link: https://github.com/RandyNorthrup/crosschat-obs
 
 **Reply under it:** attach `assets/social/x-post-1200x675.png`.
 
-> Built for OBS Studio 33 on Windows. Themeable widgets, eight looks built in, and your own overlays served too. MIT licensed.
+> Works with OBS on Windows, Mac and Linux, and with Streamlabs Desktop on Windows. Themeable widgets, eight looks built in, your own logos, and your own overlays served too. MIT licensed.
 
 ## Instagram Reels / TikTok / YouTube Shorts
 
@@ -27,7 +27,7 @@ Link: https://github.com/RandyNorthrup/crosschat-obs
 
 > Moderate and answer your whole stream from your phone 📱
 >
-> CrossChat merges Twitch, YouTube, Kick, X, TikTok, Facebook and Rumble chat. Tap a question to put it on stream, send quick replies, time out trolls, from the couch or a second PC.
+> CrossChat merges Twitch, YouTube, Kick, X, TikTok, Facebook, Instagram and Rumble chat. Tap a question to put it on stream, send quick replies, time out trolls, from the couch or a second PC.
 >
 > Free and open source. Link in bio.
 >
@@ -46,7 +46,7 @@ Link: https://github.com/RandyNorthrup/crosschat-obs
 > 🛡️ Delete, timeout, ban without switching tabs
 > 🎨 Theme Studio with live preview
 > 📱 Pair your phone or a second PC
-> 🔴 Goes live on X when OBS starts streaming
+> 🔴 Goes live on X when your stream starts
 >
 > Free, open source, runs on your own PC.
 > github.com/RandyNorthrup/crosschat-obs
@@ -55,24 +55,24 @@ Link: https://github.com/RandyNorthrup/crosschat-obs
 
 **Attach:** `assets/video/overview.mp4`.
 
-> CrossChat: every stream chat (Twitch, YouTube, Kick, X, TikTok, Facebook, Rumble) in one window for OBS. Reply to all at once, put questions on stream, moderate from your phone. Free and open source.
+> CrossChat: every stream chat (Twitch, YouTube, Kick, X, TikTok, Facebook, Instagram, Rumble) in one window, for OBS and Streamlabs. Reply to all at once, put questions on stream, moderate from your phone. Free and open source.
 > github.com/RandyNorthrup/crosschat-obs
 
 ## Reddit (r/obs, r/Twitch, r/streaming)
 
 **Attach:** `assets/video/theme-studio.mp4`, or the README screenshots.
 
-**Title:** I made a free, open-source chat hub for OBS: Twitch/YouTube/Kick/X chat in one window, themeable overlays, phone companion
+**Title:** I made a free, open-source chat hub for streamers: Twitch/YouTube/Kick/X/TikTok/Facebook/Instagram/Rumble chat in one window, themeable overlays, phone companion
 
-> Multistreaming meant four chat tabs, so I built CrossChat. It's a small local app that OBS starts with a script.
+> Multistreaming meant a chat tab for every platform, so I built CrossChat. It's a small local app that OBS can start with a script, and it follows Streamlabs Desktop too.
 >
 > - One window with every platform's chat and viewer counts. Reply to all at once, or to one person on their own platform.
-> - Four OBS browser-source widgets: chat, featured message, viewer counter, alerts. There's a Theme Studio with eight presets and full CSS control.
-> - Moderation (Twitch through the official API, YouTube through its own chat menu), quick replies, and an "answer later" list.
+> - Four browser-source widgets: chat, featured message, viewer counter, alerts. There's a Theme Studio with eight presets, your own logos and platform names, and full CSS control.
+> - Moderation on Twitch, YouTube and Kick, delete and mute on Rumble, delete on Facebook, quick replies, and an "answer later" list.
 > - A phone or second-PC companion over your home network, paired with a QR code.
-> - It starts and ends your X livestream with OBS (X has no stream key that does that by itself).
+> - It starts and ends your X livestream with your stream (X has no stream key that does that by itself).
 > - It serves your own overlays too, since OBS 33 blocks local-file overlays from reaching localhost.
 >
-> Windows, OBS 28+ (tested on 33.0.1), MIT. There's a demo mode if you want to try it without going live.
+> Windows, Mac and Linux, OBS 28+ (tested on 33.0.1), and Streamlabs Desktop on Windows. MIT. There's a demo mode if you want to try it without going live.
 >
 > github.com/RandyNorthrup/crosschat-obs

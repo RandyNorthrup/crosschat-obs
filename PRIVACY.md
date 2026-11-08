@@ -22,7 +22,7 @@ CrossChat is an open-source program that runs on your own computer, and a browse
 | `www.tiktok.com` | Your own TikTok LIVE page only. It first asks CrossChat which account is yours, and reads nothing on any other page |
 | `www.facebook.com/live/producer` | Read comments on your own live, type your replies, delete a comment when you ask |
 | `www.instagram.com/` | The home page only, where Instagram's Live producer opens: read your own live's comments and viewer count, type your replies |
-| `rumble.com/chat/popup/` | Type your replies in your own live's chat |
+| `rumble.com/chat/popup/` | Type your replies in your own live's chat, and carry out your moderation there |
 
 **Selling and sharing.** Your data is not sold, not transferred to anyone, not used for advertising, and not used to decide creditworthiness or for lending.
 

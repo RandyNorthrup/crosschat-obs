@@ -40,7 +40,7 @@ CrossChat puts the chat of every platform you stream to in one window, and lets 
 What the extension does
 • Posts the replies you write in CrossChat to YouTube, X, TikTok, Facebook, Instagram and Rumble, by typing them into each site's own chat box, as the account already signed in to your browser.
 • Brings chat in from your own X livestream, TikTok LIVE page, Facebook Live Producer and Instagram live.
-• Carries out the moderation you ask for on YouTube and Facebook, in those sites' own menus.
+• Carries out the moderation you ask for on YouTube, Facebook and Rumble, in those sites' own menus.
 • Starts and ends your X livestream when you ask, or together with your stream.
 • Places and closes the windows CrossChat opens. Your own browser windows are never touched.
 
@@ -70,7 +70,7 @@ Connects the streamer's own live-stream pages to the CrossChat app on their comp
 **Host permission justification** (one box, at most 1,000 characters; the extension asks for no API permissions):
 
 ```
-127.0.0.1:4466 is the CrossChat app on the user's own computer, the only place the extension sends data. studio.x.com: starts and ends the user's own X livestream when asked, reads its chat, types their replies. youtube.com/live_chat: types the user's replies and carries out their moderation through YouTube's own menus. tiktok.com: the user's own TikTok LIVE page only; TikTok changes pages without a reload, so the script must load on the site, but it asks the app which account is the user's and does nothing on any other page. facebook.com/live/producer: shows only the user's own broadcasts; reads comments, types replies, deletes a comment when asked. instagram.com, home page only, where Instagram's Live producer opens: reads the user's own live's comments and viewer count, types their replies. rumble.com/chat/popup: types the user's replies in their own live's chat.
+127.0.0.1:4466 is the CrossChat app on the user's own computer, the only place the extension sends data. studio.x.com: starts and ends the user's own X livestream when asked, reads its chat, types their replies. youtube.com/live_chat: types the user's replies and carries out their moderation through YouTube's own menus. tiktok.com: the user's own TikTok LIVE page only; TikTok changes pages without a reload, so the script must load on the site, but it asks the app which account is the user's and does nothing on any other page. facebook.com/live/producer: shows only the user's own broadcasts; reads comments, types replies, deletes a comment when asked. instagram.com, home page only, where Instagram's Live producer opens: reads the user's own live's comments and viewer count, types their replies. rumble.com/chat/popup: types the user's replies in their own live's chat and carries out their moderation there.
 ```
 
 **Remote code:** No, I am not using remote code. (All JavaScript ships in the package. There is no `eval` and nothing is downloaded.)
