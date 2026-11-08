@@ -29,6 +29,7 @@
   <div class="top">
     <h1>CROSSCHAT</h1>
     <span id="live">OFF AIR</span>
+    <button id="stream-toggle" class="btn" type="button" hidden>Start stream</button>
     <span id="device" hidden><i class="dot"></i><span></span></span>
     <div id="total">0<small>WATCHING</small></div>
     <button id="theme" class="icon-btn" type="button"></button>
@@ -101,10 +102,11 @@
     <section class="section" id="channels-section">
       <h3>Channels &amp; options</h3>
       <div class="first-run" id="channels-first" role="note" hidden><b>Set up your channels</b>
-        <p>Type the channels you stream to and press Save. CrossChat reads their chat from the next time OBS starts.</p></div>
+        <p>Type the channels you stream to and press Save. CrossChat reads their chat from the next time it starts.</p></div>
       <p class="hint">Saved in config.json on this PC. Sign-ins, keys and passwords are never shown or changed here.</p>
       <div class="cfg" id="channels-form"></div>
       <div class="buttons"><button class="btn primary" type="button" id="channels-save">Save</button><span class="saved" id="channels-saved" role="status" aria-live="polite"></span></div>
+      <p id="leave-row" hidden><button id="leave" class="btn" type="button">Close CrossChat</button></p>
     </section>
     <section class="section">
       <h3>Look and sound</h3>
@@ -248,7 +250,7 @@
     </section>
     <section class="section">
       <h3>Check the stream</h3>
-      <p class="hint">Puts a made-up event on the widgets in OBS, so you can see them without going live.</p>
+      <p class="hint">Puts a made-up event on your on-stream widgets, so you can see them without going live.</p>
       <div class="buttons">
         <button class="btn" type="button" data-test="chat">Test chat</button>
         <button class="btn" type="button" data-test="alert">Test alert</button>

@@ -91,6 +91,12 @@
   .checks label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); }
   .checks input { accent-color: var(--accent); width: 16px; height: 16px; }
   fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+  .logo-row { display: grid; grid-template-columns: 28px 1fr auto auto auto; gap: 6px; align-items: center; }
+  .logo-row input { grid-column: 2 / -1; }
+  .logo-title { font-size: 13px; font-weight: 600; }
+  .logo-well { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 6px; border: 1px solid var(--line); background: var(--raised); }
+  .logo-well svg, .logo-well img { width: 20px; height: 20px; display: block; object-fit: contain; }
+  .logo-actions { display: flex; flex-wrap: wrap; gap: 6px; }
   .field[aria-disabled="true"] { opacity: .45; }
 
   /* preview */
@@ -162,6 +168,7 @@
       <button class="btn small danger" id="delete" type="button">Delete</button>
     </div>
     <input id="import-file" type="file" accept=".json,application/json" hidden>
+    <input id="logo-file" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg" hidden>
   </nav>
 
   <form id="controls" aria-label="Theme settings" onsubmit="return false"></form>
@@ -188,7 +195,7 @@
       <p class="help">The preview shows made-up chat. Your picture stays on this PC.</p>
     </div>
     <div id="stage-wrap"><div id="stage" data-back="game" aria-hidden="true"></div></div>
-    <h2>Add to OBS</h2>
+    <h2>Add to your stream</h2>
     <div id="widgets"></div>
   </section>
 </div>
@@ -205,9 +212,9 @@
   <form method="dialog" id="save-form">
     <h2 id="save-title">Save theme</h2>
     <div class="field"><label for="save-label">Display name</label><input id="save-label" type="text" maxlength="60" required></div>
-    <div class="field"><label for="save-name">File name (for OBS addresses)</label>
+    <div class="field"><label for="save-name">File name (for source addresses)</label>
       <input id="save-name" type="text" maxlength="40" required pattern="[a-z0-9][a-z0-9-]{0,39}" aria-describedby="save-help save-error">
-      <p class="help" id="save-help">Lowercase letters, numbers and dashes. Used as <code>?theme=</code> in the OBS address.</p></div>
+      <p class="help" id="save-help">Lowercase letters, numbers and dashes. Used as <code>?theme=</code> in the source's address.</p></div>
     <p class="error" id="save-error" role="alert"></p>
     <div class="buttons"><button class="btn" value="cancel" formnovalidate type="submit">Cancel</button><button class="btn primary" id="save-ok" value="ok" type="submit">Save</button></div>
   </form>
@@ -222,6 +229,7 @@
 </dialog>
 
 <script src="/web/theme.js"></script>
+<script src="/web/icons.js"></script>
 <script src="/web/studio.js"></script>
 </body>
 </html>

@@ -4,6 +4,19 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+- **Your own platform logos and names on the on-stream widgets.** In the Theme Studio: one logo or name for every platform, one per platform (which wins), the plain bubble, or no name. **Hide every platform** removes every sign of which platform a message came from. Logos are kept inside the theme, so they export with it. See [docs/THEMES.md](docs/THEMES.md#your-own-logos-and-names).
+- **Streamlabs Desktop.** CrossChat follows its stream with no token and nothing to set up there, and closes when it closes.
+- **Any other streaming app.** A **Start stream** / **End stream** button in the chat window, or `control.py stream-start` and `stream-end`. See [Other streaming apps](README.md#other-streaming-apps).
+- **Settings → Streaming app** (`"broadcaster"` in `config.json`), and **Close CrossChat** when it follows Streamlabs or nothing.
+- `PRIVACY.md`, `docs/CHROME_WEB_STORE.md` and `scripts/package_extension.py`, for publishing the extension on the Chrome Web Store.
+
+### Changed
+
+- A theme file can now be up to 224 KB (it was 64 KB), to hold its logos.
+- The extension's description is 132 characters, the most the Chrome Web Store takes.
+
 ## [1.8.0] - 2026-11-01
 
 ### Highlights

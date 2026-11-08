@@ -94,7 +94,7 @@ The card shows the newest 200 lines of each; search to find older ones.
 
 ### Alerts
 
-Subs, resubs, gifts, raids, cheers, Super Chats, Super Stickers, memberships and Rumble Rants look the same in the chat list whichever platform they come from: a tag with the kind (**GIFT**, **RANT**…), one sentence with the name and the amount, then what the viewer wrote. The widgets in OBS use the same sentences, which you can change in the Theme Studio.
+Subs, resubs, gifts, raids, cheers, Super Chats, Super Stickers, memberships and Rumble Rants look the same in the chat list whichever platform they come from: a tag with the kind (**GIFT**, **RANT**…), one sentence with the name and the amount, then what the viewer wrote. The on-stream widgets use the same sentences, which you can change in the Theme Studio.
 
 ### Quick replies
 
@@ -137,7 +137,7 @@ These are set up on the streaming PC, in Settings there.
 - **Text to speech** reads chat through the streaming PC's speakers: every message, questions only, events (subs, raids…), messages that start with a command such as `!tts`, or just the message you show on stream. Pick the voice, speed and volume, whether to say who wrote it, and whether to skip links. **Test the voice** tries it; **Stop reading** (also on the companion, and in the bar above the box while it reads) stops and skips what's waiting.
   - Voices listed **On this PC** stay on the PC. Voices listed **Online** (Edge's "Natural" voices, Chrome's Google voices) send the text they read to Microsoft or Google to make the audio; Settings says so when you pick one. CrossChat never picks an online voice by itself.
   - Lines are read one at a time, never over each other. Hidden messages are never read.
-- **Filters** hide messages by word or phrase, by viewer (name or @handle), `!commands`, and known chat bots. Hidden messages never reach the widgets in OBS; in the chat list they stay, dimmed, with why.
+- **Filters** hide messages by word or phrase, by viewer (name or @handle), `!commands`, and known chat bots. Hidden messages never reach the on-stream widgets; in the chat list they stay, dimmed, with why.
 - **Chat history**: every stream's chat is saved on the streaming PC. Settings → **Open chat history** lists your streams, newest first. Open one to search it by name or words, show one platform or questions only, and **Export** it as a spreadsheet (CSV) or a web page (HTML).
 - **Connections** shows how each chat is doing: how long it has been connected, when the last message came and how often it reconnected. The same line is in the tooltip of each platform pill at the top.
 
@@ -152,7 +152,7 @@ These are set up on the streaming PC, in Settings there.
 | **Connections** | Each chat's health; connect or disconnect Twitch, Kick, Rumble and Discord (on the streaming PC). |
 | **Paired devices** | The list, **Remove**, **Pair a device**, and the Tailscale switch for away from home (on the streaming PC). |
 | **Chat history** | Saved chat of every stream: search and export (on the streaming PC). |
-| **Check the stream** | Test chat, alert, featured message or viewer count on the widgets in OBS, without going live. |
+| **Check the stream** | Test chat, alert, featured message or viewer count on the on-stream widgets, without going live. |
 | **About** | The version, and on the streaming PC the address other devices use and the update notice switch (off by default). |
 
 ## Keeping it private

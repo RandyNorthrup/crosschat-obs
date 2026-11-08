@@ -1,7 +1,7 @@
-"""CrossChat hub: the chat of every platform the stream goes to, in one window, following OBS.
+"""CrossChat hub: the chat of every platform the stream goes to, in one window, following your streaming app.
 
-OBS starts this (obs/crosschat.lua) and it leaves when OBS closes. When OBS starts streaming it opens the chat
-window; it closes the window a little while after the stream ends. With the CrossChat browser extension it also
+OBS starts this (obs/crosschat.lua) and it leaves when OBS closes; for other streaming apps see follow_app. When the
+stream starts it opens the chat window; it closes the window a little while after the stream ends. With the CrossChat browser extension it also
 starts and ends the livestream on X and posts the replies typed in the chat window.
 
 Settings are in config.json in the folder above this one (see config.example.json).
@@ -104,6 +104,7 @@ DEFAULTS = {
     "open_window_on_stream_start": True,
     "close_window_seconds_after_stream": 120,
     "overlay": {"platforms": "all", "theme": "classic"},
+    "broadcaster": "auto",                   # the streaming app to follow: "auto", "obs", "streamlabs" or "manual" (see follow_app)
     "obs": {"host": "127.0.0.1", "port": 0, "password": ""},     # port 0 and no password: read from OBS's own settings
     "remote": {"enabled": True, "port": 4467, "tailscale": False},  # the companion for paired devices; tailscale: also away from home
     "updates": {"check": False},             # true: ask GitHub once a day whether a newer CrossChat is out (nothing else is sent)
@@ -1087,7 +1088,7 @@ async def x_go(mode):
     await open_page("x", "https://studio.x.com/live" + tail, box(X.get("window"), "x"))
     if mode == "live":
         note("X: starting the livestream there...")
-    return mode or "OBS is not live, so X was only opened"
+    return mode or "The stream is not live, so X was only opened"
 
 
 x_told = collections.deque(maxlen=3000)      # X chat lines already shown (its page reports them again after a reload)
@@ -1678,9 +1679,144 @@ async def obs_link():
     await close_chat()
 
 
+# ---- other streaming apps: when OBS isn't the one streaming -------------------------------------------
+# Streamlabs Desktop answers on this PC's own TCP port without a token (its Settings > Remote Control is only for other
+# devices): JSON-RPC, one message per line. Its status is asked for every couple of seconds rather than subscribed to: a
+# request that gets no answer (it is loading, or switching scene collection) is simply asked again next time.
+STREAMLABS_PORT = 28194
+STREAMLABS_POLL = 2                          # seconds between two questions, and how long one may take
+STREAMLABS_RETRY = 3                         # seconds between two tries to reach it
+STREAMLABS_GONE = 30                         # seconds without it before it counts as closed (changing its Remote Control settings drops us)
+BROADCASTERS = ("auto", "obs", "streamlabs", "manual")
+
+
+async def streamlabs_status(reader, writer, number):
+    """Streamlabs' streamingStatus now (offline, starting, live, ending, reconnecting), or None when it doesn't say in time."""
+    ask = {"jsonrpc": "2.0", "id": number, "method": "getModel", "params": {"resource": "StreamingService", "args": []}}
+    writer.write((json.dumps(ask) + "\n").encode())
+    await writer.drain()
+
+    async def answer():
+        while True:
+            line = await reader.readline()
+            if not line:
+                raise ConnectionError("Streamlabs closed the connection")
+            try:
+                said = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(said, dict) and said.get("id") == number:
+                result = said.get("result")
+                return result.get("streamingStatus") if isinstance(result, dict) else None
+    try:
+        return await asyncio.wait_for(answer(), STREAMLABS_POLL)
+    except asyncio.TimeoutError:
+        return None
+
+
+async def streamlabs_session(reader, writer):
+    """One connection to Streamlabs: follow its stream until the connection ends."""
+    number = 0
+    while True:
+        number += 1
+        status = await streamlabs_status(reader, writer, number)
+        if status == "live":                     # "reconnecting" and "ending" are still the same stream
+            await stream_started()
+        elif status == "offline":
+            await stream_stopped()
+        await asyncio.sleep(STREAMLABS_POLL)
+
+
+async def streamlabs_link():
+    """Follow Streamlabs Desktop: wait for it for as long as it takes, and leave once it has closed."""
+    gone, told = None, False
+    while gone is None or time.monotonic() - gone < STREAMLABS_GONE:
+        try:
+            reader, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", STREAMLABS_PORT), 5)
+        except (OSError, asyncio.TimeoutError):
+            if not told:
+                told = True
+                log.info("waiting for Streamlabs Desktop")
+            await asyncio.sleep(STREAMLABS_RETRY)
+            continue
+        log.info("connected to Streamlabs Desktop")
+        told = False
+        try:
+            await streamlabs_session(reader, writer)
+        except (OSError, ConnectionError) as error:
+            log.info("Streamlabs connection: %s", error)
+        finally:
+            writer.close()
+        gone = time.monotonic()
+    log.info("Streamlabs Desktop closed")
+
+
+async def streamlabs_answers():
+    """True when a Streamlabs Desktop is running on this PC right now."""
+    try:
+        _, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", STREAMLABS_PORT), 1)
+    except (OSError, asyncio.TimeoutError):
+        return False
+    writer.close()
+    return True
+
+
+async def manual_link():
+    """No streaming app to follow: the chat window's Start stream button (or control.py stream-start) says when you are live."""
+    log.info("following no streaming app: Start stream in the chat window says when you are live")
+    await asyncio.Event().wait()
+
+
+async def manual_stream(go):
+    """Start stream / End stream, when CrossChat follows no app. With an app, the app knows better."""
+    if state.get("app") != "manual":
+        return {"ok": False, "why": "CrossChat follows your streaming app, so it knows by itself when you are live."}
+    if go == "start":
+        await stream_started()
+    elif go == "end":
+        await stream_stopped()
+    else:
+        return {"ok": False, "why": "That is neither start nor end."}
+    return {"ok": True, "live": streaming.is_set()}
+
+
+def broadcaster():
+    """The app config.json names; anything else is "auto"."""
+    chosen = str(CFG.get("broadcaster") or "auto").strip().lower()
+    return chosen if chosen in BROADCASTERS else "auto"
+
+
+async def follow_app():
+    """Follow the streaming app until it closes. "auto": the OBS that started this hub; started any other way, a
+    Streamlabs that is already running, else OBS (as a hub started by hand always has)."""
+    chosen = broadcaster()
+    if chosen == "auto":
+        by_obs = "--obs-pid" in ARGV or "--obs-stdin" in ARGV
+        chosen = "streamlabs" if not by_obs and await streamlabs_answers() else "obs"
+    state["app"], state["leave"] = chosen, None
+    if chosen == "obs":
+        await obs_link()
+        return
+    state["leave"] = asyncio.Event()             # "Close CrossChat": these two don't end when OBS closes
+    link = asyncio.create_task(streamlabs_link() if chosen == "streamlabs" else manual_link())
+    asked = asyncio.create_task(state["leave"].wait())
+    await asyncio.wait({link, asked}, return_when=asyncio.FIRST_COMPLETED)
+    asked.cancel()
+    if link.done():
+        link.result()                            # something unexpected goes up to keep_running, which starts it again
+    else:
+        link.cancel()
+    await stream_stopped()
+    await close_page("x")
+    await close_chat()
+
+
 # ---- themes: how the on-stream widgets look ----------------------------------------------------------
 # The ones that come with CrossChat are in hub/presets and can't be changed; yours are in themes/ in the CrossChat
 # folder, one JSON file each, made in the Theme Studio (/studio).
+THEME_MOST = 224 * 1024                      # bytes of a theme file (all nine custom logos fit); web/theme.js says the same
+
+
 def themes_dir():
     return arg("--themes", os.path.join(HOME, "themes"))
 
@@ -1756,8 +1892,8 @@ def theme_change(body, what):
     elif what == "save":
         theme = body.get("theme")
         text = json.dumps(theme, indent=2, ensure_ascii=False)
-        if not isinstance(theme, dict) or len(text.encode()) > 64 * 1024:
-            return {"ok": False, "why": "A theme is a JSON object of at most 64 KB."}
+        if not isinstance(theme, dict) or len(text.encode()) > THEME_MOST:
+            return {"ok": False, "why": "A theme is a JSON object of at most %d KB." % (THEME_MOST // 1024)}
         write_file(mine, text + "\n")
     elif os.path.isfile(mine):
         os.remove(mine)
@@ -2766,7 +2902,7 @@ async def serve(reader, writer, remote=False):
         elif method == "POST":
             await serve_post(reader, writer, headers, url.path, remote)
         elif url.path == "/whoami":
-            body = {"remote": remote, "device": device["name"] if device else None, "version": VERSION, "lan_url": lan_url()}
+            body = {"remote": remote, "device": device["name"] if device else None, "version": VERSION, "lan_url": lan_url(), "app": state.get("app", "")}
             await reply(writer, "200 OK", TYPES[".json"], json.dumps(body).encode())
         elif url.path == "/":
             await reply(writer, "200 OK", TYPES[".html"], page(WEB, "window.html"), NO_FRAMES)
@@ -2891,6 +3027,14 @@ async def serve(reader, writer, remote=False):
         elif url.path == "/show":
             await show_window()
             await reply(writer, "200 OK", "text/plain", b"ok")
+        elif url.path == "/stream":                # Start stream / End stream, when CrossChat follows no streaming app
+            answer = await manual_stream((query.get("go") or [""])[0])
+            await reply(writer, "200 OK", TYPES[".json"], json.dumps(answer).encode())
+        elif url.path == "/leave":                 # Close CrossChat (the modes that don't end when OBS closes)
+            leaving = state.get("leave")
+            if leaving:
+                leaving.set()
+            await reply(writer, "200 OK", TYPES[".json"], json.dumps({"ok": bool(leaving)}).encode())
         elif url.path == "/x/go":                  # Go live on X (OBS script button, hotkey or shortcut), or a test
             mode = (query.get("mode") or ["live"])[0]
             did = await x_go(mode if mode in ("live", "private", "dry") else "live")
@@ -3209,7 +3353,7 @@ async def main():
             await stream_started()
             await asyncio.Event().wait()
         else:
-            await keep_running("obs", obs_link)
+            await keep_running("obs", follow_app)
     finally:
         # Stop listening, without waiting for the open connections to end ("async with server" does, from Python
         # 3.12.1): a chat page's live feed never ends by itself, so a chat still open in a tab kept the hub (and its

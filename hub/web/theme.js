@@ -14,6 +14,14 @@
   // Too many on a busy stream to pop up or fill the on-stream chat unless the theme turns them on.
   const QUIET_ALERTS = ['like', 'join'];
   const SANS = '"Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif';
+  // Custom logos and names: one for every platform ("all") and one per platform. Per platform beats "all", "all" beats built-in.
+  const LOGO_KEYS = ['all', ...PLATFORMS];
+  const BUBBLE = 'chat';                           // a logo value: CrossChat's plain speech bubble instead of a brand
+  const NO_NAME = '-';                             // a name value: show no name at all
+  const LOGO_MOST = 20000;                         // characters of one logo in a theme file
+  const LOGO_BOXES = [128, 96, 64, 48];            // the square sizes the Theme Studio tries, biggest first
+  const THEME_MOST = 224 * 1024;                   // bytes of a theme file with all nine logos; hub.py keeps the same limit
+  const blanks = () => Object.fromEntries(LOGO_KEYS.map((k) => [k, '']));
 
   // Every key a theme may have, with its default. A theme file only needs the keys it changes.
   const DEFAULTS = {
@@ -90,6 +98,8 @@
         other: '{text}',
       },
     },
+    logos: blanks(),               // '' built-in | 'chat' the plain bubble | a small picture (data:image/png, webp or jpeg)
+    names: blanks(),               // '' built-in | your own name | '-' no name
     css: '',
   };
 
@@ -123,6 +133,7 @@
     label: [60], 'font.family': [200, /^[A-Za-z0-9 ,"'-]+$/], 'font.google': [40, /^[A-Za-z0-9 ]*$/],
     'viewers.label': [40], css: [20000],
   };
+  LOGO_KEYS.forEach((k) => { TEXTS['names.' + k] = [24]; });
 
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -153,6 +164,13 @@
     return unique.length === 0 || unique.length === PLATFORMS.length ? 'all' : unique;
   }
 
+  // A logo as a theme file may hold it, or null. Only small pictures of these types: never SVG (which can carry
+  // scripts) and never an address (which would tell another server the streamer's IP each time the overlay loads).
+  function logo(value) {
+    if (value === '' || value === BUBBLE) return value;
+    return typeof value === 'string' && value.length <= LOGO_MOST && /^data:image\/(png|webp|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(value) ? value : null;
+  }
+
   // Lay `input` over `base` (a slice of DEFAULTS), keeping only known keys with usable values.
   function walk(base, input, path, issues) {
     const out = clone(base);
@@ -163,6 +181,11 @@
       const want = base[key], value = input[key];
       if (at === 'chat.platforms') { out[key] = platforms(value); continue; }
       if (at === 'schema') continue;
+      if (path === 'logos') {
+        const picture = logo(value);
+        if (picture === null) issues.push(at + ': not a small PNG, WebP or JPEG picture'); else out[key] = picture;
+        continue;
+      }
       if (isObject(want)) { out[key] = walk(want, value, at, issues); continue; }
       if (typeof want === 'boolean') {
         if (typeof value === 'boolean') out[key] = value; else issues.push(at + ': not true or false');
@@ -264,6 +287,43 @@
     return param != null && param !== '' ? platforms(param) : platforms(themePlatforms);
   }
   const shows = (list, p) => list === 'all' || list.includes(p);
+
+  const known = (map, p) => (PLATFORMS.includes(p) ? String(map[p] || '').trim() : '');
+  const customName = (t, p) => known(t.names, p) || (PLATFORMS.includes(p) ? String(t.names.all || '').trim() : '');
+
+  // The logo theme t puts on platform p: a picture, BUBBLE, or '' for the platform's own glyph.
+  const logoFor = (t, p) => known(t.logos, p) || (PLATFORMS.includes(p) ? t.logos.all : '') || '';
+
+  // The name theme t shows for platform p: its own, or `builtin` when it sets none, or '' when it hides names.
+  function platformName(t, p, builtin) {
+    const name = customName(t, p);
+    if (!name) return builtin || '';
+    return name === NO_NAME ? '' : name;
+  }
+
+  // The short tag ("TW") for the text style: `builtin` unless the theme renames or hides the platform.
+  function platformTag(t, p, builtin) {
+    const name = customName(t, p);
+    if (!name) return builtin;
+    return name === NO_NAME ? '•' : [...name].slice(0, 3).join('').toUpperCase();
+  }
+
+  // The biggest rendering of a picture that fits in a theme, or '' when none does. render(box, type) gives a data URL.
+  function shrinkLogo(render) {
+    for (const box of LOGO_BOXES) {
+      for (const type of ['image/png', 'image/webp']) {
+        const url = render(box, type);
+        if (logo(url)) return url;
+      }
+    }
+    return '';
+  }
+
+  // Where a picture of this size goes in a square: whole, centred.
+  function logoBox(width, height, box) {
+    const k = box / Math.max(width, height, 1), w = Math.max(1, Math.round(width * k)), h = Math.max(1, Math.round(height * k));
+    return { x: Math.floor((box - w) / 2), y: Math.floor((box - h) / 2), w, h };
+  }
 
   // A message split into text and Twitch emotes. Twitch counts positions in code points, so this does too.
   function emotePieces(text, emotes) {
@@ -431,7 +491,8 @@
   }
 
   return {
-    SCHEMA, PLATFORMS, ALERTS, QUIET_ALERTS, DEFAULTS, RANGES, ENUMS, TEXTS,
+    SCHEMA, PLATFORMS, ALERTS, QUIET_ALERTS, DEFAULTS, RANGES, ENUMS, TEXTS, LOGO_KEYS, BUBBLE, NO_NAME, LOGO_MOST, THEME_MOST,
+    logoFor, platformName, platformTag, shrinkLogo, logoBox,
     merge, problems, diff, validName, slug, color, platforms, wanted, shows, emotePieces, fill, fillParts,
     alertKind, alertParts, alertLine,
     luminance, contrast, readable, ink, nameColor, lightSurface, cssVars, switches, apply, clone,

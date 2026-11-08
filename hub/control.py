@@ -7,6 +7,9 @@ Mac, the apps in ~/Applications/CrossChat; on Linux, the CrossChat entries in th
   pythonw control.py x-private   test: a livestream on X only you can see
   pythonw control.py x-dry       test: fill X's form, never press Go Live
   pythonw control.py unfeature   take the featured message off the stream
+  pythonw control.py stream-start  say the stream has started ("broadcaster": "manual" only)
+  pythonw control.py stream-end    say the stream has ended ("broadcaster": "manual" only)
+  pythonw control.py leave       close CrossChat (when it follows Streamlabs or nothing: with OBS, it closes with OBS)
   pythonw control.py demo        try CrossChat with a made-up live stream (its own port, nothing is posted anywhere)
 """
 import json
@@ -18,7 +21,7 @@ import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PATHS = {"show": "/show", "x-live": "/x/go?mode=live", "x-private": "/x/go?mode=private", "x-dry": "/x/go?mode=dry",
-         "unfeature": "/feature?clear=1"}
+         "unfeature": "/feature?clear=1", "stream-start": "/stream?go=start", "stream-end": "/stream?go=end", "leave": "/leave"}
 
 
 def port():

@@ -1,6 +1,6 @@
 # Themes and on-stream widgets
 
-CrossChat puts four widgets on your stream. Each one is an OBS **Browser Source** pointing at the CrossChat hub on your PC, and each one takes its look from a **theme**.
+CrossChat puts four widgets on your stream. Each one is a **Browser Source** (in OBS or Streamlabs; a web page source in other apps) pointing at the CrossChat hub on your PC, and each one takes its look from a **theme**.
 
 | Widget | Address | Suggested Browser Source size |
 |---|---|---|
@@ -9,7 +9,7 @@ CrossChat puts four widgets on your stream. Each one is an OBS **Browser Source*
 | Viewer counter | `http://127.0.0.1:4466/overlay/viewers` | 600 × 120 |
 | Alerts | `http://127.0.0.1:4466/overlay/alerts` | 800 × 300 |
 
-The widgets are transparent, so whatever is behind them in your scene shows through. The hub must be running (it starts with OBS) for them to show anything. Add `?demo` to any address to see made-up chat without going live.
+The widgets are transparent, so whatever is behind them in your scene shows through. The hub must be running (it starts with OBS; with another app, open CrossChat first) for them to show anything. Add `?demo` to any address to see made-up chat without going live.
 
 ## Theme Studio
 
@@ -21,8 +21,8 @@ Open **http://127.0.0.1:4466/studio** in your browser while OBS is running.
 2. **Change anything** in the middle column. The preview on the right updates as you go. It shows made-up chat on all four widgets.
 3. **Check it over your scene**: under *Behind the widgets*, choose the dark game scene, a light desktop, a transparency checkerboard, green screen, or **Your own picture…** (a screenshot of your game, say). The picture stays in your browser and is never uploaded. *Show* switches between the whole 1920 × 1080 stream and one widget at full size.
 4. **Save**. Every OBS source using that theme updates within a second; there is no need to refresh the source.
-5. **Add to OBS**: each widget card has **Copy OBS address** (the address with `?theme=` for this theme) and its suggested size. In OBS: *Sources → + → Browser*, paste the address as the URL, and set the width and height.
-6. **Send test to OBS** puts a test chat message, featured message, viewer count or alert on the real sources in OBS, so you can check placement without going live.
+5. **Add to your stream**: each widget card has **Copy address** (the address with `?theme=` for this theme) and its suggested size. In OBS: *Sources → + → Browser*. In Streamlabs: *Sources → + → Browser Source*. Paste the address as the URL, and set the width and height.
+6. **Send test** puts a test chat message, featured message, viewer count or alert on the real sources in your scene, so you can check placement without going live.
 
 Other buttons:
 
@@ -48,6 +48,18 @@ Leaving the page with unsaved changes asks first.
 | ![](../assets/themes/contrast.png) | High contrast | `contrast` | Large text, black and yellow, text tags; chat appears without animation. |
 
 Glass blurs only what is inside the browser source. OBS does not show a browser source what lies beneath it in the scene, so on stream the cards look tinted rather than blurred.
+
+## Your own logos and names
+
+Open **Platform logos and names** in the Studio, to brand the widgets your way or to hide which platform a message came from.
+
+- **Every platform** sets one logo or name for all of them. A row for one platform beats it, and with neither set you get the built-in one.
+- **Choose…** takes a PNG, JPEG, WebP or SVG of up to 8 MB. The Studio redraws it as a small picture inside the theme, so anything else inside the file is left behind, and exporting a theme takes its logos along.
+- **Bubble** uses CrossChat's plain speech bubble. **Clear** goes back to the built-in logo.
+- Type a name to rename a platform, or a single `-` to show no name. Names appear in "on Twitch" on the featured message, in `{platform}` in alert wording, on viewer pills without icons, and (first three letters) on text tags. If your alert wording uses `{platform}`, reword it to read well without a name.
+- **Hide every platform** sets the bubble, no names, and every platform colour to the accent colour, all in one go. **Use the brand colours** under *Platform colours* brings the colours back.
+
+A custom logo keeps its own colours: unlike the built-in logos, it doesn't take the platform colour. This changes the on-stream widgets only. The chat window on your PC keeps its TW, YT tags.
 
 ## One theme per scene
 
@@ -83,7 +95,7 @@ These override the theme for one source. Combine them with `&`.
 
 ## Theme files
 
-A theme is a JSON file. It only needs the settings it changes; everything else comes from the defaults below. The Studio checks every value: numbers are kept within their range, colours must be `#rrggbb` (or `#rgb`), and unknown settings are ignored. Importing a file tells you what it fixed.
+A theme is a JSON file of at most 224 KB. It only needs the settings it changes; everything else comes from the defaults below. The Studio checks every value: numbers are kept within their range, colours must be `#rrggbb` (or `#rgb`), and unknown settings are ignored. Importing a file tells you what it fixed.
 
 Your themes live in **`%LOCALAPPDATA%\CrossChat\themes\`**, one `<file name>.json` each. To share a theme, send the file (or use **Export**); to use one, **Import** it in the Studio or drop the file into that folder.
 
@@ -163,6 +175,8 @@ Your themes live in **`%LOCALAPPDATA%\CrossChat\themes\`**, one `<file name>.jso
 | `alerts.showText` | true/false | the viewer's own message under the title | `true` |
 | `alerts.types.<type>` | true/false | types: `sub`, `resub`, `gift`, `raid`, `cheer`, `member`, `superchat`, `follow`, `other` | all `true` |
 | `alerts.labels.<type>` | text | up to 140 characters; `{name}`, `{amount}`, `{text}`, `{platform}` are filled in | e.g. `"{name} gifted {amount}!"` |
+| `logos.all`, `logos.<platform>` | logo | `""` (built-in), `"chat"` (plain bubble), or a `data:image/png`, `webp` or `jpeg` base64 picture of up to 20,000 characters. No SVG and no web addresses | `""` |
+| `names.all`, `names.<platform>` | text | up to 24 characters; `""` built-in, `"-"` no name | `""` |
 | `css` | text | extra CSS, up to 20,000 characters | `""` |
 
 ### Alert sound in OBS
@@ -247,7 +261,7 @@ A gradient total in the viewer counter, and no per-platform pills on the right-h
 
 ## When something looks wrong
 
-- **Nothing shows**: the hub isn't running (start OBS, which starts it) or nothing has happened yet. Try **Send test to OBS** in the Studio, or add `?demo` to the address.
+- **Nothing shows**: the hub isn't running (start OBS, which starts it, or with another app use **CrossChat → Open chat**) or nothing has happened yet. Try **Send test** in the Studio, or add `?demo` to the address.
 - **The theme didn't change on stream**: save it in the Studio, and check the source's address names the right `?theme=`.
 - **Old look after an update**: right-click the source → *Refresh cache of current page*.
 - **A shared theme looks different**: it may use a Google Font that needs internet, or a Windows font you don't have.

@@ -21,16 +21,23 @@
   const NAMES = { twitch: 'Twitch', youtube: 'YouTube', kick: 'Kick', x: 'X', tiktok: 'TikTok', facebook: 'Facebook', instagram: 'Instagram',
                   rumble: 'Rumble' };
 
-  // An <svg> for `platform`, filled with currentColor so CSS decides its colour.
-  function icon(platform, doc) {
+  // An <svg> for `platform`, filled with currentColor so CSS decides its colour. logo: the theme's custom logo for it
+  // (theme.js logoFor): 'chat' for the plain bubble, or a picture, drawn as an <img> so nothing in it can ever run.
+  function icon(platform, doc, logo) {
     doc = doc || document;
+    if (logo && logo !== 'chat') {
+      const img = doc.createElement('img');
+      img.src = logo; img.alt = ''; img.decoding = 'async';
+      img.setAttribute('aria-hidden', 'true');
+      return img;
+    }
     const ns = 'http://www.w3.org/2000/svg';
     const svg = doc.createElementNS(ns, 'svg');
     svg.setAttribute('viewBox', '0 0 24 24');
     svg.setAttribute('aria-hidden', 'true');
     svg.setAttribute('focusable', 'false');
     const path = doc.createElementNS(ns, 'path');
-    path.setAttribute('d', PATHS[platform] || PATHS.chat);
+    path.setAttribute('d', (logo !== 'chat' && PATHS[platform]) || PATHS.chat);
     path.setAttribute('fill', 'currentColor');
     svg.appendChild(path);
     return svg;

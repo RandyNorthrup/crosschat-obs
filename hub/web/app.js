@@ -284,7 +284,7 @@
 
   // ---- Settings → Channels & options: the parts of config.json the hub lets this window change -----------------------
   // Each field: where it lives in config.json, how it is shown, and one line on what it does. The hub checks every value
-  // again (POST /config) and says which changes need OBS restarted.
+  // again (POST /config) and says which changes need a restart.
   const CONFIG_FIELDS = [
     { key: 'twitch', group: 'Channels', label: 'Twitch channel', type: 'text', max: 200, placeholder: 'twitch.tv/yourname', hint: 'Your channel name or link. CrossChat reads its chat.' },
     { key: 'youtube', group: 'Channels', label: 'YouTube channel', type: 'text', max: 200, placeholder: '@yourhandle', hint: 'Your @handle or channel link. Chat shows up once you are live.' },
@@ -292,14 +292,15 @@
     { key: 'tiktok', group: 'Channels', label: 'TikTok @name', type: 'text', max: 200, placeholder: '@yourname', hint: 'Your TikTok LIVE page opens in your browser when you go live, and its chat is read there.' },
     { key: 'facebook', group: 'Channels', label: 'Facebook Live', type: 'bool', hint: 'Reads comments from Live Producer, which opens in your browser when you go live.' },
     { key: 'instagram', group: 'Channels', label: 'Instagram Live', type: 'bool', hint: 'Reads comments from Instagram’s live producer (Create → Live video on instagram.com), which opens in your browser when you go live.' },
+    { key: 'broadcaster', group: 'Streaming app', label: 'Streaming app', type: 'select', options: [['auto', 'Find it by itself (OBS or Streamlabs)'], ['obs', 'OBS'], ['streamlabs', 'Streamlabs Desktop'], ['manual', 'Another app: I press Start stream']], hint: 'How CrossChat knows when you are live. With another app, a Start stream button appears at the top of this window.' },
     { key: 'x.enabled', group: 'X', label: 'X livestreams', type: 'bool', hint: 'Reads and answers the chat of your livestream on X.' },
-    { key: 'x.auto_go_live', group: 'X', label: 'Go live on X by itself', type: 'bool', hint: 'Starts the X livestream a few seconds after OBS starts streaming.' },
+    { key: 'x.auto_go_live', group: 'X', label: 'Go live on X by itself', type: 'bool', hint: 'Starts the X livestream a few seconds after your stream starts.' },
     { key: 'x.title', group: 'X', label: 'Livestream title', type: 'text', max: 120, placeholder: 'Live now', hint: 'The title X shows, unless a title file is set.' },
     { key: 'x.title_file', group: 'X', label: 'Title file', type: 'text', max: 260, placeholder: 'C:\\stream\\title.txt', hint: 'A text file whose first line becomes the title. Leave empty to use the title above.' },
-    { key: 'x.source', group: 'X', label: 'Source name on X', type: 'text', max: 40, placeholder: 'OBS', hint: 'The video source X Live Studio should pick: the name it shows for OBS.' },
-    { key: 'open_window_on_stream_start', group: 'Window', label: 'Open this window when the stream starts', type: 'bool', hint: 'Chat is in front of you the moment OBS goes live.' },
-    { key: 'close_window_seconds_after_stream', group: 'Window', label: 'Close the windows after the stream (seconds)', type: 'int', min: 0, max: 3600, hint: 'How long the chat window and live pages stay open once OBS stops streaming.' },
-    { key: 'window', group: 'Window', label: 'Window position', type: 'select', options: [['auto', 'Right edge of the main screen'], ['custom', 'Where config.json says']], hint: 'Where this window opens. Keep it somewhere OBS doesn’t capture.' },
+    { key: 'x.source', group: 'X', label: 'Source name on X', type: 'text', max: 40, placeholder: 'OBS', hint: 'The video source X Live Studio should pick: the name it shows for your streaming app.' },
+    { key: 'open_window_on_stream_start', group: 'Window', label: 'Open this window when the stream starts', type: 'bool', hint: 'Chat is in front of you the moment you go live.' },
+    { key: 'close_window_seconds_after_stream', group: 'Window', label: 'Close the windows after the stream (seconds)', type: 'int', min: 0, max: 3600, hint: 'How long the chat window and live pages stay open once the stream stops.' },
+    { key: 'window', group: 'Window', label: 'Window position', type: 'select', options: [['auto', 'Right edge of the main screen'], ['custom', 'Where config.json says']], hint: 'Where this window opens. Keep it somewhere your streaming app doesn’t capture.' },
     { key: 'emotes.7tv', group: 'Emotes', label: '7TV emotes', type: 'bool', hint: 'Shows 7TV emote pictures here and on stream.' },
     { key: 'emotes.bttv', group: 'Emotes', label: 'BetterTTV emotes', type: 'bool', hint: 'Shows BetterTTV emote pictures here and on stream.' },
     { key: 'emotes.ffz', group: 'Emotes', label: 'FrankerFaceZ emotes', type: 'bool', hint: 'Shows FrankerFaceZ emote pictures here and on stream.' },
@@ -412,7 +413,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
 
   const F = globalThis.CrossChatFeed || { emoteMap: () => new Map(), withEmotes: (p) => p };
   const T = globalThis.CrossChatTheme;            // alert sentences, the same as on stream (theme.js)
-  const ctx = { remote: false, device: null, version: '', lanUrl: null, executor: false, executorKnown: false, twitch: 'off',
+  const ctx = { remote: false, device: null, version: '', lanUrl: null, app: '', live: false, executor: false, executorKnown: false, twitch: 'off',
                 bridge: !!document.documentElement.dataset.crosschat, states: {}, unpaired: false };
   let counts = {}, starred = new Set(), quick = [], devices = [], twitchAuth = { state: 'off' }, kickAuth = { state: 'off' }, rumbleAuth = { state: 'off' }, pairTimer = null;
   let discordAuth = { state: 'off' }, companion = { tailscale: false }, update = { check: false };
@@ -1036,8 +1037,18 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
   $('ding-switch').onchange = () => setDing($('ding-switch').checked);
   $('gear').onclick = () => { drawSettings(); openDialog($('settings')); };
   $('studio').onclick = $('studio-open').onclick = () => window.open('/studio', '_blank');
+  // (GET, like /show and /x/go: the shortcuts and a Stream Deck use the same addresses through control.py)
+  $('stream-toggle').onclick = async () => {
+    try {
+      const a = await (await fetch('/stream?go=' + (ctx.live ? 'end' : 'start'), { cache: 'no-store' })).json();
+      if (!a.ok) note(a.why || 'CrossChat did not change the stream.', 'bad');
+    } catch (e) { note('CrossChat did not answer.', 'bad'); }
+  };
+  $('leave').onclick = async () => {
+    if (await ask({ title: 'Close CrossChat?', text: 'Chat stops until you open CrossChat again.', ok: 'Close' })) fetch('/leave', { cache: 'no-store' }).catch(() => {});
+  };
   document.querySelectorAll('[data-test]').forEach((b) => {
-    b.onclick = async () => { const a = await api('/test', { kind: b.dataset.test }); note(a.ok ? 'Test ' + b.dataset.test + ' sent to the widgets in OBS.' : 'Test not sent: ' + (a.why || 'no answer') + '.', a.ok ? 'good' : 'bad'); };
+    b.onclick = async () => { const a = await api('/test', { kind: b.dataset.test }); note(a.ok ? 'Test ' + b.dataset.test + ' sent to your on-stream widgets.' : 'Test not sent: ' + (a.why || 'no answer') + '.', a.ok ? 'good' : 'bad'); };
   });
 
   function drawTwitch() {
@@ -1594,7 +1605,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
         wrap.append(label, input);
       }
       input.id = id;
-      const hint = el('p', 'hint', f.hint + (config.restart.includes(f.key) ? ' Takes effect when OBS restarts.' : '')); hint.id = id + '-hint';
+      const hint = el('p', 'hint', f.hint + (config.restart.includes(f.key) ? (ctx.app && ctx.app !== 'obs' ? ' Takes effect when CrossChat opens again.' : ' Takes effect when OBS restarts.') : '')); hint.id = id + '-hint';
       input.setAttribute('aria-describedby', hint.id);
       wrap.append(hint); box.append(wrap);
     });
@@ -1676,6 +1687,8 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     $('device').hidden = !ctx.remote;
     $('device').querySelector('span').textContent = ctx.device || 'Paired device';
     $('studio').hidden = ctx.remote;
+    $('stream-toggle').hidden = ctx.remote || ctx.app !== 'manual';
+    $('leave-row').hidden = ctx.remote || !ctx.app || ctx.app === 'obs';
     document.title = 'CrossChat · chat' + (ctx.remote ? ' (' + (ctx.device || 'companion') + ')' : '');
     drawNotice();
   }
@@ -1695,6 +1708,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
         ctx.states = m.status || {}; health = m.health || {}; drawPlatforms(); youtubeBox(m.yt || ''); refreshActs();
         if ($('settings').open) drawHealth();
         const live = $('live'); live.className = m.live ? 'on' : ''; live.textContent = m.live ? 'LIVE' : 'OFF AIR';
+        ctx.live = !!m.live; $('stream-toggle').textContent = ctx.live ? 'End stream' : 'Start stream';
         break;
       }
       case 'viewers': counts = m.counts || {}; drawPlatforms(); $('total').firstChild.textContent = m.total; break;
@@ -1767,7 +1781,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
       const r = await fetch('/whoami', { cache: 'no-store' });
       if (r.status === 401 || r.status === 403) { ctx.remote = true; unpaired(); applyMode(); return; }
       const w = await r.json();
-      Object.assign(ctx, { remote: !!w.remote, device: w.device || null, version: w.version || '', lanUrl: w.lan_url || null });
+      Object.assign(ctx, { remote: !!w.remote, device: w.device || null, version: w.version || '', lanUrl: w.lan_url || null, app: w.app || '' });
     } catch (e) { /* an older hub: behave as the window on this PC */ }
     applyMode();
     connect();

@@ -1,7 +1,7 @@
-// Theme Studio: pick a theme, change it with live preview, save it for OBS. The preview frames are the real overlay
+// Theme Studio: pick a theme, change it with live preview, save it for your stream. The preview frames are the real overlay
 // page (/overlay/<widget>?preview) showing made-up chat; the Studio sends them the theme being edited.
 (() => {
-  const T = window.CrossChatTheme, doc = document, $ = (id) => doc.getElementById(id);
+  const T = window.CrossChatTheme, I = window.CrossChatIcons, doc = document, $ = (id) => doc.getElementById(id);
   const WIDGETS = {
     chat: { label: 'Chat feed', size: [450, 800], at: [40, 230], test: 'chat', help: 'Chat from every platform.' },
     featured: { label: 'Featured message', size: [900, 260], at: [510, 790], test: 'featured', help: 'A message you pick in the chat window.' },
@@ -39,7 +39,7 @@
     { title: 'Name', open: true, fields: [{ path: 'label', type: 'text', label: 'Display name', help: 'Shown in theme lists.' }] },
     { title: 'Text', open: true, fields: [
       { path: 'font.family', type: 'font', label: 'Font' },
-      { path: 'font.google', type: 'text', label: 'Google Font (optional)', placeholder: 'e.g. Inter, Outfit, Nunito', help: 'Loaded from fonts.google.com when OBS shows the overlay. Leave empty to use the font above.' },
+      { path: 'font.google', type: 'text', label: 'Google Font (optional)', placeholder: 'e.g. Inter, Outfit, Nunito', help: 'Loaded from fonts.google.com when the overlay is shown. Leave empty to use the font above.' },
       { path: 'font.size', type: 'range', label: 'Size (px)' },
       { path: 'font.weight', type: 'weight', label: 'Message weight' },
       { path: 'font.nameWeight', type: 'weight', label: 'Name weight' },
@@ -76,6 +76,7 @@
       { path: 'message.firstHighlight', type: 'toggle', label: 'Highlight first-time chatters', help: 'A NEW tag and a ring on a viewer’s first message in your channel (Twitch says when).' },
     ] },
     { title: 'Platform tags', fields: [{ path: 'message.platform', type: 'select', label: 'Show the platform as' }] },
+    { title: 'Platform logos and names', fields: [{ type: 'logos', label: 'Logos and names' }] },
     { title: 'Chat feed', fields: [
       { path: 'chat.direction', type: 'select', label: 'Order' },
       { path: 'chat.align', type: 'select', label: 'Side' },
@@ -113,7 +114,7 @@
   ];
 
   let list = { default: 'classic', themes: [] }, current = { name: null, builtin: false }, work = T.merge({}), saved = JSON.stringify(work);
-  let dirty = false, pushTimer = 0, backUrl = '';
+  let dirty = false, pushTimer = 0, backUrl = '', logoKey = 'all';
   const frames = {};
 
   // ---- small helpers ------------------------------------------------------------------------------------------
@@ -142,6 +143,62 @@
       d.onclose = () => resolve(d.returnValue === 'ok');
       d.returnValue = ''; d.showModal();
     });
+  }
+
+  // ---- custom logos and names ---------------------------------------------------------------------------------
+  function logoRow(key) {
+    const title = key === 'all' ? 'Every platform' : PLATFORM_NAMES[key];
+    const small = (text, label, onclick) => el('button', { class: 'btn small', type: 'button', text, 'aria-label': label + ' ' + title, onclick });
+    return el('div', { class: 'logo-row', 'data-logo': key },
+      el('span', { class: 'logo-well' }),
+      el('span', { class: 'logo-title', text: title }),
+      small('Choose…', 'Choose a logo for', () => { logoKey = key; $('logo-file').click(); }),
+      small('Bubble', 'Use the plain bubble for', () => setLogo(key, T.BUBBLE)),
+      small('Clear', 'Remove the custom logo of', () => setLogo(key, '')),
+      el('input', { type: 'text', maxLength: 24, 'aria-label': 'Name shown for ' + title, placeholder: key === 'all' ? 'Name for every platform' : PLATFORM_NAMES[key], 'data-path': 'names.' + key }));
+  }
+
+  function fillLogos() {
+    $('controls').querySelectorAll('[data-logo]').forEach((row) => {
+      const key = row.dataset.logo;
+      row.querySelector('.logo-well').replaceChildren(I.icon(key === 'all' ? T.BUBBLE : key, doc, key === 'all' ? work.logos.all : T.logoFor(work, key)));
+    });
+  }
+
+  function setLogo(key, value) { work.logos[key] = value; changed(); fillLogos(); }
+
+  function hidePlatforms() {                       // nothing on stream says which platform a message came from
+    T.LOGO_KEYS.forEach((k) => { work.logos[k] = ''; work.names[k] = ''; });
+    work.logos.all = T.BUBBLE; work.names.all = T.NO_NAME;
+    T.PLATFORMS.forEach((p) => { work.colors[p] = work.colors.accent; });
+    changed(); fill();
+  }
+
+  function builtInLogos() {
+    T.LOGO_KEYS.forEach((k) => { work.logos[k] = ''; work.names[k] = ''; });
+    changed(); fill();
+  }
+
+  // Any picture the browser can open, redrawn as a small PNG or WebP: what an SVG could carry doesn't survive that.
+  async function readLogo(file) {
+    if (file.size > 8 * 1024 * 1024) throw new Error('it is bigger than 8 MB');
+    const url = URL.createObjectURL(file);
+    try {
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      const canvas = doc.createElement('canvas'), wide = img.naturalWidth || 512, high = img.naturalHeight || 512;
+      const picture = T.shrinkLogo((box, type) => {
+        canvas.width = canvas.height = box;
+        const at = T.logoBox(wide, high, box);
+        canvas.getContext('2d').drawImage(img, at.x, at.y, at.w, at.h);
+        return canvas.toDataURL(type, 0.9);
+      });
+      if (!picture) throw new Error('it has too much detail to fit in a theme');
+      return picture;
+    } finally {
+      URL.revokeObjectURL(url);
+    }
   }
 
   // ---- the controls -----------------------------------------------------------------------------------------
@@ -177,6 +234,12 @@
       const set = el('fieldset', { class: 'checks', 'data-group': f.path }, el('legend', { class: 'sr', text: f.label }),
         names.map((n) => el('label', {}, el('input', { type: 'checkbox', value: n }), f.type === 'platforms' ? PLATFORM_NAMES[n] || n : ALERT_NAMES[n])));
       wrap.append(el('span', { class: 'legend', 'aria-hidden': 'true', text: f.label }), set);
+    } else if (f.type === 'logos') {
+      wrap.append(el('p', { class: 'help', text: 'A logo or name set for one platform beats the one for every platform. A name of - shows no name. “Choose…” takes PNG, JPEG, WebP or SVG. Applies to the on-stream widgets.' }));
+      T.LOGO_KEYS.forEach((key) => wrap.append(logoRow(key)));
+      wrap.append(el('div', { class: 'logo-actions' },
+        el('button', { class: 'btn small', type: 'button', text: 'Hide every platform', onclick: hidePlatforms, title: 'Plain bubble, no names, and platform colours set to the accent colour' }),
+        el('button', { class: 'btn small', type: 'button', text: 'Back to built-in logos and names', onclick: builtInLogos })));
     } else if (f.type === 'labels') {
       wrap.append(el('span', { class: 'legend', text: f.label }));
       T.ALERTS.forEach((n) => {
@@ -220,6 +283,7 @@
       const v = get(work, g.dataset.group);
       g.querySelectorAll('input').forEach((box) => { box.checked = g.dataset.group === 'chat.platforms' ? T.shows(v, box.value) : !!v[box.value]; });
     });
+    fillLogos();
     whens();
   }
 
@@ -341,20 +405,20 @@
         el('span', { class: 'size', text: 'Browser Source ' + info.size[0] + ' × ' + info.size[1] }),
         el('span', { class: 'help', text: info.help }),
         el('div', { class: 'row' },
-          el('button', { class: 'btn small', type: 'button', text: 'Copy OBS address', onclick: () => copyUrl(w) }),
-          el('button', { class: 'btn small', type: 'button', text: 'Send test to OBS', onclick: () => test(info.test, info.label) }))));
+          el('button', { class: 'btn small', type: 'button', text: 'Copy address', onclick: () => copyUrl(w) }),
+          el('button', { class: 'btn small', type: 'button', text: 'Send test', onclick: () => test(info.test, info.label) }))));
     });
   }
 
   async function copyUrl(w) {
-    if (!current.name) { say('Save this theme first: OBS can only use saved themes.', 'bad'); return; }
+    if (!current.name) { say('Save this theme first: only saved themes can go on stream.', 'bad'); return; }
     const url = location.origin + '/overlay/' + w + '?theme=' + encodeURIComponent(current.name);
-    try { await navigator.clipboard.writeText(url); say('Copied ' + url + (dirty ? ' (save to send your latest changes to OBS)' : ''), 'ok'); }
+    try { await navigator.clipboard.writeText(url); say('Copied ' + url + (dirty ? ' (save to send your latest changes to your stream)' : ''), 'ok'); }
     catch (e) { say(url, 'ok'); }
   }
 
   async function test(kind, label) {
-    try { await call('/test', { kind }); say('Sent a test to ' + label + ' sources in OBS.', 'ok'); }
+    try { await call('/test', { kind }); say('Sent a test to your ' + label + ' sources.', 'ok'); }
     catch (e) { say('Could not reach CrossChat: ' + e.message, 'bad'); }
   }
 
@@ -405,7 +469,7 @@
     setDirty(false);
     await refresh();
     fill();
-    say('Saved “' + label + '”. OBS sources using ?theme=' + name + ' update now.', 'ok');
+    say('Saved “' + label + '”. Sources using ?theme=' + name + ' update now.', 'ok');
   }
 
   function saveAs() {
@@ -440,11 +504,17 @@
       const file = $('import-file').files[0]; $('import-file').value = '';
       if (!file || !(await leaveOk())) return;
       try {
-        if (file.size > 64 * 1024) throw new Error('the file is bigger than 64 KB');
+        if (file.size > T.THEME_MOST) throw new Error('the file is bigger than ' + T.THEME_MOST / 1024 + ' KB');
         const raw = JSON.parse(await file.text()), issues = T.problems(raw);
         load(T.merge(raw), { name: null, builtin: false });
-        say('Imported “' + work.label + '”' + (issues.length ? ' with ' + issues.length + ' fix(es): ' + issues.slice(0, 2).join('; ') : '') + '. Save it to use it in OBS.', issues.length ? 'bad' : 'ok');
+        say('Imported “' + work.label + '”' + (issues.length ? ' with ' + issues.length + ' fix(es): ' + issues.slice(0, 2).join('; ') : '') + '. Save it to use it on stream.', issues.length ? 'bad' : 'ok');
       } catch (e) { say('Could not import that file: ' + e.message, 'bad'); }
+    };
+    $('logo-file').onchange = async () => {
+      const file = $('logo-file').files[0], key = logoKey; $('logo-file').value = '';
+      if (!file) return;
+      try { setLogo(key, await readLogo(file)); say('Logo set. Save the theme to use it on stream.', 'ok'); }
+      catch (e) { say('Could not use that picture: ' + e.message, 'bad'); }
     };
     $('export').onclick = () => {
       const blob = new Blob([JSON.stringify(work, null, 2) + '\n'], { type: 'application/json' });
@@ -453,7 +523,7 @@
       say('Exported ' + a.download + '. Share it, or import it on another PC.', 'ok');
     };
     $('delete').onclick = async () => {
-      if (!current.name || current.builtin || !(await ask('Delete “' + work.label + '”?', 'OBS sources using it go back to the default theme.', 'Delete'))) return;
+      if (!current.name || current.builtin || !(await ask('Delete “' + work.label + '”?', 'Sources using it go back to the default theme.', 'Delete'))) return;
       try {
         const answer = await call('/themes/delete', { name: current.name });
         if (!answer.ok) throw new Error(answer.why || 'not deleted');

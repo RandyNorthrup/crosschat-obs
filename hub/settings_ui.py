@@ -18,6 +18,7 @@ FIELDS = {
     "tiktok": ("channel", "tiktok", True),
     "facebook": ("bool", None, True),
     "instagram": ("bool", None, True),
+    "broadcaster": ("choice", ("auto", "obs", "streamlabs", "manual"), True),
     "x.enabled": ("bool", None, True),
     "x.auto_go_live": ("bool", None, False),
     "x.title": ("text", 120, False),
@@ -35,7 +36,8 @@ FIELDS = {
     "remote.port": ("int", (1024, 65535), False),
 }
 LABELS = {"twitch": "Twitch channel", "youtube": "YouTube channel", "kick": "Kick channel", "tiktok": "TikTok @name",
-          "facebook": "Facebook Live", "instagram": "Instagram Live", "x.enabled": "X", "x.auto_go_live": "Go live on X by itself", "x.title": "X title",
+          "facebook": "Facebook Live", "instagram": "Instagram Live", "broadcaster": "Streaming app", "x.enabled": "X",
+          "x.auto_go_live": "Go live on X by itself", "x.title": "X title",
           "x.title_file": "X title file", "x.source": "X source name", "window": "Window position",
           "open_window_on_stream_start": "Open the window when the stream starts",
           "close_window_seconds_after_stream": "Close the windows after the stream", "emotes.bttv": "BetterTTV emotes",
@@ -108,6 +110,10 @@ def check(key, value, cfg, channel):
     if not isinstance(value, str):
         raise SettingsError("%s must be text." % label)
     value = value.strip()
+    if kind == "choice":
+        if value not in detail:
+            raise SettingsError("%s must be one of: %s." % (label, ", ".join(detail)))
+        return value
     if kind == "channel":
         if len(value) > 200 or CONTROL.search(value):
             raise SettingsError("That %s is too long." % label)
@@ -177,7 +183,9 @@ def save(path, body, cfg, channel, port=None):
     except OSError as error:
         return {"ok": False, "why": "Could not save config.json (%s)." % (error.strerror or error)}, {}
     restart = [k for k in changes if FIELDS[k][2]]
-    why = "Saved. Restart OBS to apply: %s." % ", ".join(LABELS[k] for k in restart) if restart else "Saved."
+    with_obs = wanted.get("broadcaster", shown(cfg, "broadcaster")) in ("auto", "obs", "")
+    how = "Restart OBS" if with_obs else "Close CrossChat and open it again"
+    why = "Saved. %s to apply: %s." % (how, ", ".join(LABELS[k] for k in restart)) if restart else "Saved."
     return {"ok": True, "why": why, "restart_needed": bool(restart), "restart": restart}, changes
 
 

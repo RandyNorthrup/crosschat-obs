@@ -142,6 +142,10 @@ Viewers' names and messages are public chat. CrossChat keeps them only on your P
 - Your ordinary browser windows are never moved or closed, even with the CrossChat chat or one of those platform pages open in a tab, and nor is the Theme Studio. The extension can't read the address of any other site's tab at all.
 - A job names only the window's role, the address CrossChat opened, the place, and window ids. The extension answers with window ids only (and, when it can't do a job, why).
 
+**Custom logos can't run or call out.** A theme can hold a logo only as a small PNG, WebP or JPEG inside the theme file. SVG and web addresses are refused when a theme is read, and logos are drawn as images. The Theme Studio accepts an SVG only by redrawing it as a picture.
+
+**Other streaming apps.** With Streamlabs Desktop, CrossChat only asks its local port (`127.0.0.1:28194`) whether it is live, and sends it nothing else. **Start stream** and **Close CrossChat** are refused when another website or a paired device asks.
+
 **Chat text is never treated as code.**
 
 - The pages put names and messages on screen as plain text, never as HTML.

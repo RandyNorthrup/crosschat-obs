@@ -129,7 +129,8 @@ def test_theme_api(home):
         refused = json.loads((await post("/themes/save", {"name": "classic", "theme": {}}))[1])
         assert refused["ok"] is False and "comes with CrossChat" in refused["why"]
         assert json.loads((await post("/themes/save", {"name": "Bad Name", "theme": {}}))[1])["ok"] is False
-        assert json.loads((await post("/themes/save", {"name": "big", "theme": {"css": "x" * 70000}}))[1])["ok"] is False
+        assert json.loads((await post("/themes/save", {"name": "big", "theme": {"css": "x" * (hub.THEME_MOST + 1)}}))[1])["ok"] is False
+        assert json.loads((await post("/themes/save", {"name": "logos", "theme": {"css": "x" * 70000}}))[1])["ok"] is True      # logos need the room
         assert json.loads((await post("/themes/default", {"name": "mine"}))[1]) == {"ok": True}
         assert json.loads((await http("GET", "/themes"))[1])["default"] == "mine"
         assert json.loads((await post("/themes/delete", {"name": "mine"}))[1]) == {"ok": True}

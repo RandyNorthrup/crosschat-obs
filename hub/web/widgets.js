@@ -53,11 +53,14 @@
   }
 
   // ---- drawing one message ----------------------------------------------------------------------------
+  const glyph = (p) => I.icon(p, doc, T.logoFor(theme, p));              // the theme's logo for it, else the platform's own
+  const nameOf = (p) => T.platformName(theme, p, I.NAMES[p]);            // the theme's name for it ('' when it hides names)
+
   function platformMark(p) {
     if (theme.message.platform === 'text') {
-      const tag = doc.createElement('span'); tag.className = 'cc-tag'; tag.textContent = SHORT[p] || '•'; return tag;
+      const tag = doc.createElement('span'); tag.className = 'cc-tag'; tag.textContent = T.platformTag(theme, p, SHORT[p] || '•'); return tag;
     }
-    const icon = doc.createElement('span'); icon.className = 'cc-icon'; icon.appendChild(I.icon(p, doc)); return icon;
+    const icon = doc.createElement('span'); icon.className = 'cc-icon'; icon.appendChild(glyph(p)); return icon;
   }
 
   function colourFor(el, m) {
@@ -80,7 +83,7 @@
 
   // A sub, raid, cheer, Super Chat or Rant as one line in the chat feed: the theme's alert sentence ("{name} cheered
   // {amount}!"), then whatever the viewer wrote. The same sentence as the alerts widget, for every platform.
-  const eventLine = (m) => T.alertLine(m, theme, I.NAMES[m.p]);
+  const eventLine = (m) => T.alertLine(m, theme, nameOf(m.p));
 
   function message(m, cls) {
     const el = doc.createElement('div');
@@ -96,8 +99,8 @@
       const badge = doc.createElement('span'); badge.className = 'cc-badge'; badge.textContent = b; head.appendChild(badge);
     });
     const name = doc.createElement('span'); name.className = 'cc-name'; name.textContent = m.name || ''; head.appendChild(name);
-    if (cls === 'cc-featured' && theme.featured.platform && I.NAMES[m.p]) {
-      const where = doc.createElement('span'); where.className = 'cc-where'; where.textContent = 'on ' + I.NAMES[m.p]; head.appendChild(where);
+    if (cls === 'cc-featured' && theme.featured.platform && nameOf(m.p)) {
+      const where = doc.createElement('span'); where.className = 'cc-where'; where.textContent = 'on ' + nameOf(m.p); head.appendChild(where);
     }
     const time = doc.createElement('span'); time.className = 'cc-time';
     time.textContent = new Date(m.t || Date.now()).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -235,8 +238,8 @@
     platforms.forEach((p) => {
       const pill = doc.createElement('span'); pill.className = 'cc-vp'; pill.dataset.platform = p;
       pill.style.setProperty('--cc-p', theme.colors[p]); pill.style.setProperty('--cc-ink', T.ink(theme.colors[p]));
-      if (theme.viewers.icon) { const icon = doc.createElement('span'); icon.className = 'cc-icon'; icon.appendChild(I.icon(p, doc)); pill.appendChild(icon); }
-      else { const tag = doc.createElement('span'); tag.textContent = I.NAMES[p]; pill.appendChild(tag); }
+      if (theme.viewers.icon) { const icon = doc.createElement('span'); icon.className = 'cc-icon'; icon.appendChild(glyph(p)); pill.appendChild(icon); }
+      else if (nameOf(p)) { const tag = doc.createElement('span'); tag.textContent = nameOf(p); pill.appendChild(tag); }
       const count = doc.createElement('b'); count.textContent = short(crowd.counts[p]); pill.appendChild(count);
       box.appendChild(pill);
     });
@@ -286,10 +289,10 @@
   }
 
   function alertCard(m) {
-    const a = T.alertParts(m, theme, I.NAMES[m.p]);
+    const a = T.alertParts(m, theme, nameOf(m.p));
     const el = doc.createElement('div'); el.className = 'cc-alert'; el.dataset.alert = a.kind; el.dataset.platform = m.p; el.dataset.id = m.id;
     colourFor(el, m);
-    const icon = doc.createElement('div'); icon.className = 'cc-alert-icon'; icon.appendChild(I.icon(m.p, doc));
+    const icon = doc.createElement('div'); icon.className = 'cc-alert-icon'; icon.appendChild(glyph(m.p));
     const body = doc.createElement('div'); body.className = 'cc-alert-body';
     const title = doc.createElement('div'); title.className = 'cc-alert-title';
     a.parts.forEach((part) => {

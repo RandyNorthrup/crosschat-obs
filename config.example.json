@@ -11,6 +11,7 @@
   "open_window_on_stream_start": true,
   "close_window_seconds_after_stream": 120,
   "overlay": {"platforms": "all", "theme": "classic"},
+  "broadcaster": "auto",
   "obs": {"host": "127.0.0.1", "port": 0, "password": ""},
   "remote": {"enabled": true, "port": 4467, "tailscale": false},
   "updates": {"check": false},

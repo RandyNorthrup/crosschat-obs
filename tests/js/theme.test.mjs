@@ -168,3 +168,96 @@ test('icons exist for every platform', () => {
   for (const p of Object.keys(A.NAMES)) assert.ok(I.PATHS[p] && I.NAMES[p], p + ' has an icon and a name');
   for (const p of T.PLATFORMS) assert.match(T.DEFAULTS.colors[p], /^#[0-9a-f]{6}$/i);
 });
+
+const PNG = 'data:image/png;base64,iVBORw0KGgo=', WEBP = 'data:image/webp;base64,UklGRg==';
+
+test('a logo for one platform beats the one for every platform, which beats the built-in', () => {
+  assert.equal(T.logoFor(T.merge({}), 'twitch'), '');
+  const every = T.merge({ logos: { all: PNG } });
+  assert.equal(T.logoFor(every, 'twitch'), PNG);
+  assert.equal(T.logoFor(every, 'rumble'), PNG);
+  const both = T.merge({ logos: { all: PNG, twitch: WEBP } });
+  assert.equal(T.logoFor(both, 'twitch'), WEBP);
+  assert.equal(T.logoFor(both, 'youtube'), PNG);
+  assert.equal(T.logoFor(T.merge({ logos: { all: PNG, kick: 'chat' } }), 'kick'), 'chat');
+  assert.equal(T.logoFor(every, 'system'), '', 'only real platforms take a logo');
+});
+
+test('a theme file can only hold small pictures as logos', () => {
+  const bad = ['data:image/svg+xml;base64,PHN2Zz4=', 'https://example.com/logo.png', 'javascript:alert(1)', 'data:text/html;base64,PGI+',
+    'data:image/png;base64,<script>', PNG + ' ', 'data:image/png;base64,' + 'A'.repeat(T.LOGO_MOST), 42, true, ['chat']];
+  bad.forEach((value) => {
+    assert.equal(T.merge({ logos: { twitch: value } }).logos.twitch, '', String(value).slice(0, 40));
+    assert.match(T.problems({ logos: { twitch: value } })[0], /logos\.twitch: not a small PNG, WebP or JPEG/);
+  });
+  const longest = 'data:image/png;base64,' + 'A'.repeat(T.LOGO_MOST - 'data:image/png;base64,'.length);
+  assert.equal(T.merge({ logos: { twitch: longest } }).logos.twitch, longest, 'exactly at the limit is fine');
+  assert.deepEqual(T.problems({ logos: { nope: PNG } }), ['logos.nope: unknown key, ignored']);
+});
+
+test('platform names: renamed, the same for every platform, or hidden', () => {
+  const built = 'Twitch';
+  assert.equal(T.platformName(T.merge({}), 'twitch', built), 'Twitch');
+  assert.equal(T.platformName(T.merge({ names: { twitch: 'Main' } }), 'twitch', built), 'Main');
+  assert.equal(T.platformName(T.merge({ names: { all: 'Live' } }), 'twitch', built), 'Live');
+  assert.equal(T.platformName(T.merge({ names: { all: 'Live', twitch: 'Main' } }), 'twitch', built), 'Main');
+  assert.equal(T.platformName(T.merge({ names: { all: '-' } }), 'twitch', built), '');
+  assert.equal(T.platformName(T.merge({ names: { all: '-', twitch: 'Main' } }), 'twitch', built), 'Main');
+  assert.equal(T.platformName(T.merge({ names: { twitch: '-' } }), 'twitch', built), '');
+  assert.equal(T.platformName(T.merge({ names: { twitch: '   ' } }), 'twitch', built), 'Twitch', 'spaces are no name');
+  assert.equal(T.platformName(T.merge({ names: { all: 'Live' } }), 'system', 'CrossChat'), 'CrossChat');
+  assert.equal(T.merge({ names: { twitch: 'x'.repeat(40) } }).names.twitch.length, 24);
+});
+
+test('the short tag follows the name', () => {
+  assert.equal(T.platformTag(T.merge({}), 'twitch', 'TW'), 'TW');
+  assert.equal(T.platformTag(T.merge({ names: { twitch: 'main' } }), 'twitch', 'TW'), 'MAI');
+  assert.equal(T.platformTag(T.merge({ names: { all: '-' } }), 'twitch', 'TW'), '•');
+});
+
+test('a hidden name leaves no gap in an alert', () => {
+  const t = T.merge({ names: { all: '-' }, alerts: { labels: { sub: '{name} subscribed {platform}' } } });
+  assert.equal(T.alertLine({ alert: 'sub', p: 'twitch', name: 'Ann' }, t, T.platformName(t, 'twitch', 'Twitch')), 'Ann subscribed');
+});
+
+test('the biggest rendering that fits is the one kept', () => {
+  const tried = [];
+  const render = (box, type) => { tried.push(box + ' ' + type); return 'data:' + type + ';base64,' + 'A'.repeat(box === 64 ? 100 : T.LOGO_MOST + 1); };
+  assert.match(T.shrinkLogo(render), /^data:image\/png;base64,A{100}$/);
+  assert.deepEqual(tried, ['128 image/png', '128 image/webp', '96 image/png', '96 image/webp', '64 image/png']);
+  assert.equal(T.shrinkLogo(() => 'data:image/png;base64,' + 'A'.repeat(T.LOGO_MOST + 1)), '', 'nothing fits');
+  assert.equal(T.shrinkLogo(() => 'data:text/plain;base64,AAAA'), '', 'not a picture');
+});
+
+test('a picture goes whole and centred in its square', () => {
+  assert.deepEqual(T.logoBox(100, 100, 128), { x: 0, y: 0, w: 128, h: 128 });
+  assert.deepEqual(T.logoBox(200, 100, 128), { x: 0, y: 32, w: 128, h: 64 });
+  assert.deepEqual(T.logoBox(100, 200, 128), { x: 32, y: 0, w: 64, h: 128 });
+  assert.deepEqual(T.logoBox(1000, 1, 48), { x: 0, y: 23, w: 48, h: 1 });
+});
+
+test('a theme with every logo at its largest and the longest CSS still fits a theme file', () => {
+  const logos = Object.fromEntries(T.LOGO_KEYS.map((k) => [k, 'data:image/png;base64,' + 'A'.repeat(T.LOGO_MOST - 22)]));
+  assert.equal(T.LOGO_KEYS.length, 9);
+  const full = T.merge({ logos, css: 'x'.repeat(20000) });
+  assert.ok(T.LOGO_KEYS.every((k) => full.logos[k].length === T.LOGO_MOST));
+  assert.ok(new TextEncoder().encode(JSON.stringify(full, null, 2)).length <= T.THEME_MOST);
+});
+
+function fakeDoc() {
+  const node = (tag) => ({ tag, attrs: {}, kids: [], setAttribute(k, v) { this.attrs[k] = v; }, appendChild(c) { this.kids.push(c); } });
+  return { createElement: node, createElementNS: (ns, tag) => node(tag) };
+}
+
+test('a custom logo is an image, never markup; the bubble and the brand are drawn', () => {
+  const picture = I.icon('twitch', fakeDoc(), PNG);
+  assert.equal(picture.tag, 'img');
+  assert.equal(picture.src, PNG);
+  assert.equal(picture.alt, '');
+  assert.equal(picture.kids.length, 0);
+  const bubble = I.icon('twitch', fakeDoc(), 'chat');
+  assert.equal(bubble.tag, 'svg');
+  assert.equal(bubble.kids[0].attrs.d, I.PATHS.chat);
+  assert.equal(I.icon('twitch', fakeDoc(), '').kids[0].attrs.d, I.PATHS.twitch);
+  assert.equal(I.icon('twitch', fakeDoc()).kids[0].attrs.d, I.PATHS.twitch);
+});

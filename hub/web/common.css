@@ -11,7 +11,7 @@ body { font: var(--cc-weight, 500) var(--cc-size, 20px)/var(--cc-line, 1.35) var
   color: var(--cc-text); text-shadow: var(--cc-text-shadow); overflow-wrap: anywhere; }
 .cc-icon { flex: none; display: inline-grid; place-items: center; width: 1.05em; height: 1.05em; margin-top: calc((var(--cc-line) * 1em - 1.05em) / 2);
   color: var(--cc-p); filter: var(--cc-icon-filter); }
-.cc-icon svg { width: 100%; height: 100%; display: block; }
+.cc-icon svg, .cc-icon img { width: 100%; height: 100%; display: block; object-fit: contain; }
 .cc-tag { flex: none; align-self: flex-start; min-width: 2.7em; margin-top: calc((var(--cc-line) * 1em - 1.45em) / 2 + .1em); padding: .2em .45em; border-radius: .4em;
   background: var(--cc-p); color: var(--cc-ink); font-size: .62em; font-weight: 800; letter-spacing: .05em; line-height: 1.25; text-align: center; text-shadow: none; }
 .cc-main { min-width: 0; flex: 1 1 auto; }
@@ -147,7 +147,7 @@ body { font: var(--cc-weight, 500) var(--cc-size, 20px)/var(--cc-line, 1.35) var
   animation: cc-timer var(--cc-alert-seconds) linear both; }
 .cc-alert-icon { flex: none; width: 2.5em; height: 2.5em; border-radius: 50%; display: grid; place-items: center; background: var(--cc-p); color: var(--cc-ink);
   box-shadow: 0 0 0 .3em color-mix(in srgb, var(--cc-p) 28%, transparent); }
-.cc-alert-icon svg { width: 52%; height: 52%; }
+.cc-alert-icon svg, .cc-alert-icon img { width: 52%; height: 52%; object-fit: contain; }
 .cc-alert-body { min-width: 0; display: flex; flex-direction: column; gap: .15em; }
 .cc-alert-title { font-weight: var(--cc-name-weight); line-height: 1.25; }
 .cc-alert-name { color: var(--cc-name, var(--cc-p)); }

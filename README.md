@@ -15,7 +15,7 @@
   <a href="https://www.paypal.com/donate/?hosted_button_id=Q9VC7B42R7K82"><img alt="Donate with PayPal" src="https://img.shields.io/badge/donate-PayPal-0070ba"></a>
 </p>
 
-**CrossChat** is a free companion for OBS Studio when you stream to several platforms at once. It reads **Twitch, YouTube, Kick, X, TikTok, Facebook, Instagram and Rumble** chat into one window, lets you **answer everyone with one message** (or one person on their own platform), **moderates** Twitch, YouTube, Kick and Rumble (and deletes Facebook comments), puts **themeable chat, featured messages, viewer counts and alerts** on your stream, and **starts and ends your X livestream together with OBS**. Pair your **phone or another PC** to read, answer and moderate chat from there. Everything runs on your own PC and home network.
+**CrossChat** is a free companion for OBS Studio, Streamlabs Desktop or [any other streaming app](#other-streaming-apps) when you stream to several platforms at once. It reads **Twitch, YouTube, Kick, X, TikTok, Facebook, Instagram and Rumble** chat into one window, lets you **answer everyone with one message** (or one person on their own platform), **moderates** Twitch, YouTube, Kick and Rumble (and deletes Facebook comments), puts **themeable chat, featured messages, viewer counts and alerts** on your stream, and **starts and ends your X livestream together with OBS**. Pair your **phone or another PC** to read, answer and moderate chat from there. Everything runs on your own PC and home network.
 
 <p align="center">
   <img src="assets/video/overview.webp" alt="CrossChat in action: a question from YouTube is put on stream, then one reply goes out to Twitch, YouTube and X at once" width="100%"><br>
@@ -36,7 +36,7 @@
 - **Read chat aloud**: questions, everything, alerts or a `!tts` command, with Windows' own voices.
 - **Chat history**: every stream kept on your PC for 90 days, to search and export as CSV or HTML.
 - Light, dark, or follows Windows.
-- Opens by itself when OBS starts streaming, and closes two minutes after you stop.
+- Opens by itself when your stream starts, and closes two minutes after you stop.
 
 **Reply and moderate from one place**
 - Type once to post to every live platform, as you.
@@ -58,7 +58,8 @@
 - Post to a channel of your Discord server while you're live: a going-live notice with your channel links, the messages you show on stream, or all chat. You pick.
 - Through a webhook you make in Discord: no bot, no sign-in. Chat can't ping anyone there, and hidden messages never go.
 
-**Four on-stream widgets** (OBS Browser Sources)
+**Four on-stream widgets** (Browser Sources in OBS, Streamlabs or anything that shows a web page)
+- **Your own platform logos and names:** one picture for every platform, one per platform, or none at all. One button hides which platform a message came from.
 - **Chat feed**: the merged chat, or only the platforms you choose.
 - **Featured message**: hover any message in the CrossChat window, press **show**, and it appears big on stream.
 - **Viewer counter**: everyone watching, in total and per platform.
@@ -66,11 +67,11 @@
 
 **Theme Studio**
 - Eight built-in looks, and full control over fonts, colours, layout, animation, platform icons and custom CSS.
-- Live preview over your own screenshot, and one-click test events to the sources already in OBS.
+- Live preview over your own screenshot, and one-click test events to the sources already in your scenes.
 - A different theme per scene.
 
 **X Live started with OBS**
-- X only goes live when you press Go Live on its Live Studio page. The CrossChat browser extension does that for you when OBS starts streaming, and ends the livestream when you stop.
+- X only goes live when you press Go Live on its Live Studio page. The CrossChat browser extension does that for you when your stream starts, and ends the livestream when you stop.
 - X's chat and viewer count join the CrossChat window.
 
 **Follows OBS, stays local**
@@ -143,7 +144,7 @@ Every setting, the CSS hooks and how to share themes are in **[docs/THEMES.md](d
 | | |
 |---|---|
 | **PC** | Windows 10 or 11, 64-bit (tested on Windows 11), or a Mac with macOS 15 or newer (tested with OBS on Intel and Apple-silicon Macs; see [Mac](#mac)), or 64-bit Linux (tested on Ubuntu 25.10 and 24.04; see [Linux](#linux)) |
-| **OBS Studio** | 28 or newer, with its built-in WebSocket server. Tested with **33.0.1** (obs-websocket 5.7.6). |
+| **A streaming app** | **OBS Studio** 28 or newer, with its built-in WebSocket server (tested with **33.0.1**, obs-websocket 5.7.6); or **Streamlabs Desktop**; or any app that can show a web page as a source. See [Other streaming apps](#other-streaming-apps). |
 | **Browser** | Google Chrome, or Microsoft Edge (on a Mac or Linux also Chromium; on Linux also Brave). Needed only for replying, and for X and TikTok. |
 | **Python** | Nothing to install: the setup program brings its own (python.org's embeddable Python). The zip's `Install.cmd` needs Python 3.10 or newer, and offers to install it. On a Mac or Linux, Python 3.10 or newer. |
 | **X Live** *(optional)* | X Premium with access to [X Live Studio](https://studio.x.com/live), and OBS sending video to X (see [X Live](#x-live)). |
@@ -151,7 +152,7 @@ Every setting, the CSS hooks and how to share themes are in **[docs/THEMES.md](d
 | **Facebook Live, Rumble** *(optional)* | Signed in to them in the same browser (see [Facebook Live and Rumble](#facebook-live-and-rumble)). |
 | **Instagram Live** *(optional)* | Signed in to Instagram in the same browser, and OBS sending video to Instagram (see [Instagram Live](#instagram-live)). |
 
-CrossChat doesn't send your video anywhere. OBS does that. To stream to several platforms at once, use what you already use for that: an OBS multi-output plugin such as [obs-multi-rtmp](https://github.com/sorayuki/obs-multi-rtmp), or a restreaming service.
+CrossChat doesn't send your video anywhere. Your streaming app does that. To stream to several platforms at once, use what you already use for that: an OBS multi-output plugin such as [obs-multi-rtmp](https://github.com/sorayuki/obs-multi-rtmp), or a restreaming service.
 
 ## Install
 
@@ -178,14 +179,28 @@ CrossChat doesn't send your video anywhere. OBS does that. To stream to several 
    | Viewer counter | `http://127.0.0.1:4466/overlay/viewers` | 600 × 120 |
    | Alerts | `http://127.0.0.1:4466/overlay/alerts` | 800 × 300 |
 
-   Add `?theme=neon` (or any theme name) to give one source its own look. The Theme Studio's **Copy OBS address** buttons build these addresses for you.
+   Add `?theme=neon` (or any theme name) to give one source its own look. The Theme Studio's **Copy address** buttons build these addresses for you.
 
 > [!TIP]
 > Use the `http://127.0.0.1:4466/...` addresses rather than local files. OBS 33's browser blocks pages opened as local files from reaching anything on `127.0.0.1`.
 
-To check everything without going live, press **Send test to OBS** in the Theme Studio, or start OBS streaming to a test server on your own PC. CrossChat sees that a stream to `rtmp://127.0.0.1` is a test and doesn't start anything public.
+To check everything without going live, press **Send test** in the Theme Studio, or start OBS streaming to a test server on your own PC. CrossChat sees that a stream to `rtmp://127.0.0.1` is a test and doesn't start anything public.
 
 **Prefer a zip?** `CrossChat-<version>-windows.zip` is still on every release. Extract it and double-click `Install.cmd`: it uses a Python 3.10+ already on your PC (or offers to install one), sets up its own environment, and asks for your channels in a console window. Then follow steps 3–5 above.
+
+## Other streaming apps
+
+CrossChat needs to know one thing from your streaming app: when you are live. Choose how in **Settings → Channels & options → Streaming app** (`"broadcaster"` in `config.json`).
+
+| Streaming app | What to do |
+|---|---|
+| **OBS Studio** | Nothing: the [Install](#install) steps above. |
+| **Streamlabs Desktop** | Choose **Streamlabs Desktop**. Nothing else to set up: no token, and its Remote Control setting can stay off. CrossChat follows it from then on, and closes when it closes. |
+| **Anything else** (XSplit, vMix, Meld Studio...) | Choose **Another app**. A **Start stream** button appears at the top of the chat window: press it when you go live and **End stream** when you stop. A Stream Deck or hotkey can do the same with `control.py stream-start` and `control.py stream-end`. |
+
+Without OBS there is no script to start CrossChat, so open it before you stream: **CrossChat → Open chat** in the Start menu (on a Mac or Linux, the CrossChat app entries). Skip step 3 of Install. Add the widgets in your app the way it adds a web page (in Streamlabs: *Sources → + → Browser Source*). When CrossChat follows Streamlabs or nothing, **Settings → Channels & options → Close CrossChat** stops it.
+
+The hotkeys, the buttons in *Tools → Scripts* and the docked chat are OBS's own. In other apps, use the chat window and `control.py`. With **Another app**, X can only go live on your word: CrossChat can't see whether your video is really going out.
 
 ## Mac
 
@@ -320,7 +335,7 @@ X has no stream key that starts a livestream by itself: someone has to press **G
 
 1. In [X Live Studio](https://studio.x.com/live), create a source (CrossChat expects it to be called **OBS**; change `x.source` if yours has another name) and send OBS's video to it with your multistream setup.
 2. Run `Install.cmd` and answer **yes** to "Do you stream to X?", or set `"x": {"enabled": true}` in `config.json`.
-3. When OBS starts streaming, CrossChat waits a few seconds, opens Live Studio next to the chat window, and the extension:
+3. When your stream starts, CrossChat waits a few seconds, opens Live Studio next to the chat window, and the extension:
    - checks the source shows **Connected**;
    - fills in the title;
    - sets the audience to **Public**;
@@ -341,7 +356,7 @@ TikTok has no public chat API. Tools that connect to TikTok LIVE chat directly u
 
 1. Set `"tiktok": "@yourname"` in `config.json` (or answer the installer's question).
 2. Stay signed in to TikTok in Chrome or Edge, the browser with the CrossChat extension.
-3. When OBS starts streaming, CrossChat opens **your own TikTok LIVE page** in a small window under the chat window. Keep it open while you stream.
+3. When your stream starts, CrossChat opens **your own TikTok LIVE page** in a small window under the chat window. Keep it open while you stream.
 4. The extension passes on the chat lines shown there and types your replies into TikTok's own chat box, as you. Replies are up to 150 characters.
 5. Gifts, follows, shares and likes shown on that page become CrossChat alerts:
    - **Gifts** show the gift's name and how many, such as "Rose ×5". A combo counts as one alert with its final count. TikTok's page doesn't show what a gift costs, so CrossChat doesn't make up a money value.
@@ -355,7 +370,7 @@ The extension first asks CrossChat which TikTok account is yours. On every other
 
 ## Facebook Live and Rumble
 
-**Facebook Live.** Set `"facebook": true` (or answer the installer's question). When OBS starts streaming, CrossChat opens Facebook's **Live Producer**, where you press Go live as usual. While your live runs, the extension passes on the comments shown there and types your replies into its comment box, as you. Live Producer only ever shows your own broadcasts, and the extension may touch no other part of Facebook.
+**Facebook Live.** Set `"facebook": true` (or answer the installer's question). When your stream starts, CrossChat opens Facebook's **Live Producer**, where you press Go live as usual. While your live runs, the extension passes on the comments shown there and types your replies into its comment box, as you. Live Producer only ever shows your own broadcasts, and the extension may touch no other part of Facebook.
 
 **Rumble.** In Settings → Connections → Rumble, paste your **Live Stream API URL** from [rumble.com/account/livestream-api](https://rumble.com/account/livestream-api). CrossChat reads Rumble chat, Rants, subs, gifted subs and the viewer count through Rumble's official API, and keeps the URL encrypted on this PC. When your Rumble live starts, CrossChat opens Rumble's chat window for it, and replies are typed there as you (sign in to Rumble in the same browser). The extension never presses Rumble's Rant button.
 
@@ -390,7 +405,7 @@ Instagram takes a stream from OBS through its **Live producer** on instagram.com
 
 1. Set `"instagram": true` in `config.json` (or answer the installer's question), and stay signed in to Instagram in Chrome or Edge, the browser with the CrossChat extension.
 2. In the Live producer, use a **persistent stream key** (**Manage Persistent Key**) in OBS, so the same key works every time you go live.
-3. When OBS starts streaming, CrossChat opens instagram.com in a small window under the chat window. Open **Create → Live video** there, add a title and pick the audience, press **Next**, and press **Go live** once the preview shows.
+3. When your stream starts, CrossChat opens instagram.com in a small window under the chat window. Open **Create → Live video** there, add a title and pick the audience, press **Next**, and press **Go live** once the preview shows.
 4. While the live runs, the extension passes on the comments and viewer count the Live producer shows, and types your replies into its comment box, as you.
 
 Start the live in the window CrossChat opens (or any tab opened at instagram.com's home page): the extension works only there. The Live producer only ever shows your own live, and the extension reads nothing else on Instagram: no feed, messages or profiles. To rehearse, pick the **Practice** audience, which only you can see. Moderate Instagram comments in Instagram itself.
@@ -402,15 +417,16 @@ Your settings are in `%LOCALAPPDATA%\CrossChat\config.json` (start from [`config
 | Key | Default | |
 |---|---|---|
 | `twitch`, `youtube`, `kick` | `""` | Your channels. A name, an `@handle`, a channel ID or a link all work. |
-| `tiktok` | `""` | Your TikTok `@name`. Its LIVE page opens in your browser when OBS goes live (see [TikTok LIVE](#tiktok-live)). |
+| `tiktok` | `""` | Your TikTok `@name`. Its LIVE page opens in your browser when you go live (see [TikTok LIVE](#tiktok-live)). |
 | `tiktok_window` | `"auto"` | Where that page goes: under the chat window, or `{"x", "y", "width", "height"}`. |
 | `facebook` | `false` | `true`: Facebook Live comments from Live Producer (see [Facebook Live and Rumble](#facebook-live-and-rumble)). |
 | `instagram` | `false` | `true`: Instagram Live comments from its Live producer (see [Instagram Live](#instagram-live)). |
 | `facebook_window`, `instagram_window`, `rumble_window` | `"auto"` | Where Live Producer, instagram.com and Rumble's chat window go. |
 | `port` | `4466` | The hub's port on `127.0.0.1`. The extension expects 4466. |
+| `broadcaster` | `"auto"` | How CrossChat knows you are live: `"obs"`, `"streamlabs"`, `"manual"` (a Start stream button), or `"auto"`: the OBS that started it, else a Streamlabs Desktop that is already running, else OBS. See [Other streaming apps](#other-streaming-apps). |
 | `browser` | `"auto"` | `"auto"` (Chrome, else Edge), `"chrome"`, `"edge"` or a full path. On a Mac also `"chromium"`; on Linux also `"chromium"` and `"brave"` (after Edge), or a program on your PATH. It must be the browser that has the extension. |
 | `window` | `"auto"` | `"auto"` docks the chat at the right edge of the main screen, or `{"x", "y", "width", "height"}`. Put it where OBS doesn't capture. |
-| `open_window_on_stream_start` | `true` | Open the chat window when OBS starts streaming. |
+| `open_window_on_stream_start` | `true` | Open the chat window when your stream starts. |
 | `close_window_seconds_after_stream` | `120` | How long it stays after the stream ends. |
 | `overlay.platforms` | `"all"` | Which platforms the on-stream chat shows by default, for example `["twitch"]`. |
 | `overlay.theme` | `"classic"` | The theme sources use without `?theme=` (the Theme Studio's **Set as default** overrides it). |
@@ -425,7 +441,7 @@ Your settings are in `%LOCALAPPDATA%\CrossChat\config.json` (start from [`config
 | `logs.enabled`, `logs.keep_days` | `true`, `90` | Keep each stream's chat on this PC, and for how long. |
 | `custom_overlays` | `""` | A folder of your own overlay pages, served at `http://localhost:4466/custom/<file>` (see below). |
 | `x.enabled` | `false` | Use X Live. |
-| `x.auto_go_live` | `true` | Go live on X when OBS starts streaming. |
+| `x.auto_go_live` | `true` | Go live on X when your stream starts. |
 | `x.title` | `"Live now"` | Livestream title. |
 | `x.title_file`, `x.title_prefix` | `""` | Use the first line of a text file as the title instead (handy with a "now building" file). |
 | `x.source` | `"OBS"` | The source name in X Live Studio. |
@@ -511,6 +527,7 @@ More detail, and how to report a problem privately: [SECURITY.md](SECURITY.md).
 
 ## Known limits
 
+- **Streamlabs Desktop:** checked on Windows with Streamlabs Desktop 1.21.9, signed out: CrossChat finds it, reads its status, and closes when it closes. A real go-live in Streamlabs (it needs a signed-in account) was tested only against a stand-in that answers as its source code does, and the widgets inside its Browser Source and the Mac version aren't tested yet. Other streaming apps use the **Start stream** button, so CrossChat only knows what you tell it.
 - **Mac:** checked with OBS 33.0.1 on Intel Macs (macOS 15.7.4 and 15.7.9), read-aloud and the phone companion included, and on every change with OBS on an Apple-silicon Mac (macOS 26.6.2); see [Mac](#mac) for exactly what. Without the extension, CrossChat can't move or close its windows on a Mac (macOS refuses that to programs OBS starts, and doesn't ask); with it, it can. Away from home with Tailscale is Windows-only.
 - **Linux:** checked on Ubuntu 25.10 with Ubuntu's OBS 30.2.3 and OBS 33.0.1 from Flathub, the extension, read-aloud, the docked chat and the phone companion included, and on every change on Ubuntu 24.04 with OBS from the OBS Project's PPA and from Flathub; all of it on a virtual X11 display, with Google Chrome (see [Linux](#linux) for exactly what). Not seen yet on a desktop someone sits at: the chat window there. With the extension, CrossChat's windows were placed, moved and closed on X11, XWayland and Wayland (KWin, on a virtual screen), at a display scale of 100 % only; on Wayland the desktop chooses where they go. Without the extension, on Wayland CrossChat can move and close them only when the browser runs through XWayland. Other distributions, and browsers other than Google Chrome (Snap and Flatpak browsers too), are untested. Read-aloud needs speech-dispatcher, and Google Chrome started with `--enable-speech-dispatcher`. Ubuntu's and Debian's own OBS package has no Browser Source, so the widgets and the dock need OBS from Flathub or the OBS Project's PPA.
 - **CrossChat's windows on Windows** are placed Windows' own way, as before, whenever it can see them: the browser's window API counts Windows' invisible resize borders in (asked for a place, a browser window's visible edges were 7 px in at the left, right and bottom, on GitHub's Windows machines). The extension's part on Windows (closing the windows, and placing one Windows can't see) hasn't been run on a real Windows desktop: `scripts/window_e2e.py` runs on macOS and Linux.

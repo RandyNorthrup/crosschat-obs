@@ -155,7 +155,7 @@ The answer says what happens next:
 {"ok": true, "why": "Saved. Restart OBS to apply: Twitch channel.", "restart_needed": true, "restart": ["twitch"]}
 ```
 
-The channels, Facebook and X on or off apply when OBS restarts; everything else at once (emotes, chat history, the window, X's title and source, and the companion, which reopens on its new port).
+The channels, Facebook and X on or off and the streaming app apply when OBS restarts (or, when CrossChat follows Streamlabs or nothing, when it opens again); everything else at once (emotes, chat history, the window, X's title and source, and the companion, which reopens on its new port).
 
 ## Doing
 
