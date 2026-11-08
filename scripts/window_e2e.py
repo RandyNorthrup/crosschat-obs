@@ -502,18 +502,22 @@ async def scenario(args, browser, folder):
             # Launch Services' first launches of the stand-in browser app on a fresh GitHub Mac took about 2 minutes each
             # (118 s, then over 120 s, then under 4 s). Done here until one is quick, before anything is timed. With
             # --version the browser prints its version and ends: no window.
+            started_once = False
             for _ in range(4):
                 started = time.time()
                 try:
-                    await asyncio.to_thread(subprocess.run, ["open", "-W", "-n", "-a", app, "--args", "--version"], timeout=300,
+                    await asyncio.to_thread(subprocess.run, ["open", "-W", "-n", "-a", app, "--args", "--version"], timeout=150,
                                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                except subprocess.TimeoutExpired:
-                    check(False, "the stand-in browser app starts through Launch Services", "not within 300 s")
-                    break
+                except subprocess.TimeoutExpired:          # (once in a while one never comes back: the next one does)
+                    info("Launch Services didn't start the stand-in browser app within 150 s; trying again")
+                    continue
+                started_once = True
                 took = time.time() - started
                 info("the stand-in browser app started through Launch Services in %.1f s" % took)
                 if took < 5:
                     break
+            if not started_once:
+                check(False, "the stand-in browser app starts through Launch Services", "not in 4 tries of 150 s")
         await hub.start(folder, app)
 
         async def hub_up():

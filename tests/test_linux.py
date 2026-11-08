@@ -192,6 +192,12 @@ def throwaway_browser(tmp_path):
     return str(wrapper)
 
 
+def drop_browser(tmp_path):
+    os.system("pkill -f -- '--user-data-dir=%s' >/dev/null 2>&1" % (tmp_path / "profile"))
+    time.sleep(1)                                     # (it is still leaving when pkill returns)
+    shutil.rmtree(tmp_path / "profile", ignore_errors=True)
+
+
 def browser_log(tmp_path):
     try:
         return (tmp_path / "browser.log").read_text(errors="replace")[-4000:]
@@ -221,6 +227,12 @@ def test_a_real_browser_window_opens_moves_and_closes(tmp_path):
     page.write_text("<!doctype html><title>CrossChat window test</title><p>hello")
     started = time.monotonic()
     handle = asyncio.run(linux.open_app(browser, page.as_uri(), (40, 50, 420, 500)))
+    if not handle and not any(shown for *_, shown in what_x_shows()):
+        # Chrome now and then puts no window on a bare X display at all: X has only a hidden one of its own (seen on GitHub's
+        # machines about once in 50 runs, with nothing in its log). This test is about finding a window that is there.
+        print("the browser showed no window at all; giving a second one the chance\nX shows: %r" % (what_x_shows(),))
+        drop_browser(tmp_path)
+        handle = asyncio.run(linux.open_app(browser, page.as_uri(), (40, 50, 420, 500)))
     print("the new window was found %.1f s after the browser was started" % (time.monotonic() - started))   # (a cold start took 10)
     try:
         assert handle, "the new window wasn't found\nX shows: %r\nthe browser said:\n%s" % (what_x_shows(), browser_log(tmp_path))
@@ -240,8 +252,7 @@ def test_a_real_browser_window_opens_moves_and_closes(tmp_path):
             time.sleep(0.25)
         assert linux.windows(browser, "CrossChat window test") == []
     finally:
-        os.system("pkill -f -- '--user-data-dir=%s' >/dev/null 2>&1" % (tmp_path / "profile"))
-        shutil.rmtree(tmp_path / "profile", ignore_errors=True)
+        drop_browser(tmp_path)
 
 
 def geometry(handle):
