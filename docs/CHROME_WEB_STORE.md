@@ -2,7 +2,7 @@
 
 For whoever publishes CrossChat's browser extension. Everything the [developer dashboard](https://chrome.google.com/webstore/devconsole) asks for is here, ready to paste.
 
-**Listing:** item ID `bnjoldkacppoejikoiccgkblbajbenhj`, first submitted for review on 8 November 2026. Its address once approved: https://chromewebstore.google.com/detail/bnjoldkacppoejikoiccgkblbajbenhj
+**Listing:** item ID `bnjoldkacppoejikoiccgkblbajbenhj`, submitted for review on 8 November 2026, rejected that day for listing platform names in the description (see [Things a reviewer may question](#things-a-reviewer-may-question)), and submitted again the same day with the description below. Its address once approved: https://chromewebstore.google.com/detail/bnjoldkacppoejikoiccgkblbajbenhj
 
 ## Build the upload
 
@@ -35,13 +35,13 @@ It writes `dist/CrossChat-extension-<version>.zip` and refuses anything the stor
 **Description:**
 
 ```
-CrossChat puts the chat of every platform you stream to in one window, and lets you answer everyone from there. This extension is the part that works in your browser. It needs the free CrossChat app on your computer: https://github.com/RandyNorthrup/crosschat-obs
+CrossChat puts the chat of the platforms you stream to in one window, and lets you answer everyone from there. This extension is the part that works in your browser. It needs the free CrossChat app on your computer: https://github.com/RandyNorthrup/crosschat-obs
 
 What the extension does
-• Posts the replies you write in CrossChat to YouTube, X, TikTok, Facebook, Instagram and Rumble, by typing them into each site's own chat box, as the account already signed in to your browser.
-• Brings chat in from your own X livestream, TikTok LIVE page, Facebook Live Producer and Instagram live.
-• Carries out the moderation you ask for on YouTube, Facebook and Rumble, in those sites' own menus.
-• Starts and ends your X livestream when you ask, or together with your stream.
+• Posts the replies you write in CrossChat, by typing them into each site's own chat box, as the account already signed in to your browser.
+• Brings in the chat from your own live-stream pages.
+• Carries out the moderation you ask for, in each site's own menus.
+• Starts and ends your livestream on a site that needs its button pressed, when you ask.
 • Places and closes the windows CrossChat opens. Your own browser windows are never touched.
 
 Private by design
@@ -50,7 +50,7 @@ Private by design
 • Reads no logins, passwords or tokens.
 • Open source: every line is on GitHub.
 
-CrossChat is an independent project, and is not made by or affiliated with X, YouTube, TikTok, Meta, Rumble, Twitch or Kick.
+The sites it works with are listed on the project's page. CrossChat is an independent project, and is not made by or affiliated with any streaming platform.
 ```
 
 **Pictures** (`assets/webstore/`): store icon `extension/icons/icon-128.png`; screenshots `screenshot-1-reply.png` to `screenshot-4-studio.png` (1280 × 800); small promo tile `promo-small-440x280.png`.
@@ -99,6 +99,7 @@ Needs the free CrossChat app on the same computer. It works on the tester's own 
 
 ## Things a reviewer may question
 
+- **Platform names in the description.** The first submission was rejected under *Keyword Spam* (violation reference *Yellow Argon*) for two lists of platform names, one of them in the "not affiliated with" line. Keep lists of platform names out of the description and the pictures' text. The Privacy tab's justification names each site because it has to, and isn't part of the public listing.
 - **`www.tiktok.com/*`** is the broadest host permission. The justification above explains why.
 - **The icon** is CrossChat's own mark, but it looks like X's logo. Reviewers can turn down an icon that suggests another company's product, so have a different one ready if they object.
 - **`rumble-confirm.js`** runs in the page's own world, which reviewers look at closely. It is short, and it only answers Rumble's confirmation box when the extension deletes a message the streamer asked it to.
