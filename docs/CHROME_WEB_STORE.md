@@ -1,6 +1,8 @@
 # Publishing the extension on the Chrome Web Store
 
-For whoever publishes CrossChat's browser extension. Everything the [developer dashboard](https://chrome.google.com/webstore/devconsole) asks for is here, ready to paste. Chrome doesn't let tools script the dashboard, so this is done by hand.
+For whoever publishes CrossChat's browser extension. Everything the [developer dashboard](https://chrome.google.com/webstore/devconsole) asks for is here, ready to paste.
+
+**Listing:** item ID `bnjoldkacppoejikoiccgkblbajbenhj`, first submitted for review on 8 November 2026. Its address once approved: https://chromewebstore.google.com/detail/bnjoldkacppoejikoiccgkblbajbenhj
 
 ## Build the upload
 
@@ -28,7 +30,7 @@ It writes `dist/CrossChat-extension-<version>.zip` and refuses anything the stor
 
 **Summary** (from the manifest): Companion to the CrossChat app: reads your own live chats and posts your replies. Talks only to the app on this PC. Reads no logins.
 
-**Category:** Social & Communication. **Language:** English.
+**Category:** Communication. **Language:** English.
 
 **Description:**
 
@@ -65,23 +67,17 @@ CrossChat is an independent project, and is not made by or affiliated with X, Yo
 Connects the streamer's own live-stream pages to the CrossChat app on their computer, so they can read and answer the chat of every platform they stream to from one window.
 ```
 
-**Permissions:** the extension asks for no API permissions, only these host permissions.
+**Host permission justification** (one box, at most 1,000 characters; the extension asks for no API permissions):
 
-| Host permission | Justification to paste |
-|---|---|
-| `http://127.0.0.1:4466/*` | The CrossChat app on the user's own computer. The extension exchanges chat lines and reply jobs with it, and nothing else. |
-| `https://studio.x.com/*` | X Live Studio: starts and ends the user's own X livestream when they ask, reads its chat, and types their replies. |
-| `https://www.youtube.com/live_chat*` | YouTube's chat box: types the user's replies and carries out their moderation through YouTube's own menus. |
-| `https://www.tiktok.com/*` | The user's own TikTok LIVE page: reads its chat and types their replies. TikTok moves between pages without a reload, so the script must be present on the site; it asks the app which account is the user's and does nothing on any other page. |
-| `https://www.facebook.com/live/producer*` | Facebook Live Producer, which shows only the user's own broadcasts: reads comments, types replies, and deletes a comment when asked. |
-| `https://www.instagram.com/` | The home page only, where Instagram's Live producer opens: reads the user's own live's comments and viewer count, and types their replies. |
-| `https://rumble.com/chat/popup/*` | Rumble's chat pop-out: types the user's replies in their own live's chat. |
+```
+127.0.0.1:4466 is the CrossChat app on the user's own computer, the only place the extension sends data. studio.x.com: starts and ends the user's own X livestream when asked, reads its chat, types their replies. youtube.com/live_chat: types the user's replies and carries out their moderation through YouTube's own menus. tiktok.com: the user's own TikTok LIVE page only; TikTok changes pages without a reload, so the script must load on the site, but it asks the app which account is the user's and does nothing on any other page. facebook.com/live/producer: shows only the user's own broadcasts; reads comments, types replies, deletes a comment when asked. instagram.com, home page only, where Instagram's Live producer opens: reads the user's own live's comments and viewer count, types their replies. rumble.com/chat/popup: types the user's replies in their own live's chat.
+```
 
 **Remote code:** No, I am not using remote code. (All JavaScript ships in the package. There is no `eval` and nothing is downloaded.)
 
 **Data usage.** These answers are declarations you make to Google, so check they still match the code before ticking them. What the code does today:
 
-- Tick **Website content**: chat text and viewer names on the user's own live pages are read and passed to the app on the same computer.
+- Tick **Personal communications** (the form's examples include chat messages) and **Website content**: chat text and viewer names on the user's own live pages are read and passed to the app on the same computer.
 - Leave the rest unticked: it reads no logins, health or financial data, location, browsing history or activity.
 - Tick all three certifications: not sold to third parties, not used for purposes unrelated to the single purpose, not used for creditworthiness or lending. Nothing is ever sent to the developer.
 
@@ -89,15 +85,10 @@ Connects the streamer's own live-stream pages to the CrossChat app on their comp
 
 ## Test instructions
 
+The **Additional instructions** box takes at most 500 characters. Username and password stay empty.
+
 ```
-The extension needs the CrossChat app on the same computer, and works on the tester's own live streams, so no account is supplied.
-
-To see it connect, with made-up chat and nothing posted anywhere:
-1. Install Python 3.10 or newer, then download the source from https://github.com/RandyNorthrup/crosschat-obs and run: pip install -r hub/requirements.txt
-2. Run: python hub/hub.py --demo
-3. Open http://127.0.0.1:4466/ in the browser with the extension. The chat window opens with sample chat. Type a reply and send it: the demo shows it as sent and nothing leaves the computer.
-
-The extension reads nothing on other sites and shows no interface of its own.
+Needs the free CrossChat app on the same computer. It works on the tester's own live streams, so no account is supplied. To see it connect, with made-up chat and nothing posted: install Python 3.10+, download github.com/RandyNorthrup/crosschat-obs, run pip install -r hub/requirements.txt, then python hub/hub.py --demo. Open http://127.0.0.1:4466/ in the browser with the extension and send a reply: the demo shows it as sent. The extension has no interface of its own.
 ```
 
 ## Once it is approved
