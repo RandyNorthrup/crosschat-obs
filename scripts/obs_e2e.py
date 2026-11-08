@@ -46,8 +46,9 @@ from websockets.sync.client import connect
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPT = os.path.join(ROOT, "obs", "crosschat.lua")
-HUB_PORT, WS_PORT, WS_PASSWORD = 4486, 4456, "crosschat-e2e"
-DEVTOOLS_PORT = 4496                         # OBS's own browser (its browser sources and docks) answers DevTools here, for the test only
+HUB_PORT, WS_PORT = 4486, 4456
+ws_settings = ""                             # obs-websocket's settings file in the throwaway profile (OBS makes up its password there)
+DEVTOOLS_PORT = 4496                        # OBS's own browser (its browser sources and docks) answers DevTools here, for the test only
 BASE = "http://127.0.0.1:%d" % HUB_PORT
 failures = []
 
@@ -155,9 +156,11 @@ def obs_settings(config, version, backdrop=None, script=SCRIPT):
         json.dumps([{"title": "CrossChat", "url": BASE + "/", "uuid": str(uuid.uuid4())}]), dock_state(DOCK))
     write(os.path.join(config, "global.ini"), ini)
     write(os.path.join(config, "user.ini"), ini)
-    write(os.path.join(config, "plugin_config", "obs-websocket", "config.json"), json.dumps(
-        {"alerts_enabled": False, "auth_required": True, "first_load": False, "server_enabled": True,
-         "server_password": WS_PASSWORD, "server_port": WS_PORT}))
+    # first_load and no password: obs-websocket makes up a random one and saves it, as on a fresh OBS. The hub then has to
+    # find it in OBS's own settings, as it does on a streamer's PC, and nobody can guess it while the port is open.
+    global ws_settings
+    ws_settings = os.path.join(config, "plugin_config", "obs-websocket", "config.json")
+    write(ws_settings, json.dumps({"alerts_enabled": False, "auth_required": True, "first_load": True, "server_enabled": True, "server_port": WS_PORT}))
     profile = os.path.join(config, "basic", "profiles", "CrossChat")
     write(os.path.join(profile, "basic.ini"), "[General]\nName=CrossChat\n\n[Video]\nBaseCX=1920\nBaseCY=1080\nOutputCX=1280\n"
           "OutputCY=720\nFPSCommon=30\n\n[Output]\nMode=Simple\n\n[SimpleOutput]\nVBitrate=1500\nStreamEncoder=x264\n")
@@ -298,13 +301,19 @@ def nobody_listens(port):
         return s.connect_ex(("127.0.0.1", port)) != 0
 
 
+def obs_password():
+    """The password obs-websocket made up on its first load, from the file the hub reads it from too."""
+    with open(ws_settings, encoding="utf-8-sig") as f:
+        return json.load(f)["server_password"]
+
+
 def obs_connect():
     import base64
     import hashlib
     ws = connect("ws://127.0.0.1:%d" % WS_PORT, open_timeout=5)
     hello = json.loads(ws.recv(timeout=10))["d"]
     auth = hello["authentication"]
-    secret = base64.b64encode(hashlib.sha256((WS_PASSWORD + auth["salt"]).encode()).digest()).decode()
+    secret = base64.b64encode(hashlib.sha256((obs_password() + auth["salt"]).encode()).digest()).decode()
     ws.send(json.dumps({"op": 1, "d": {"rpcVersion": 1, "authentication": base64.b64encode(
         hashlib.sha256((secret + auth["challenge"]).encode()).digest()).decode(), "eventSubscriptions": 0}}))
     json.loads(ws.recv(timeout=10))
