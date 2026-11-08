@@ -13,6 +13,8 @@ import re
 import time
 
 NAME = re.compile(r"\d{4}-\d{2}-\d{2}_\d{4}(-\d+)?")
+COLOURS = {"twitch": "#9146ff", "youtube": "#ff0033", "kick": "#2fb60a", "x": "#555", "tiktok": "#c8103a", "facebook": "#1668d8",
+           "instagram": "#c4005a", "rumble": "#3f7d1a", "system": "#888"}      # (dark enough to read on the export's white page)
 
 
 def cell(value):
@@ -23,47 +25,68 @@ def cell(value):
 
 
 class ChatLog:
-    def __init__(self, folder, keep_days=90):
-        self.folder, self.keep_days = folder, keep_days
-        self.file, self.name, self.count = None, None, 0
+    def __init__(self, folder, keep_days=90, failed=None):
+        """failed: told, in words for the streamer, when this stream's history has to stop."""
+        self.folder, self.keep_days, self.failed = folder, keep_days, failed
+        self.file, self.name = None, None
 
     # ---- writing ----------------------------------------------------------------------------------------
     def start(self, now=None):
-        """A new file for a stream that just started."""
+        """A new file for a stream that just started: its name, or None when it can't be written (chat goes on without it)."""
         self.stop()
-        os.makedirs(self.folder, exist_ok=True)
-        stamp = time.strftime("%Y-%m-%d_%H%M", time.localtime(now or time.time()))
-        name, n = stamp, 1
-        while os.path.exists(self.path(name)):
-            n += 1
-            name = "%s-%d" % (stamp, n)
-        self.name, self.count = name, 0
-        self.file = open(self.path(name), "a", encoding="utf-8")
+        try:
+            os.makedirs(self.folder, exist_ok=True)
+            stamp = time.strftime("%Y-%m-%d_%H%M", time.localtime(now or time.time()))
+            name, n = stamp, 1
+            while os.path.exists(self.path(name)):
+                n += 1
+                name = "%s-%d" % (stamp, n)
+            self.file = open(self.path(name), "a", encoding="utf-8", errors="replace")
+        except OSError as error:
+            self.give_up(error)
+            return None
+        self.name = name
         self.prune()
         return name
 
     def write(self, event):
         if not self.file:
             return
-        self.file.write(json.dumps(event, ensure_ascii=False) + "\n")
-        self.file.flush()
-        if event.get("type") == "msg":
-            self.count += 1
+        try:
+            self.file.write(json.dumps(event, ensure_ascii=False) + "\n")
+            self.file.flush()
+        except OSError as error:
+            self.give_up(error)
+
+    def give_up(self, error):
+        """History can't be written (a full disk, say), and that must never get in the way of chat: this stream's file
+        stays where it got to, and the streamer is told."""
+        self.stop()
+        if self.failed:
+            self.failed("CrossChat can't write this stream's chat history (%s), so it stops here. Chat itself carries on." % (
+                error.strerror or error))
 
     def stop(self):
-        if self.file:
-            self.file.close()
-        self.file = None
+        file, self.file = self.file, None
+        if file:
+            try:
+                file.close()
+            except OSError:                      # (what was still waiting to be written; give_up has said so)
+                pass
 
     def prune(self):
         cutoff = time.time() - self.keep_days * 86400
-        for name in os.listdir(self.folder):
+        try:
+            names = os.listdir(self.folder)
+        except OSError:
+            return
+        for name in names:
             full = os.path.join(self.folder, name)
-            if name.endswith(".jsonl") and os.path.getmtime(full) < cutoff:
-                try:
+            try:
+                if name.endswith(".jsonl") and os.path.getmtime(full) < cutoff:
                     os.remove(full)
-                except OSError:
-                    pass
+            except OSError:
+                pass
 
     # ---- reading ----------------------------------------------------------------------------------------
     def path(self, name):
@@ -79,7 +102,7 @@ class ChatLog:
             full = self.path(name)
             first = last = None
             messages = 0
-            with open(full, encoding="utf-8") as f:
+            with open(full, encoding="utf-8", errors="replace") as f:     # (a full disk can leave half a character at the end)
                 for line in f:
                     try:
                         e = json.loads(line)
@@ -99,7 +122,7 @@ class ChatLog:
         if not NAME.fullmatch(name or "") or not os.path.isfile(self.path(name)):
             return None
         rows, gone, purged = [], set(), set()
-        with open(self.path(name), encoding="utf-8") as f:
+        with open(self.path(name), encoding="utf-8", errors="replace") as f:
             for line in f:
                 try:
                     e = json.loads(line)
@@ -134,14 +157,13 @@ class ChatLog:
         rows = self.messages(name)
         if rows is None:
             return None
-        colours = {"twitch": "#9146ff", "youtube": "#ff0033", "kick": "#2fb60a", "x": "#555", "system": "#888"}
         lines = []
         for m in rows:
             when = time.strftime("%H:%M:%S", time.localtime((m.get("t") or 0) / 1000))
             text = ((m.get("system") or "") + " " + (m.get("text") or "")).strip() if m.get("kind") == "event" else m.get("text", "")
             lines.append('<tr class="%s"><td>%s</td><td style="color:%s">%s</td><td><b>%s</b></td><td>%s</td></tr>' % (
                 ("gone" if m.get("gone") else "") + (" event" if m.get("kind") == "event" else "") + (" q" if m.get("question") else ""),
-                when, colours.get(m.get("p"), "#888"), html.escape(m.get("p", "")), html.escape(m.get("name", "")), html.escape(text)))
+                when, COLOURS.get(m.get("p"), "#888"), html.escape(m.get("p", "")), html.escape(m.get("name", "")), html.escape(text)))
         page = ("<!doctype html><meta charset=utf-8><title>CrossChat chat %s</title><style>body{font:14px 'Segoe UI',sans-serif;margin:24px;"
                 "color:#1d2733}table{border-collapse:collapse;width:100%%}td{padding:4px 8px;border-bottom:1px solid #e1d6c6;vertical-align:top}"
                 "td:first-child{color:#888;white-space:nowrap;font-family:Consolas,monospace}.gone td{text-decoration:line-through;opacity:.5}"

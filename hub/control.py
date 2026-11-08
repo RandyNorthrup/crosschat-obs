@@ -12,6 +12,7 @@ Mac, the apps in ~/Applications/CrossChat; on Linux, the CrossChat entries in th
   pythonw control.py leave       close CrossChat (when it follows Streamlabs or nothing: with OBS, it closes with OBS)
   pythonw control.py demo        try CrossChat with a made-up live stream (its own port, nothing is posted anywhere)
 """
+import http.client
 import json
 import os
 import subprocess
@@ -20,6 +21,8 @@ import time
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+HUB_WAIT = 30                               # seconds a hub just started may take to answer (a slow PC, a locked keyring)
+HUB_POLL = 0.25
 PATHS = {"show": "/show", "x-live": "/x/go?mode=live", "x-private": "/x/go?mode=private", "x-dry": "/x/go?mode=dry",
          "unfeature": "/feature?clear=1", "stream-start": "/stream?go=start", "stream-end": "/stream?go=end", "leave": "/leave"}
 
@@ -32,18 +35,34 @@ def port():
         return 4466
 
 
-def start_hub():
-    if sys.platform != "win32":
-        return background([])
-    pythonw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
-    subprocess.Popen([pythonw if os.path.exists(pythonw) else sys.executable, os.path.join(HERE, "hub.py")], cwd=HERE,
-                     creationflags=0x08000008, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+def start_hub(*arguments):
+    """Run hub.py on its own, detached from this short-lived helper."""
+    quiet = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+    if sys.platform == "win32":
+        pythonw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
+        subprocess.Popen([pythonw if os.path.exists(pythonw) else sys.executable, os.path.join(HERE, "hub.py"), *arguments], cwd=HERE,
+                         creationflags=0x08000008, **quiet)
+    else:
+        subprocess.Popen([sys.executable, os.path.join(HERE, "hub.py"), *arguments], cwd=HERE, start_new_session=True, **quiet)
 
 
-def background(arguments):
-    """macOS and Linux: run hub.py on its own, detached from this short-lived helper."""
-    subprocess.Popen([sys.executable, os.path.join(HERE, "hub.py"), *arguments], cwd=HERE, start_new_session=True,
-                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+def answers(base):
+    """Whether a CrossChat hub answers at `base` (http://127.0.0.1:port)."""
+    try:
+        with urllib.request.urlopen(base + "/version", timeout=2) as reply:
+            return "version" in json.load(reply)
+    except (OSError, ValueError, TypeError, http.client.HTTPException):
+        return False
+
+
+def wait_for_hub(base):
+    """Wait until the hub just started answers, for HUB_WAIT seconds at most. Whether it did."""
+    deadline = time.monotonic() + HUB_WAIT
+    while time.monotonic() < deadline:
+        if answers(base):
+            return True
+        time.sleep(HUB_POLL)
+    return False
 
 
 def show(address):
@@ -62,19 +81,11 @@ DEMO_PORT = 4477
 def main(command):
     base = "http://127.0.0.1:%d" % port()
     if command == "demo":
-        demo = "http://127.0.0.1:%d/" % DEMO_PORT
-        try:
-            urllib.request.urlopen(demo + "version", timeout=2).read()
-        except OSError:
-            if sys.platform != "win32":
-                background(["--demo", "--quiet", "--no-window", "--port", str(DEMO_PORT)])
-            else:
-                pythonw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
-                subprocess.Popen([pythonw if os.path.exists(pythonw) else sys.executable, os.path.join(HERE, "hub.py"), "--demo", "--quiet",
-                                  "--no-window", "--port", str(DEMO_PORT)], cwd=HERE, creationflags=0x08000008,
-                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            time.sleep(3)
-        show(demo)
+        demo = "http://127.0.0.1:%d" % DEMO_PORT
+        if not answers(demo):
+            start_hub("--demo", "--quiet", "--no-window", "--port", str(DEMO_PORT))
+            wait_for_hub(demo)
+        show(demo + "/")
         return 0
     if command == "studio":
         show(base + "/studio")
@@ -90,7 +101,7 @@ def main(command):
             if attempt or command != "show":
                 break
             start_hub()                         # nothing answered: run the hub without OBS, then ask again
-            time.sleep(3)
+            wait_for_hub(base)
     if command.startswith("x-"):
         show("https://studio.x.com/live")             # no hub: at least show X's page
     return 1

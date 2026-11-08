@@ -89,7 +89,8 @@ def test_with_obs_stdin_the_hub_stays_until_its_input_ends(home, monkeypatch):
     """OBS from Flathub: no process id to watch, so the hub follows OBS (reconnecting when the connection drops) until
     the pipe OBS holds is closed, as it is when OBS ends."""
     reader, writer = os.pipe()
-    monkeypatch.setattr(hub, "OBS_INPUT", reader)
+    real_watch = hub.watch_stdin
+    monkeypatch.setattr(hub, "watch_stdin", lambda fd: real_watch(reader))
     connections = []
 
     async def script(ws, request):
@@ -124,3 +125,28 @@ def test_a_wrong_password_is_reported(home, monkeypatch):
             await asyncio.wait_for(hub.obs_link(), 10)
     asyncio.run(test())
     assert len(told) == 1 and "password" in told[0]
+
+
+def test_every_refused_password_waits_before_trying_again(home, monkeypatch):
+    """Not only the first: OBS closing the door on a wrong password every two seconds fills its log."""
+    monkeypatch.setattr(hub, "warn", lambda text: None)
+    monkeypatch.setattr(hub, "RETRY_AFTER_REFUSAL", 0.25)
+    waits = []
+    real_sleep = asyncio.sleep
+
+    async def sleep(seconds):
+        if seconds == 0.25:
+            waits.append(seconds)
+        await real_sleep(0 if seconds in (0.25, 2) else seconds)
+    monkeypatch.setattr(hub.asyncio, "sleep", sleep)
+    monkeypatch.setattr(hub, "obs_open", lambda pid: len(waits) < 3)
+
+    async def script(ws, request):
+        raise AssertionError("not reached")
+
+    async def test():
+        async with fake_obs(script) as server:
+            home({"obs": {"port": server.sockets[0].getsockname()[1], "password": "wrong"}}, "--obs-pid", "123")
+            await asyncio.wait_for(hub.obs_link(), 10)
+    asyncio.run(test())
+    assert len(waits) == 3

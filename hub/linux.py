@@ -21,6 +21,9 @@ import subprocess
 import threading
 import time
 
+from config_file import on_the_side as _later
+from config_file import process_running as running  # noqa: F401  (the hub asks for linux.running)
+
 
 def _config_home():
     """$XDG_CONFIG_HOME, else ~/.config (where OBS keeps its settings, as every desktop program does)."""
@@ -225,11 +228,6 @@ def windows(app, prefix=None):
                 if _is_browser(lib, display, w) and (prefix is None or _title(lib, display, w).startswith(prefix))]
 
 
-def _later(job, *argv):
-    """Moving and closing windows needs no answer: done on the side, so the hub never waits for it."""
-    threading.Thread(target=job, args=argv, daemon=True).start()
-
-
 def _move(handle, x, y, width, height):
     with _display() as (lib, display):
         if display is not None:
@@ -326,16 +324,3 @@ def message_box(text):
             except (OSError, subprocess.SubprocessError):
                 pass
             return
-
-
-def running(pid):
-    """True while process `pid` is there."""
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:                  # there, but someone else's
-        return True
-    except OSError:
-        return False
-    return True
