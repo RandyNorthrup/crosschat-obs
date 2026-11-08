@@ -1,7 +1,7 @@
 #!/bin/bash
 # CrossChat uninstaller for macOS and Linux. On a Mac, run Uninstall.command (in the CrossChat folder, or Applications >
 # CrossChat); on Linux, "Uninstall CrossChat" in the app menu, or: bash ~/.local/share/CrossChat/scripts/uninstall.sh
-#   --quiet   ask nothing: keep a backup of your settings and themes, then remove everything else
+#   --quiet   ask nothing: keep a backup of your settings and themes, then remove everything else (chat history too)
 QUIET=0
 if [ "${1:-}" = "--quiet" ]; then QUIET=1; fi
 
@@ -28,13 +28,14 @@ if [ "$QUIET" != 1 ]; then
     case "$sure" in [yY]*) ;; *) echo 'Nothing was changed.'; exit 0 ;; esac
 fi
 
+rm -f "$APP/hub/hub.py"     # first: an open OBS's script starts a stopped hub again, unless hub.py is gone
 ps -axo pid=,command= | sed 's/^ *//' | while IFS= read -r line; do
     case "${line#* }" in *"$APP/"*hub*.py*) kill "${line%% *}" 2>/dev/null ;; esac
 done
 
 keep="$DOCUMENTS/CrossChat backup"
 mine=()
-for item in config.json themes; do
+for item in config.json themes quick.json filters.json tts.json; do
     if [ -e "$APP/$item" ]; then mine+=("$APP/$item"); fi
 done
 if [ "${#mine[@]}" -gt 0 ]; then
@@ -43,6 +44,14 @@ if [ "${#mine[@]}" -gt 0 ]; then
     case "$save" in
         [nN]*) ;;
         *) mkdir -p "$keep" && cp -R "${mine[@]}" "$keep/" && echo "Kept in $keep" ;;
+    esac
+fi
+if [ -d "$APP/logs" ]; then
+    save=n
+    if [ "$QUIET" != 1 ]; then read -r -p "Keep your chat history there too? (y/n) [y] " save </dev/tty || save=y; fi
+    case "$save" in
+        [nN]*) echo 'Your chat history goes with CrossChat.' ;;
+        *) mkdir -p "$keep" && cp -R "$APP/logs" "$keep/" && echo "Chat history kept in $keep" ;;
     esac
 fi
 
@@ -62,6 +71,10 @@ else
     rm -rf "$SHORTCUTS"
 fi
 rm -rf "$APP"
+if [ -e "$APP" ]; then
+    printf '\n\033[31mCrossChat could not be fully removed: %s is still there. Delete it by hand.\033[0m\n' "$APP"
+    exit 1
+fi
 
 printf '\n\033[32mCrossChat is removed. Two things only you can remove:\033[0m\n'
 echo '  - OBS: Tools > Scripts, select crosschat.lua, press the minus button.'

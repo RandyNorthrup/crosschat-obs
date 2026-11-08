@@ -24,7 +24,7 @@ jobs:
       - name: Tests
         run: |
           python -m pip install --require-hashes -r hub/requirements.lock
-          python -m pip install pytest lupa
+          python -m pip install --require-hashes -r scripts/requirements-dev.lock
           python -m pytest -q
           node --test "tests/js/*.test.mjs"
 
@@ -44,7 +44,7 @@ jobs:
       - name: Tests
         run: |
           python -m pip install --require-hashes -r hub/requirements.lock
-          python -m pip install pytest
+          python -m pip install --require-hashes -r scripts/requirements-dev.lock
           brew install luajit
           python -m pytest -q
           node --test "tests/js/*.test.mjs"
@@ -67,7 +67,7 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y -q --no-install-recommends gnome-keyring libsecret-tools dbus-x11
           python -m pip install --require-hashes -r hub/requirements.lock
-          python -m pip install pytest lupa
+          python -m pip install --require-hashes -r scripts/requirements-dev.lock
           dbus-run-session -- bash -eo pipefail -c 'printf ci-keyring | gnome-keyring-daemon --unlock --components=secrets > /dev/null; python -m pytest -q'
           node --test "tests/js/*.test.mjs"
 

@@ -382,8 +382,17 @@ class StartedByOBS:
         return self.obs is not None and self.obs.poll() is None
 
     async def connected(self):
-        await asyncio.sleep(3)                 # (the chat tab connects as the hub's window with the extension)
-        return True
+        """The hub's own word for it: whether a chat window with the extension is connected (its feed says so at once)."""
+        def executor():
+            with urllib.request.urlopen("http://127.0.0.1:%d/events" % PORT, timeout=15) as feed:
+                for line in feed:
+                    if line.startswith(b"data: ") and json.loads(line[6:]).get("type") == "executor":
+                        return json.loads(line[6:])["present"]
+            return False
+        try:
+            return await asyncio.to_thread(executor)
+        except OSError:                        # (not answering yet)
+            return False
 
     async def open_windows(self):
         await asyncio.to_thread(get, "/show")            # Open chat

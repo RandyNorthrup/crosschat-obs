@@ -4,12 +4,15 @@
 #   -Step obs-status   print on | running | off: OBS's WebSocket server is on; or it's off and OBS is open; or both off
 #   -Step finish       a first config.json, OBS's WebSocket server (with -EnableWebSocket), the hub again for an open
 #                      OBS, and the OBS script's path on the clipboard
-#   -Step uninstall    stop CrossChat; with -Backup, copy your settings and themes to Documents\CrossChat backup
+#   -Step uninstall    stop CrossChat; with -Backup, copy your settings and themes to Documents\CrossChat backup, and with
+#                      -BackupLogs your chat history
 param(
     [Parameter(Mandatory = $true)][ValidateSet('stop-hub', 'obs-status', 'finish', 'uninstall')][string]$Step,
     [string]$App = (Join-Path $env:LOCALAPPDATA 'CrossChat'),
     [switch]$EnableWebSocket,
-    [switch]$Backup
+    [switch]$Backup,
+    [switch]$BackupLogs,
+    [string]$KeepIn = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'CrossChat backup')
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2
@@ -74,13 +77,13 @@ switch ($Step) {
     }
     'uninstall' {
         Stop-Hubs
-        if ($Backup) {
-            $keep = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'CrossChat backup'
-            $mine = @('config.json', 'themes', 'quick.json', 'filters.json', 'tts.json') | ForEach-Object { Join-Path $App $_ } | Where-Object { Test-Path $_ }
-            if ($mine) {
-                New-Item -ItemType Directory -Force $keep | Out-Null
-                foreach ($item in $mine) { Copy-Item $item $keep -Recurse -Force }
-            }
+        $wanted = @()
+        if ($Backup) { $wanted += 'config.json', 'themes', 'quick.json', 'filters.json', 'tts.json' }
+        if ($BackupLogs) { $wanted += 'logs' }
+        $mine = @($wanted | ForEach-Object { Join-Path $App $_ } | Where-Object { Test-Path $_ })
+        if ($mine) {
+            New-Item -ItemType Directory -Force $KeepIn | Out-Null
+            foreach ($item in $mine) { Copy-Item $item $KeepIn -Recurse -Force }
         }
     }
 }

@@ -2,7 +2,7 @@
 ; installer\build.ps1 builds it and passes VERSION (x.y.z), STAGE (the folder laid out as installed) and OUTFILE.
 ;
 ;   setup.exe /S         installs silently (says yes to switching on OBS's WebSocket server when it's off)
-;   uninstall.exe /S     removes CrossChat silently (keeps settings and themes in Documents\CrossChat backup)
+;   uninstall.exe /S     removes CrossChat silently (keeps settings and themes in Documents\CrossChat backup, not chat history)
 
 Unicode true
 ManifestDPIAware true
@@ -163,8 +163,13 @@ Section "Uninstall"
   StrCpy $1 ""
   MessageBox MB_YESNO|MB_ICONQUESTION "Keep your settings and themes in Documents\CrossChat backup?" /SD IDYES IDNO +2
   StrCpy $1 "-Backup"
+  StrCpy $2 ""
+  ${If} ${FileExists} "$INSTDIR\logs\*.*"
+    MessageBox MB_YESNO|MB_ICONQUESTION "Keep your chat history there too?" /SD IDNO IDNO +2
+    StrCpy $2 "-BackupLogs"
+  ${EndIf}
   ${If} ${FileExists} "$INSTDIR\installer\steps.ps1"
-    nsExec::ExecToLog '${PS} "$INSTDIR\installer\steps.ps1" -Step uninstall -App "$INSTDIR" $1'
+    nsExec::ExecToLog '${PS} "$INSTDIR\installer\steps.ps1" -Step uninstall -App "$INSTDIR" $1 $2'
     Pop $0
   ${EndIf}
 
@@ -175,5 +180,9 @@ Section "Uninstall"
   ${EndIf}
   RMDir /r "$SMPROGRAMS\CrossChat"
   DeleteRegKey HKCU "${UNINSTKEY}"
-  MessageBox MB_OK|MB_ICONINFORMATION "CrossChat is removed. Two things only you can remove:$\r$\n  - OBS: Tools > Scripts, select crosschat.lua, press the minus button.$\r$\n  - Chrome or Edge: the extensions page, CrossChat, Remove." /SD IDOK
+  ${If} ${FileExists} "$INSTDIR\*.*"
+    MessageBox MB_OK|MB_ICONEXCLAMATION "CrossChat could not be fully removed: $INSTDIR is still there. Close whatever is using it (OBS, a window open in that folder), then delete the folder." /SD IDOK
+  ${Else}
+    MessageBox MB_OK|MB_ICONINFORMATION "CrossChat is removed. Two things only you can remove:$\r$\n  - OBS: Tools > Scripts, select crosschat.lua, press the minus button.$\r$\n  - Chrome or Edge: the extensions page, CrossChat, Remove." /SD IDOK
+  ${EndIf}
 SectionEnd

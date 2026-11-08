@@ -5,7 +5,7 @@
 local obs = obslua
 local ffi = require("ffi")
 local bit = require("bit")
-local WINDOWS = ffi.os == "Windows"   -- anything else is a Mac: there the hub is started with posix_spawn
+local WINDOWS = ffi.os == "Windows"   -- anything else is a Mac or Linux: there the hub is started with posix_spawn
 local LINUX = ffi.os == "Linux"       -- Linux: started like on a Mac, with Linux's own folders
 
 if WINDOWS then pcall(ffi.cdef, [[
@@ -26,6 +26,12 @@ if WINDOWS then pcall(ffi.cdef, [[
   int ShellExecuteExW(CROSSCHAT_SHELLEXECUTEINFOW* info);
   int GetExitCodeProcess(void* process, unsigned long* code);
   int CloseHandle(void* handle);
+  void* CreateThread(void* security, size_t stack, void* start, void* parameter, unsigned long flags, unsigned long* id);
+  typedef struct {
+    unsigned int cbSize; void* hwndOwner; void* hInstance; const wchar_t* lpszText; const wchar_t* lpszCaption;
+    unsigned long dwStyle; const wchar_t* lpszIcon; size_t dwContextHelpId; void* lpfnMsgBoxCallback; unsigned long dwLanguageId;
+  } CROSSCHAT_MSGBOXPARAMSW;
+  int MessageBoxIndirectW(const CROSSCHAT_MSGBOXPARAMSW* params);
 ]]) else pcall(ffi.cdef, [[
   int posix_spawn(int* pid, const char* path, void* const* actions, const void* attributes, char* const argv[], char* const envp[]);
   int posix_spawnp(int* pid, const char* file, void* const* actions, const void* attributes, char* const argv[], char* const envp[]);
@@ -53,15 +59,19 @@ if LINUX then
 end
 local kernel32 = WINDOWS and ffi.load("kernel32") or nil
 local shell32 = WINDOWS and ffi.load("shell32") or nil
+local user32 = WINDOWS and ffi.load("user32") or nil
 local SEP = WINDOWS and "\\" or "/"
 
 local VERSION = "1.9.0"
-local PORT = 4466
+local DEFAULT_PORT = 4466
 local python_setting = ""
 local hotkeys = {}
-local hub_process = nil       -- the hub this script started, watched so a crash doesn't leave you without chat
+-- Each hub is { process = its handle (Windows) or pid, pipe = OBS's end of its pipe (Flatpak) }.
+local running_hub = nil       -- the hub this script started, watched so a crash doesn't leave you without chat
+local second_hub = nil        -- one started while that one runs ("Start the hub again"): it ends at once if that one still answers
 local restarts = {}           -- when it was restarted, to give up on a hub that can't stay up
 local STILL_ACTIVE = 259
+local ALREADY_RUNNING = 3     -- the hub's exit code when another CrossChat hub already answers on its port
 
 -- Windows wants UTF-16; OBS and Lua speak UTF-8 (so folders with accents or other scripts work).
 local function wide(text)
@@ -82,10 +92,10 @@ local function exists(path)
   return kernel32.GetFileAttributesW(wide(path)) ~= 0xFFFFFFFF
 end
 
--- ShellExecute with show = 0: no console window flashes (os.execute and io.popen both flash one)
-local function run(file, parameters, directory, show)
+-- ShellExecute hidden: no console window flashes (os.execute and io.popen both flash one)
+local function run(file, parameters, directory)
   local done = shell32.ShellExecuteW(nil, wide("open"), wide(file), parameters and wide(parameters) or nil,
-                                     directory and wide(directory) or nil, show or 0)
+                                     directory and wide(directory) or nil, 0)
   return tonumber(ffi.cast("intptr_t", done)) > 32
 end
 
@@ -173,7 +183,6 @@ end
 -- on the computer itself (the OBS Flatpak is allowed to). The sandbox's process ids mean nothing out there, so instead
 -- of --obs-pid the hub gets a pipe as its input whose other end only OBS holds: it ends when OBS ends, and the hub too.
 local FLATPAK = false
-local hub_pipe = nil          -- (Flatpak) OBS's end of that pipe
 
 if not WINDOWS then
   exists = function(path)
@@ -191,16 +200,6 @@ if not WINDOWS then
     end
     return pid ~= nil
   end
-end
-
-local function open_page(address)
-  if WINDOWS then
-    return run(address, nil, nil, 1)
-  end
-  if LINUX then
-    return run("xdg-open", { address })
-  end
-  return run("/usr/bin/open", { address })
 end
 
 -- OBS's settings folder (where obs-websocket keeps its port and password). Portable OBS (started with --portable,
@@ -252,11 +251,22 @@ local function python()
   return "pyw.exe", "-3 "
 end
 
+-- A hub just started is watched at once when none is. While one runs it waits as the second hub: "Start the hub
+-- again" with a hub already there ends by itself, and the watchdog below must not lose sight of the running one.
+local function watch_new_hub(started)
+  if running_hub == nil then
+    running_hub = started
+  else
+    second_hub = started
+  end
+  return true
+end
+
 -- Like run(), but keeps a handle on the new process so the watchdog below can see whether it is still running.
 local function run_watched(file, parameters, directory)
   local info = ffi.new("CROSSCHAT_SHELLEXECUTEINFOW")
   info.cbSize = ffi.sizeof(info)
-  info.fMask = 0x40           -- SEE_MASK_NOCLOSEPROCESS
+  info.fMask = 0x440          -- SEE_MASK_NOCLOSEPROCESS, SEE_MASK_FLAG_NO_UI (Windows' own error box would stop OBS's thread)
   local verb, path, args, folder = wide("open"), wide(file), wide(parameters), wide(directory)   -- kept until the call returns
   info.lpVerb, info.lpFile, info.lpParameters, info.lpDirectory = verb, path, args, folder
   info.nShow = 0
@@ -264,11 +274,7 @@ local function run_watched(file, parameters, directory)
   if started == 0 or info.hProcess == nil then
     return false
   end
-  if hub_process ~= nil then
-    kernel32.CloseHandle(hub_process)
-  end
-  hub_process = info.hProcess
-  return true
+  return watch_new_hub({ process = info.hProcess })
 end
 
 -- macOS and Linux: the same, with the pid to wait for. (Flatpak: with the pipe described above as the hub's input.)
@@ -290,27 +296,53 @@ local function spawn_watched(argv)
   if pid == nil then
     return false
   end
-  if hub_process ~= nil then
-    table.insert(helpers, hub_process)                 -- an earlier hub still gets collected when it ends
-  end
-  if hub_pipe ~= nil then
-    ffi.C.close(hub_pipe)                              -- an earlier hub's pipe ends: that hub leaves too
-  end
-  hub_pipe = fds and fds[1] or nil
-  hub_process = pid
-  return true
+  return watch_new_hub({ process = pid, pipe = fds and fds[1] or nil })
 end
 
 -- Flatpak: run a program on the computer itself rather than in OBS's sandbox.
 local function on_host(argv)
   local out = { "flatpak-spawn", "--host", "--watch-bus" }
-  if os.getenv("CROSSCHAT_CONFIG") then              -- (tests point the hub at their own settings this way)
-    table.insert(out, "--env=CROSSCHAT_CONFIG=" .. os.getenv("CROSSCHAT_CONFIG"))
-  end
   for _, text in ipairs(argv) do
     table.insert(out, text)
   end
   return out
+end
+
+-- Something the streamer has to know about: in the script log, and in a box of its own (few open that log).
+local ALERT_GAP = 60          -- seconds: a button pressed again and again while Python is missing shows one box
+local last_alert = 0
+local boxes = {}              -- (Windows) what the boxes on screen read: kept for as long as the script runs
+
+local function alert(text)
+  obs.script_log(obs.LOG_WARNING, text)
+  local now = os.time()
+  if now - last_alert < ALERT_GAP then
+    return
+  end
+  last_alert = now
+  if WINDOWS then
+    -- The box waits for OK, so it gets a thread of its own, with no Lua on it: the watchdog runs on OBS's video thread.
+    -- (MessageBoxIndirectW takes one pointer, as a thread's start function does.)
+    local box, message, title = ffi.new("CROSSCHAT_MSGBOXPARAMSW"), wide(text), wide("CrossChat")
+    box.cbSize = ffi.sizeof(box)
+    box.lpszText, box.lpszCaption = message, title
+    box.dwStyle = 0x50030     -- MB_ICONWARNING, MB_SETFOREGROUND, MB_TOPMOST
+    table.insert(boxes, { box, message, title })
+    local thread = kernel32.CreateThread(nil, 0, ffi.cast("void*", user32.MessageBoxIndirectW), box, 0, nil)
+    if thread ~= nil then
+      kernel32.CloseHandle(thread)
+    end
+  elseif LINUX then
+    -- (a shell, to ask for whichever the desktop has; from a Flatpak OBS, on the computer itself, where they are)
+    local argv = { "sh", "-c", 'if command -v zenity > /dev/null; then exec zenity --warning --no-markup --title=CrossChat "--text=$1"; '
+      .. 'else exec kdialog --title CrossChat --sorry "$1"; fi', "sh", text }
+    if FLATPAK then
+      argv = on_host(argv)
+    end
+    run(argv[1], { unpack(argv, 2) })
+  else
+    run("osascript", { "-e", "on run argv", "-e", 'display alert "CrossChat" message (item 1 of argv) as warning', "-e", "end run", text })
+  end
 end
 
 local function python_run(script, arguments, watched)
@@ -339,7 +371,7 @@ local function python_run(script, arguments, watched)
     end
   end
   if not ok then
-    obs.script_log(obs.LOG_WARNING, "could not start Python (" .. exe .. "). Run "
+    alert("CrossChat could not start Python (" .. exe .. "). Run "
       .. (WINDOWS and "CrossChat's setup" or LINUX and "CrossChat's scripts/install.sh" or "Install.command")
       .. " again, or set the Python field in Tools > Scripts > crosschat.lua.")
   end
@@ -347,6 +379,10 @@ local function python_run(script, arguments, watched)
 end
 
 local function start_hub()
+  if second_hub ~= nil then
+    obs.script_log(obs.LOG_INFO, "a second hub is still starting: not starting another")
+    return
+  end
   local folder = obs_config_folder()
   obs.script_log(obs.LOG_INFO, "starting the hub (OBS settings in " .. folder .. ")")
   if FLATPAK then
@@ -360,20 +396,23 @@ local function start_hub()
   python_run("hub.py", string.format('--obs-pid %d --obs-config "%s"', kernel32.GetCurrentProcessId(), folder), true)
 end
 
--- How the hub this script started has ended: nil while it still runs, else its exit code.
-local function hub_ended()
+-- How a hub this script started has ended: nil while it still runs, else its exit code.
+local function hub_ended(started)
   if WINDOWS then
     local code = ffi.new("unsigned long[1]")
-    if kernel32.GetExitCodeProcess(hub_process, code) == 0 or code[0] == STILL_ACTIVE then
+    if kernel32.GetExitCodeProcess(started.process, code) == 0 or code[0] == STILL_ACTIVE then
       return nil
     end
-    kernel32.CloseHandle(hub_process)
+    kernel32.CloseHandle(started.process)
     return tonumber(code[0])
   end
   local status = ffi.new("int[1]")
-  local done = ffi.C.waitpid(hub_process, status, 1)   -- WNOHANG
+  local done = ffi.C.waitpid(started.process, status, 1)   -- WNOHANG
   if done == 0 then
     return nil
+  end
+  if started.pipe ~= nil then
+    ffi.C.close(started.pipe)
   end
   if done < 0 then
     return 0                  -- someone else collected it: nothing to go on, so no restart
@@ -384,21 +423,40 @@ local function hub_ended()
   return 128 + bit.band(status[0], 0x7f)                -- ended by a signal
 end
 
--- The watchdog: if the hub stops with an error (not because OBS is closing or another hub already runs, which end
--- it normally), start it again. Five restarts in ten minutes means something is really wrong: then it stops trying
--- and says so in the script log.
+-- The watchdog: if the hub stops with an error (not when it ended normally, or another hub already answers on its
+-- port: that's code 3), start it again. Five restarts in ten minutes means something is really wrong: then it stops
+-- trying and tells you.
 local function watch_hub()
   if not WINDOWS then
     reap()
   end
-  if hub_process == nil then
+  if second_hub ~= nil then
+    local code = hub_ended(second_hub)
+    if code ~= nil then
+      second_hub = nil
+      if code == ALREADY_RUNNING then
+        obs.script_log(obs.LOG_INFO, "the hub is already running: leaving it as it is")
+      elseif code ~= 0 then
+        obs.script_log(obs.LOG_WARNING, "a second hub stopped with an error (code " .. code .. "); the first one keeps running")
+      end
+    end
+  end
+  if running_hub == nil then
     return
   end
-  local code = hub_ended()
+  local code = hub_ended(running_hub)
   if code == nil then
     return
   end
-  hub_process = nil
+  running_hub = nil
+  if second_hub ~= nil then
+    running_hub, second_hub = second_hub, nil           -- the second hub came up as this one ended: watch that one now
+    return
+  end
+  if code == ALREADY_RUNNING then
+    obs.script_log(obs.LOG_INFO, "another CrossChat hub is already running: leaving it as it is")
+    return
+  end
   if code == 0 or not exists(app_folder() .. SEP .. "hub" .. SEP .. "hub.py") then
     return                    -- it ended normally, or CrossChat was uninstalled
   end
@@ -411,7 +469,8 @@ local function watch_hub()
   end
   restarts = recent
   if #restarts >= 5 then
-    obs.script_log(obs.LOG_WARNING, "the hub keeps stopping with an error; see crosschat.log, then press Start the hub again")
+    alert("CrossChat's hub keeps stopping with an error, so it was not started again. See crosschat.log in the CrossChat folder, "
+      .. "then press Start the hub again in Tools > Scripts > crosschat.lua.")
     return
   end
   table.insert(restarts, now)
@@ -428,23 +487,32 @@ local function control(command)
   end
 end
 
+-- The port the hub listens on: "port" in config.json, read with OBS's own JSON reader.
+local function hub_port()
+  local settings = obs.obs_data_create_from_json_file(app_folder() .. SEP .. "config.json")
+  if settings == nil then
+    return DEFAULT_PORT
+  end
+  local port = obs.obs_data_get_int(settings, "port")
+  obs.obs_data_release(settings)
+  return port > 0 and port or DEFAULT_PORT
+end
+
 function script_description()
+  local address = "<code>http://127.0.0.1:" .. hub_port() .. "/overlay/"
   return "<b>CrossChat " .. VERSION .. "</b><br>Every platform's chat in one window, on-stream chat widgets, and X Live "
     .. "started with OBS.<br><br>On-stream widgets (add each as a Browser Source):<br>"
-    .. "<code>http://127.0.0.1:" .. PORT .. "/overlay/chat</code><br>"
-    .. "<code>http://127.0.0.1:" .. PORT .. "/overlay/featured</code><br>"
-    .. "<code>http://127.0.0.1:" .. PORT .. "/overlay/viewers</code><br>"
-    .. "<code>http://127.0.0.1:" .. PORT .. "/overlay/alerts</code><br>"
+    .. address .. "chat</code><br>"
+    .. address .. "featured</code><br>"
+    .. address .. "viewers</code><br>"
+    .. address .. "alerts</code><br>"
     .. "Restyle them in the Theme Studio."
 end
 
 function script_properties()
   local props = obs.obs_properties_create()
   obs.obs_properties_add_button(props, "show", "Open chat window", control("show"))
-  obs.obs_properties_add_button(props, "studio", "Open Theme Studio", function()
-    open_page("http://127.0.0.1:" .. PORT .. "/studio")
-    return false
-  end)
+  obs.obs_properties_add_button(props, "studio", "Open Theme Studio", control("studio"))
   obs.obs_properties_add_button(props, "unfeature", "Hide featured message", control("unfeature"))
   obs.obs_properties_add_button(props, "x_live", "Go live on X now", control("x-live"))
   obs.obs_properties_add_button(props, "x_dry", "Test X (fill the form, never go live)", control("x-dry"))
@@ -484,10 +552,12 @@ end
 
 function script_unload()
   obs.timer_remove(watch_hub)
-  if hub_process ~= nil and WINDOWS then
-    kernel32.CloseHandle(hub_process)
+  if WINDOWS then
+    for _, started in pairs({ running_hub, second_hub }) do
+      kernel32.CloseHandle(started.process)
+    end
   end
-  hub_process = nil           -- (on a Mac or Linux the hub stays a child of OBS and leaves with it)
+  running_hub, second_hub = nil, nil                    -- (on a Mac or Linux the hub stays a child of OBS and leaves with it)
 end
 
 function script_save(settings)
