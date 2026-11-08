@@ -1,9 +1,10 @@
 // The CrossChat app: the chat window on the streaming PC (http://127.0.0.1:4466/) and the companion on a phone, tablet
 // or another PC on the home network (http://<this PC>:4467/). One page for both; GET /whoami says which it is.
 //
-// Everything is sent through the hub (POST /send, /mod, ...). The hub does Twitch itself once Twitch is connected; YouTube
-// and X go out through the CrossChat extension, which only the chat window on the streaming PC has. That window is the
-// hub's "executor": it receives `outbox` jobs, hands them to the extension and reports back with POST /outbox/result.
+// Everything is sent through the hub (POST /send, /mod, ...). The hub does Twitch and Kick itself once they are connected;
+// YouTube, X, TikTok, Facebook, Instagram and Rumble go out through the CrossChat extension, which only the chat window on
+// the streaming PC has. That window is the hub's "executor": it receives `outbox` jobs, hands them to the extension and
+// reports back with POST /outbox/result.
 
 // ---- the pure part (no page needed; tests/js/app.test.mjs loads it in node) -----------------------------------------
 (function (root, factory) {
@@ -19,6 +20,8 @@
   const PAGE_PLATFORMS = ['tiktok', 'facebook', 'instagram', 'rumble'];
   const QUICK_MAX = 30, QUICK_LENGTH = 100;
   const LONGEST_TIMEOUT = { twitch: 1209600, kick: 604800 };    // 14 days; 7 days
+  // The chats a reply reaches through the CrossChat extension (the hub does Twitch and Kick itself).
+  const THROUGH_EXTENSION = 'YouTube, X, TikTok, Facebook, Instagram and Rumble';
 
   const name = (p) => (NAMES[p] ? NAMES[p][0] : p);
   const takesReplies = (p, kick) => !!LIMIT[p] && (p !== 'kick' || kick === 'on');
@@ -141,25 +144,6 @@
     return 'rgb(' + r + ',' + g + ',' + b + ')';
   }
 
-  // The message text in pieces, Twitch emotes ("id:a-b,c-d/id2:e-f") cut out by code point: [{ text } | { emote, alt }].
-  function pieces(text, emotes) {
-    const chars = [...String(text || '')], ranges = [];
-    String(emotes || '').split('/').filter(Boolean).forEach((e) => {
-      const [id, spots] = e.split(':');
-      (spots || '').split(',').forEach((s) => { const [a, z] = s.split('-').map(Number); ranges.push([a, z, id]); });
-    });
-    const out = [];
-    let at = 0;
-    ranges.sort((a, b) => a[0] - b[0]).forEach(([a, z, id]) => {
-      if (!/^\w+$/.test(id || '') || !(a >= at && z >= a && z < chars.length)) return;
-      if (a > at) out.push({ text: chars.slice(at, a).join('') });
-      out.push({ emote: id, alt: chars.slice(a, z + 1).join('') });
-      at = z + 1;
-    });
-    if (at < chars.length) out.push({ text: chars.slice(at).join('') });
-    return out;
-  }
-
   // A custom timeout typed in minutes, as the seconds platform p takes: Twitch 1 minute to 14 days, Kick whole minutes
   // (rounded up) from 1 minute to 7 days.
   function timeoutSeconds(p, minutes) {
@@ -170,6 +154,7 @@
 
   // ---- reading chat aloud ----------------------------------------------------------------------------------------------
   const TTS_READ = ['all', 'questions', 'events', 'command', 'featured'];
+  const TTS_READ_DEFAULT = 'questions', TTS_COMMAND_MOST = 20, TTS_VOICE_MOST = 120;
   const TTS_PLATFORMS = ['twitch', 'youtube', 'kick', 'x', 'tiktok', 'facebook', 'instagram', 'rumble'];
 
   // Text-to-speech settings as the hub keeps them, from whatever came in (missing or wrong values get the defaults).
@@ -179,14 +164,14 @@
     const list = Array.isArray(s.platforms) ? TTS_PLATFORMS.filter((p) => s.platforms.includes(p)) : 'all';
     return {
       enabled: s.enabled === true,
-      read: TTS_READ.includes(s.read) ? s.read : 'all',
-      command: [...clean(s.command)].slice(0, 20).join('') || '!tts',
+      read: TTS_READ.includes(s.read) ? s.read : TTS_READ_DEFAULT,
+      command: [...clean(s.command)].slice(0, TTS_COMMAND_MOST).join('') || '!tts',
       names: s.names !== false,
-      max_chars: Math.round(num(s.max_chars, 20, 500, 200)),
+      max_chars: Math.round(num(s.max_chars || 200, 20, 500, 200)),
       skip_links: s.skip_links !== false,
       platforms: list === 'all' || list.length === TTS_PLATFORMS.length ? 'all' : list,
-      voice: typeof s.voice === 'string' ? s.voice.slice(0, 200) : '',
-      rate: Math.round(num(s.rate, 0.5, 2, 1) * 10) / 10,
+      voice: typeof s.voice === 'string' ? [...s.voice].slice(0, TTS_VOICE_MOST).join('') : '',
+      rate: Math.round(num(s.rate || 1, 0.5, 2, 1) * 10) / 10,
       volume: Math.round(num(s.volume, 0, 1, 1) * 100) / 100,
     };
   }
@@ -336,10 +321,11 @@
   // ---- viewer cards --------------------------------------------------------------------------------------------------
   // Where a viewer's card comes from: GET /viewer for one platform and name (plus the platform's id when known), and
   // what to search for.
+  const VIEWER_LENGTH = 100;                   // characters of a name or a search the hub takes (viewers.py)
   function viewerPath(who, q) {
-    const out = ['p=' + encodeURIComponent(who.p || ''), 'name=' + encodeURIComponent(String(who.name || '').slice(0, 100))];
+    const out = ['p=' + encodeURIComponent(who.p || ''), 'name=' + encodeURIComponent([...String(who.name || '')].slice(0, VIEWER_LENGTH).join(''))];
     if (who.uid && /^[\w.:@|-]{1,128}$/.test(who.uid)) out.push('uid=' + encodeURIComponent(who.uid));
-    const search = clean(q).slice(0, 100);
+    const search = [...clean(q)].slice(0, VIEWER_LENGTH).join('');
     if (search) out.push('q=' + encodeURIComponent(search));
     return '/viewer?' + out.join('&');
   }
@@ -393,28 +379,28 @@
   const discordWebhook = (url) => /^https:\/\/(discord\.com|discordapp\.com|ptb\.discord\.com|canary\.discord\.com)\/api\/webhooks\/\d{15,22}\/[\w-]{30,100}$/.test(clean(url));
   // How long to wait for a reply, moderation or a window job (ms). YouTube moderation may first have to open YouTube's
   // chat pop-out (the hub waits as long: YT_MOD_SECONDS); a window job may wait for a window that is still opening.
-  const patience = (job) => (job && job.kind === 'mod' && job.p === 'youtube' ? 75000
-    : 25000 + (job && job.kind === 'window' ? Math.min(Math.max(Number(job.wait) || 0, 0), 60) * 1000 : 0));
+  const YOUTUBE_MOD_MS = 75000, JOB_MS = 25000;
+  const patience = (job) => (job && job.kind === 'mod' && job.p === 'youtube' ? YOUTUBE_MOD_MS
+    : JOB_MS + (job && job.kind === 'window' ? Math.min(Math.max(Number(job.wait) || 0, 0), 60) * 1000 : 0));
 
   return { NAMES, LIMIT, PAGE_PLATFORMS, QUICK_MAX, QUICK_LENGTH, LIST_MAX, LIST_LENGTH, TTS_READ, TTS_PLATFORMS, name, takesReplies, openPlatforms, targetsFor,
-           tooLong, clean, route, canReply, modMenu, duration, describe, cleanQuick, inView, mention, secondsLeft, readable, pieces, timeoutSeconds,
+           tooLong, clean, route, canReply, modMenu, duration, describe, cleanQuick, inView, mention, secondsLeft, readable, timeoutSeconds,
            ttsSettings, onlineVoice, voiceMaker, voiceGroups, pickVoice, speech, cleanList, filterSettings, span, health, validLog, bytes, logFilter,
            CONFIG_FIELDS, CONFIG_KEYS, configValue, configChanges, viewerPath, viewerFacts, viewerLatest, alertWord, releaseLink, extensionBehind, EXTENSION_NEEDED,
-           discordWebhook, onMac, openChatHow, patience };
+           discordWebhook, onMac, openChatHow, patience, THROUGH_EXTENSION };
 });
 
 // ---- the page ---------------------------------------------------------------------------------------------------------
 if (typeof document !== 'undefined' && document.getElementById('list')) (function (A) {
   const $ = (id) => document.getElementById(id);
   const Q = new URLSearchParams(location.search);
-  const DEMO = Q.has('demo'), DEMO_KIND = Q.get('demo') || '';
   const DRY = Q.has('dry');                       // ?dry: a test, nothing is posted anywhere
   const list = $('list'), jump = $('jump'), say = $('say');
   const css = (v) => getComputedStyle(document.documentElement).getPropertyValue('--' + v).trim();
   const store = (key, value) => { try { if (value === undefined) return localStorage.getItem(key); localStorage.setItem(key, value); } catch (e) { return null; } return null; };
   const touch = matchMedia('(hover: none)');
 
-  const F = globalThis.CrossChatFeed || { emoteMap: () => new Map(), withEmotes: (p) => p };
+  const F = globalThis.CrossChatFeed;
   const T = globalThis.CrossChatTheme;            // alert sentences, the same as on stream (theme.js)
   const ctx = { remote: false, device: null, version: '', lanUrl: null, app: '', live: false, executor: false, executorKnown: false, twitch: 'off',
                 bridge: !!document.documentElement.dataset.crosschat, states: {}, unpaired: false };
@@ -437,7 +423,6 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
 
   // ---- talking to the hub -----------------------------------------------------------------------------------------
   async function api(path, body) {
-    if (DEMO) return demoApi(path, body || {});
     try {
       const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}), cache: 'no-store' });
       if (r.status === 401 || r.status === 403) { if (ctx.remote) unpaired(); return { ok: false, why: 'this device is not paired' }; }
@@ -501,7 +486,12 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     delete jobs[n]; clearTimeout(j.timer);
     const why = 'the CrossChat extension did not answer';
     if (!answer) answer = j.job.kind === 'send' ? Object.fromEntries((j.job.to || []).map((p) => [p, { ok: false, why }])) : { ok: false, why };
-    api('/outbox/result', { job_id: j.job.id, answer });
+    const landed = api('/outbox/result', { job_id: j.job.id, answer });
+    // The extension closes this window for the hub once its answer has got there. (An extension from before 1.9 ignores
+    // this and closes it by itself a moment later.)
+    if (j.job.kind === 'window' && j.job.action === 'close' && j.job.role === 'chat') {
+      landed.then(() => window.postMessage({ crosschat: 'window', action: 'answered', role: 'chat' }, location.origin));
+    }
   }
   window.addEventListener('message', (e) => {
     if (e.source !== window || !e.data || !['sent', 'modded', 'windowed'].includes(e.data.crosschat)) return;
@@ -536,7 +526,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
 
   // The message text, with Twitch's emotes and 7TV / BetterTTV / FrankerFaceZ words swapped for their pictures.
   function words(into, m) {
-    F.withEmotes(A.pieces(m.text, m.p === 'twitch' ? m.emotes : ''), emotes).forEach((piece) => {
+    F.withEmotes(T.emotePieces(m.text, m.p === 'twitch' ? m.emotes : ''), emotes).forEach((piece) => {
       if (piece.text != null) { into.append(piece.text); return; }
       const img = el('img', piece.url ? 'emote' : 'emote tw'); img.alt = piece.alt; img.title = piece.alt; img.decoding = 'async';
       img.src = piece.url || 'https://static-cdn.jtvnw.net/emoticons/v2/' + piece.emote + '/default/' + (lightNow() ? 'light' : 'dark') + '/1.0';
@@ -904,7 +894,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
   }
 
   // ---- the action sheet for one message ------------------------------------------------------------------------------
-  const ctxNow = () => ({ remote: ctx.remote, executor: ctx.executor || DEMO, twitch: twitchAuth.state, kick: kickAuth.state, states: ctx.states });
+  const ctxNow = () => ({ remote: ctx.remote, executor: ctx.executor, twitch: twitchAuth.state, kick: kickAuth.state, states: ctx.states });
 
   // After Twitch, Kick or the chat window comes or goes: what each row's reply button can do now.
   function refreshActs() {
@@ -1434,7 +1424,6 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
   // ---- chat history (the streaming PC only): every stream's chat, saved by the hub ------------------------------------
   let logs = [], log = null;
   async function getJSON(path) {
-    if (DEMO) return demoGet(path);
     const r = await fetch(path, { cache: 'no-store' });
     if (!r.ok) throw new Error(path + ': ' + r.status);
     return r.json();
@@ -1473,7 +1462,6 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     [['csv', 'CSV'], ['html', 'HTML']].forEach(([ext]) => {
       const a = $('log-' + ext);
       a.href = '/logs/' + encodeURIComponent(g.name) + '.' + ext; a.download = 'crosschat-' + g.name + '.' + ext;
-      a.onclick = DEMO ? (e) => { e.preventDefault(); note('Demo: there is no saved chat to export.'); } : null;
     });
     $('log-lines').textContent = ''; $('log-more').hidden = true; $('log-count').textContent = 'Loading…';
     let messages;
@@ -1659,6 +1647,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     if (!ctx.remote) { drawChannels(); loadConfig().then(drawChannels); }
     $('devices-section').hidden = ctx.remote;
     $('firewall-hint').hidden = A.onMac(navigator.platform);       // (a Mac: the Pair button says what it needs)
+    $('tailscale-row').hidden = $('tailscale-hint').hidden = A.onMac(navigator.platform);    // (no Tailscale on a Mac yet: tailscale.py)
     $('update-row').hidden = ctx.remote;
     $('filters-section').hidden = ctx.remote;
     $('history-section').hidden = ctx.remote;
@@ -1676,9 +1665,9 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     else if (!ctx.remote && A.extensionBehind(document.documentElement.dataset.crosschat, A.EXTENSION_NEEDED)) {
       say_ = 'The CrossChat extension in this browser is still ' + document.documentElement.dataset.crosschat + ' (CrossChat needs ' + A.EXTENSION_NEEDED
         + ' or newer). Open chrome://extensions (edge://extensions in Edge) and press the reload arrow on CrossChat, then reload this window (F5).';
-    } else if (!DEMO && ctx.executorKnown && !ctx.executor) {
-      say_ = ctx.remote ? 'Replies to YouTube and X need the CrossChat window open on the streaming PC (Chrome or Edge with the extension).'
-        : ctx.bridge ? '' : 'Replies to YouTube and X go out through the CrossChat window in Chrome or Edge with the extension: '
+    } else if (ctx.executorKnown && !ctx.executor) {
+      say_ = ctx.remote ? 'Replies to ' + A.THROUGH_EXTENSION + ' need the CrossChat window open on the streaming PC (Chrome or Edge with the extension).'
+        : ctx.bridge ? '' : 'Replies to ' + A.THROUGH_EXTENSION + ' go out through the CrossChat window in Chrome or Edge with the extension: '
           + A.openChatHow(navigator.platform) + '.';
       if (say_ && twitchAuth.state !== 'on' && ctx.states.twitch) say_ += ' Connect Twitch in Settings' + (ctx.remote ? ' on the streaming PC' : '') + ' to reply on Twitch.';
     }
@@ -1738,7 +1727,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
       case 'devices': devices = m.devices || []; drawDevices(); break;
       case 'pair': showPair(m); break;
       case 'emotes': emotes = F.emoteMap(m.emotes); rewords(); break;
-      case 'say': if (speakerRole() || DEMO) sayIt({ id: m.id, text: m.text, voice: m.voice, rate: m.rate, volume: m.volume }); break;
+      case 'say': if (speakerRole()) sayIt({ id: m.id, text: m.text, voice: m.voice, rate: m.rate, volume: m.volume }); break;
       case 'say_stop': stopSpeech(false); break;
       case 'tts': tts = A.ttsSettings(m.settings); if ($('settings').open) drawTts(); break;
       case 'filters': filters = A.filterSettings(m.settings); if ($('settings').open && !$('filters-section').contains(document.activeElement)) drawFilters(); break;
@@ -1757,7 +1746,7 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
     let frame = $('yt');
     if (frame && frame.dataset.v === video) return;
     if (frame) frame.remove();
-    if (!video || !executorRole() || DEMO) return;
+    if (!video || !executorRole()) return;
     frame = el('iframe'); frame.id = 'yt'; frame.dataset.v = video; frame.tabIndex = -1; frame.title = 'YouTube chat (used to send replies)';
     frame.setAttribute('aria-hidden', 'true');
     frame.src = 'https://www.youtube.com/live_chat?v=' + encodeURIComponent(video) + '&embed_domain=' + location.hostname;
@@ -1772,200 +1761,31 @@ if (typeof document !== 'undefined' && document.getElementById('list')) (functio
       connected(false);
       if (ctx.remote) fetch('/whoami', { cache: 'no-store' }).then((r) => { if (r.status === 401 || r.status === 403) unpaired(); }).catch(() => {});
     };
-    feed.onmessage = (e) => { try { handle(JSON.parse(e.data)); } catch (err) { /* a line this page does not understand */ } };
+    feed.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch (err) { return; } handle(m); };   // (a bug in handle() must show)
   }
 
+  const WHOAMI_AGAIN = 2000;                      // ms between asks
   async function start() {
     showDing(); showTheme(); drawQuick(); drawViews();
+    say.maxLength = 2 * Math.max(...Object.values(A.LIMIT));   // the box counts an emoji as two, the limits as one
     if (touch.matches) say.placeholder = 'Message every live chat';
     if (DRY) say.placeholder = 'TEST MODE: nothing typed here is posted.';
-    if (DEMO) { demo(); return; }
-    try {
-      const r = await fetch('/whoami', { cache: 'no-store' });
-      if (r.status === 401 || r.status === 403) { ctx.remote = true; unpaired(); applyMode(); return; }
-      const w = await r.json();
-      Object.assign(ctx, { remote: !!w.remote, device: w.device || null, version: w.version || '', lanUrl: w.lan_url || null, app: w.app || '' });
-    } catch (e) { /* an older hub: behave as the window on this PC */ }
+    // The hub has just served this page, so no answer means it is restarting or the network dropped. Which window this is
+    // decides what it may do, so it waits to be told.
+    let w = null;
+    while (!w) {
+      try {
+        const r = await fetch('/whoami', { cache: 'no-store' });
+        if (r.status === 401 || r.status === 403) { ctx.remote = true; unpaired(); applyMode(); return; }
+        if (r.ok) w = await r.json();
+      } catch (e) { /* tried again below */ }
+      if (!w) { connected(false); await new Promise((r) => setTimeout(r, WHOAMI_AGAIN)); }
+    }
+    Object.assign(ctx, { remote: !!w.remote, device: w.device || null, version: w.version || '', lanUrl: w.lan_url || null, app: w.app || '' });
     applyMode();
     connect();
     drawEntry();
     if (!ctx.remote && (await loadConfig()) && config.first_run) openChannels(true);
-  }
-
-  // ---- ?demo: made-up people and lines, no network ------------------------------------------------------------------
-  function demoApi(path, body) {
-    const ok = (extra) => Promise.resolve(Object.assign({ ok: true }, extra || {}));
-    const id = 'demo-job-' + Math.random().toString(36).slice(2);
-    if (path === '/send') {
-      setTimeout(() => {
-        body.to.forEach((p) => handle({ type: 'msg', id: 'demo-you-' + p + Date.now(), t: Date.now(), p, name: 'you', badges: ['broadcaster'], color: '#e3a57b', kind: 'chat', text: body.text }));
-        handle({ type: 'sent', job_id: id, answer: Object.fromEntries(body.to.map((p) => [p, { ok: true }])) });
-      }, 350);
-      return ok({ job_id: id });
-    }
-    if (path === '/mod') {
-      setTimeout(() => {
-        if (body.action !== 'unban') handle({ type: body.action === 'delete' ? 'delete' : 'purge', id: [...msgs.values()].find((m) => m.mid === body.message_id)?.id, p: body.p, name: (body.name || '').toLowerCase() });
-        handle({ type: 'sent', job_id: id, answer: { ok: true } });
-      }, 350);
-      return ok({ job_id: id });
-    }
-    if (path === '/feature') { handle({ type: 'feature', msg: body.id ? msgs.get(body.id) : null }); return ok(); }
-    if (path === '/star') { const s = new Set(starred); if (body.on) s.add(body.id); else s.delete(body.id); handle({ type: 'starred', ids: [...s] }); return ok(); }
-    if (path === '/quick') { handle({ type: 'quick', replies: body.replies }); return ok(); }
-    if (path === '/pair/start') { handle({ type: 'pair', code: '482913', url: 'http://192.168.1.20:4467/pair?code=482913', expires: Date.now() / 1000 + 300 }); return ok(); }
-    if (path === '/twitch/connect') { handle({ type: 'twitch_auth', state: 'pending', user_code: 'WDJB-MJHT', verification_uri: 'https://www.twitch.tv/activate' }); return ok(); }
-    if (path === '/twitch/disconnect') { handle({ type: 'twitch_auth', state: 'off' }); return ok(); }
-    if (path === '/devices/revoke') { handle({ type: 'devices', devices: devices.filter((d) => d.id !== body.id) }); return ok(); }
-    if (path === '/kick/connect') { handle({ type: 'kick_auth', state: 'pending' }); setTimeout(() => handle({ type: 'kick_auth', state: 'on', login: 'you' }), 1500); return ok(); }
-    if (path === '/kick/disconnect') { handle({ type: 'kick_auth', state: 'off' }); return ok(); }
-    if (path === '/rumble/connect') { handle({ type: 'rumble_auth', state: 'on' }); return ok(); }
-    if (path === '/rumble/disconnect') { handle({ type: 'rumble_auth', state: 'off' }); return ok(); }
-    if (path === '/config') {                     // as the hub answers: saved, and which changes wait for OBS to restart
-      const changes = body.settings || {}, later = Object.keys(changes).filter((k) => demoConfig.restart.includes(k));
-      Object.assign(demoConfig.settings, changes);
-      const label = (k) => (A.CONFIG_FIELDS.find((f) => f.key === k) || { label: k }).label;
-      return ok({ why: later.length ? 'Saved. Restart OBS to apply: ' + later.map(label).join(', ') + '.' : 'Saved.', restart_needed: !!later.length, restart: later });
-    }
-    if (path === '/discord/connect') { handle({ type: 'discord_auth', state: 'on', name: 'stream-chat', live: true, featured: true, chat: false }); return ok(); }
-    if (path === '/discord/options') { handle(Object.assign({}, discordAuth, body, { type: 'discord_auth' })); return ok(); }
-    if (path === '/discord/disconnect') { handle({ type: 'discord_auth', state: 'off' }); return ok(); }
-    if (path === '/companion/tailscale') { handle({ type: 'companion', tailscale: !!body.on, address: body.on ? '100.101.102.103' : '', listening: false, why: '' }); return ok(); }
-    if (path === '/updates') { handle({ type: 'update', check: !!body.check, version: '', url: '' }); return ok(); }
-    if (path === '/tts') { setTimeout(() => handle({ type: 'tts', settings: body.settings }), 50); return ok(); }
-    if (path === '/filters') { setTimeout(() => handle({ type: 'filters', settings: body.settings }), 50); return ok(); }
-    if (path === '/tts/skip') { handle({ type: 'say_stop' }); return ok(); }
-    if (path === '/tts/say') {
-      const m = msgs.get(body.id);
-      if (m) handle({ type: 'say', id: m.id, text: (tts.names ? m.name + ' says: ' : '') + m.text, voice: tts.voice, rate: tts.rate, volume: tts.volume });
-      return ok();
-    }
-    return ok();
-  }
-
-  // ?demo settings: placeholder channels, nothing real.
-  const demoConfig = {
-    settings: { twitch: 'your_channel', youtube: '@yourchannel', kick: 'your_channel', tiktok: '', facebook: false, instagram: false, broadcaster: 'auto', 'x.enabled': true, 'x.auto_go_live': false,
-                'x.title': 'Building a chat app live', 'x.title_file': '', 'x.source': 'OBS', window: 'auto', open_window_on_stream_start: true,
-                close_window_seconds_after_stream: 120, 'emotes.bttv': true, 'emotes.ffz': true, 'emotes.7tv': true, 'logs.enabled': true, 'logs.keep_days': 90,
-                'remote.enabled': true, 'remote.port': 4467 },
-    restart: ['twitch', 'youtube', 'kick', 'tiktok', 'facebook', 'instagram', 'broadcaster', 'x.enabled'], custom_window: false, first_run: false,
-  };
-  if (DEMO_KIND === 'firstrun') {
-    Object.assign(demoConfig.settings, { twitch: '', youtube: '', kick: '', 'x.enabled': false, 'x.title': 'Live now' });
-    demoConfig.first_run = true;
-  }
-
-  // ?demo viewer card: the viewer's lines in this page, and made-up ones from two earlier streams.
-  function demoViewer(path) {
-    const q = new URLSearchParams(path.split('?')[1] || ''), p = q.get('p'), who = String(q.get('name') || '').toLowerCase();
-    const search = String(q.get('q') || '').toLowerCase(), hit = (m) => !search || String(m.text || '').toLowerCase().includes(search);
-    const mine = [...msgs.values()].filter((m) => m.p === p && m.kind !== 'note' && String(m.name || '').toLowerCase() === who);
-    const chat = mine.filter((m) => m.kind === 'chat'), day = 24 * 3600000, first = chat.some((m) => m.first === 'ever');
-    const past = first ? [] : ['that build from last week still runs great', 'is the overlay open source?', 'gg, see you Thursday', 'how do you keep chat this fast?']
-      .map((text, i) => ({ id: 'old-' + i, t: Date.now() - (i < 2 ? 2 : 5) * day - i * 600000, p, name: mine[0] ? mine[0].name : who, kind: 'chat', text,
-                           stream: i < 2 ? 'demo-tuesday' : 'demo-saturday' })).filter(hit);
-    return Promise.resolve({ ok: true, p, name: mine[0] ? mine[0].name : who, count: chat.length, first_seen: chat.length ? chat[0].t : null,
-                             first_ever: first, history: true, stream: mine.filter(hit).reverse(), past, past_streams: first ? 0 : 2, truncated: false });
-  }
-
-  // ?demo chat history: three streams of made-up chat.
-  function demoGet(path) {
-    if (path === '/config/editable') return Promise.resolve(JSON.parse(JSON.stringify(demoConfig)));
-    if (path.startsWith('/viewer?')) return demoViewer(path);
-    const hour = 3600000, start = new Date(); start.setHours(13, 45, 0, 0);
-    const day = (n) => start.getTime() - n * 24 * hour;
-    const all = [
-      { name: 'demo-today', started: day(0), ended: null, messages: 1284, bytes: 221184 },
-      { name: 'demo-tuesday', started: day(2) + 2 * hour, ended: day(2) + 4.2 * hour, messages: 3910, bytes: 702464 },
-      { name: 'demo-saturday', started: day(5) - hour, ended: day(5) + 1.5 * hour, messages: 2207, bytes: 391168 },
-    ];
-    if (path === '/logs') return Promise.resolve({ logs: all });
-    const from = (all.find((g) => path === '/logs/' + g.name + '.json') || all[0]).started;
-    const who = [['twitch', 'pixel_pirate', '#ff7f50'], ['youtube', 'Maya Chen', ''], ['x', 'Dev Daily', ''], ['kick', 'turbo_kat', '#53fc18'],
-                 ['twitch', 'nightowl_42', '#1e90ff'], ['youtube', 'Sam Ortiz', ''], ['twitch', 'kiwi_codes', '#9acd32'], ['youtube', 'Rafael Gomes', ''],
-                 ['tiktok', 'luna.makes', '']];
-    const said = ['what are we building today?', 'hello from Lisbon 👋', 'one chat for every platform, finally', 'W stream', 'welcome in everyone',
-                  'can you show how replies reach every platform?', 'that boss fight was wild', 'what keyboard is that?', 'how do I set up the overlay?',
-                  'gg', 'is the theme studio free too?', 'love the new layout'];
-    return Promise.resolve(Array.from({ length: 160 }, (_, i) => {
-      const [p, name, color] = who[(i * 5) % who.length], text = said[(i * 7) % said.length];
-      return { id: 'log-' + i, t: from + i * 41000, p, name, color, kind: 'chat', text, question: /\?$/.test(text) };
-    }));
-  }
-
-  function demo() {
-    const remote = DEMO_KIND === 'remote';
-    Object.assign(ctx, { remote, device: remote ? 'Phone' : null, version: '1.4.0', lanUrl: 'http://192.168.1.20:4467/', executor: true, executorKnown: true });
-    applyMode(); connected(true);
-    const t = Date.now() - 9 * 60000, at = (min) => t + min * 60000, ago = (s) => Date.now() - s * 1000;
-    handle({ type: 'status', live: true, status: { twitch: 'on', youtube: 'on', kick: 'on', x: 'on', tiktok: 'on' },
-             health: { twitch: { since: ago(4320), last: ago(8), reconnects: 0 }, youtube: { since: ago(4290), last: ago(3), reconnects: 2 },
-                       kick: { since: ago(1260), last: ago(41), reconnects: 1 }, x: { since: ago(4250), last: ago(95), reconnects: 0 },
-                       tiktok: { since: ago(4200), last: ago(12), reconnects: 0 } } });
-    handle({ type: 'viewers', counts: { twitch: 128, youtube: 342, kick: 41, x: 87, tiktok: 214 }, total: 812 });
-    handle({ type: 'twitch_auth', state: 'on', login: 'you' });
-    handle({ type: 'kick_auth', state: 'on', login: 'you' });
-    handle({ type: 'tts', settings: { enabled: true, read: 'questions', names: true, max_chars: 200, skip_links: true, platforms: 'all', voice: '', rate: 1.1, volume: 0.8 } });
-    handle({ type: 'filters', settings: { words: ['spoiler', 'cheap followers', 'dm me'], users: ['bot_4417'], hide_commands: true, bots: true } });
-    handle({ type: 'quick', replies: ['Welcome in! 👋', 'Thanks for the follow!', 'GG', 'Be right back', 'Links are in the panels below', '❤'] });
-    handle({ type: 'devices', devices: [{ id: 'd1', name: 'Phone', created: at(-3000) / 1000, last_seen: Date.now() / 1000 },
-                                          { id: 'd2', name: 'Laptop', created: at(-9000) / 1000, last_seen: at(-1500) / 1000 }] });
-    [{ kind: 'note', p: 'system', text: 'Stream started. Chat from every platform shows up here.', t: at(0) },
-     { p: 'twitch', name: 'pixel_pirate', color: '#ff7f50', text: 'first! what are we building today?', question: true, first: 'ever', t: at(1), mid: 'a1', uid: '101' },
-     { p: 'youtube', name: 'Maya Chen', badges: ['member'], text: 'Watching from Lisbon 👋 love the new overlay', t: at(1.5), mid: 'y1' },
-     { p: 'x', name: 'Dev Daily', handle: 'devdaily', text: 'One chat for every platform, finally', t: at(2) },
-     { p: 'kick', name: 'turbo_kat', color: '#53fc18', text: 'W stream, audio sounds great', t: at(3) },
-     { p: 'twitch', kind: 'event', name: 'nightowl_42', alert: 'resub', amount: '6', system: 'nightowl_42 subscribed for 6 months!', text: 'half a year already', t: at(4) },
-     { p: 'twitch', name: 'nightowl_42', color: '#1e90ff', badges: ['moderator'], text: 'welcome in, new folks 🙂', t: at(4.5), mid: 'a2', uid: '102' },
-     { p: 'youtube', name: 'Sam Ortiz', text: 'can you show how replies reach every platform?', question: true, t: at(6), id: 'yt-sam', mid: 'y2' },
-     { p: 'twitch', name: 'bot_4417', color: '#7fff00', text: 'cheap followers!!! dm me for a deal', t: at(6.5), id: 'tw-spam', mid: 'a3', uid: '103',
-       hidden: DEMO_KIND === 'mod' ? undefined : 'user' },
-     { p: 'kick', name: 'quietstorm', color: '#f4a261', text: 'hey all, first time catching you live', first: 'ever', t: at(6.8), mid: 'k2' },
-     { p: 'x', name: 'Lena Park', handle: 'lenapark', text: 'does the overlay work with Streamlabs too?', question: true, t: at(7) },
-     { p: 'tiktok', name: 'luna.makes', text: 'found you on TikTok, this setup is so clean', first: 'stream', t: at(7.2) },
-     { p: 'youtube', name: 'Rafael Gomes', text: 'what keyboard is that?', question: true, t: at(7.5), id: 'yt-kb', mid: 'y3' }]
-      .forEach((m, i) => handle({ type: 'msg', id: m.id || 'demo-' + i, kind: 'chat', color: '', badges: [], ...m }));
-    echoes.push({ text: 'Thanks all! Typing once here answers Twitch, YouTube and X together', to: ['twitch', 'youtube', 'x'], t: Date.now() });
-    ['twitch', 'youtube', 'x'].forEach((p) => handle({ type: 'msg', id: 'demo-mine-' + p, p, kind: 'chat', name: 'you', badges: ['broadcaster'], color: '#e3a57b', t: at(8),
-      text: 'Thanks all! Typing once here answers Twitch, YouTube and X together' }));
-    handle({ type: 'starred', ids: ['yt-kb', 'demo-1'] });
-    if (DEMO_KIND === 'reply') {
-      setReply(msgs.get('yt-sam')); say.value = '@Sam Ortiz sure! tap a message, press reply, and it goes back to YouTube only'; drawEntry();
-      showFeatured(msgs.get('yt-sam'));
-    }
-    if (DEMO_KIND === 'mod') {
-      openSheet(msgs.get('tw-spam'));
-      const label = [...document.querySelectorAll('#sheet-menu .label')].find((l) => l.textContent === 'Moderate');
-      if (label) label.scrollIntoView({ block: 'start' });
-    }
-    const SECTION = { tts: 'tts-section', filters: 'filters-section', health: 'connections-section' };
-    if (DEMO_KIND === 'settings' || DEMO_KIND === 'pair' || SECTION[DEMO_KIND]) { drawSettings(); openDialog($('settings')); }
-    if (DEMO_KIND === 'pair') { api('/pair/start', {}); $('pair').scrollIntoView({ block: 'center' }); }
-    if (SECTION[DEMO_KIND]) $(SECTION[DEMO_KIND]).scrollIntoView({ block: 'start' });
-    if (DEMO_KIND === 'tts') {                    // what the speaker window shows while it reads (nothing is spoken)
-      speaker.add({ id: 'demo-say', text: 'Rafael Gomes says: what keyboard is that?' }); speaker.add({ id: 'demo-say-2', text: 'Sam Ortiz says: can you show how replies reach every platform?' });
-      drawReading();
-    }
-    if (DEMO_KIND === 'history') openHistory().then(() => openLog(logs[1]));
-    if (DEMO_KIND === 'quick') openQuickEditor();
-    if (DEMO_KIND === 'channels' || DEMO_KIND === 'firstrun') openChannels(DEMO_KIND === 'firstrun');
-    if (DEMO_KIND === 'viewer') openViewer(msgs.get('demo-6'));
-    if (DEMO_KIND === 'alerts') {                 // every platform's alerts, as they arrive from the hub
-      [{ p: 'youtube', name: 'Maya Chen', alert: 'superchat', amount: '$10.00', system: 'Super Chat $10.00', text: 'Thanks for the tutorial, it finally clicked!' },
-       { p: 'youtube', name: 'Priya N', alert: 'superchat', amount: '$2.00', system: 'Super Sticker $2.00' },
-       { p: 'youtube', name: 'Rafael Gomes', alert: 'gift', amount: '5 memberships', system: 'Rafael Gomes gifted 5 memberships' },
-       { p: 'youtube', name: 'Sam Ortiz', alert: 'member', system: 'Welcome to Members!' },
-       { p: 'twitch', name: 'bitbucket', alert: 'cheer', amount: '500 bits', system: 'bitbucket cheered 500 bits', text: 'Cheer500 great stream' },
-       { p: 'twitch', name: 'raid_leader', alert: 'raid', amount: '37', system: '37 raiders from raid_leader have joined!' },
-       { p: 'twitch', name: 'kiwi_codes', alert: 'resub', amount: '', system: 'kiwi_codes subscribed at Tier 1.' },
-       { p: 'kick', name: 'turbo_kat', alert: 'gift', amount: '3 subs', system: 'turbo_kat gifted 3 subs' },
-       { p: 'kick', name: 'glitchfox', alert: 'raid', amount: '12', system: 'glitchfox is raiding with 12 viewers' },
-       { p: 'rumble', name: 'trailhead_tv', alert: 'superchat', amount: '$5.00', system: 'trailhead_tv sent a $5.00 Rant', text: 'Keep the builds coming' },
-       { p: 'rumble', name: 'maple_moto', alert: 'gift', amount: '2 subs', system: 'maple_moto gifted 2 subs' },
-       { p: 'twitch', name: 'AriaPlays', alert: 'announcement', system: 'AriaPlays shared an announcement', text: 'Giveaway at the top of the hour!' }]
-        .forEach((e, i) => handle({ type: 'msg', id: 'demo-alert-' + i, kind: 'event', color: '', badges: [], text: '', t: at(8.2 + i * 0.05), ...e }));
-    }
   }
 
   start();

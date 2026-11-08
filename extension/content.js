@@ -11,9 +11,8 @@
 (async () => {
   const MODES = { '#golive': 'live', '#golive-private': 'private', '#golive-dry': 'dry' };
   const JOB = 'crosschat-job';
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const ask = (type, data) => new Promise((r) => chrome.runtime.sendMessage({ type, data }, (a) => r(chrome.runtime.lastError ? { reached: false } : a)));
-  const text = (el) => (el.textContent || '').replace(/\s+/g, ' ').trim();
+  const { sleep, clean, ask, waitFor: lookFor } = globalThis.CrossChatCommon;
+  const text = (el) => clean(el.textContent);
 
   const bar = document.createElement('div');
   bar.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:2147483647;padding:10px 16px;font:600 14px system-ui,sans-serif;' +
@@ -39,14 +38,11 @@
   let step = 'start';
   const waitFor = async (find, seconds, what) => {
     step = what;
-    for (let i = 0; i < seconds * 4; i++) {
-      const found = find();
-      if (found) return found;
-      await sleep(250);
-    }
-    throw new Error(what);
+    const found = await lookFor(find, seconds * 1000);
+    if (!found) throw new Error(what);
+    return found;
   };
-  const shown = (el) => (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+  const shown = (el) => clean(el.innerText || el.textContent);
   const button = (label, root) => [...(root || document).querySelectorAll('button')].find((b) =>
     shown(b) === label || text(b) === label || b.getAttribute('aria-label') === label);
   const usable = (b) => b && !b.disabled && b.getAttribute('aria-disabled') !== 'true';
@@ -153,7 +149,8 @@
       const heading = group && group.querySelector('h1, h2, h3, h4, [role="heading"]');
       return !!heading && /^past/i.test(text(heading));
     };
-    for (let i = 0; i < 80 && !/^\/live\/\w/.test(location.pathname); i++) {
+    const givenUp = Date.now() + 20000;
+    while (Date.now() < givenUp && !/^\/live\/\w/.test(location.pathname)) {
       const link = [...document.querySelectorAll('a[href*="/live/"]')].find((a) => text(a) === want.title && !past(a));
       if (link) { link.click(); await sleep(3000); }
       await sleep(250);

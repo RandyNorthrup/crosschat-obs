@@ -1,11 +1,12 @@
-// Tests for extension/tiktok.js: what each row of TikTok's LIVE chat becomes, and one alert per gift streak.
+// Tests for extension/tiktok-rows.js: what each row of TikTok's LIVE chat becomes, and one alert per gift streak.
 // Run: node --test "tests/js/*.test.mjs"   (tests/browser/tiktok_page.cjs runs the same rows on a real page)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { loadExtension } from './extension-files.mjs';
 
 const require = createRequire(import.meta.url);
-const TT = require('../../extension/tiktok.js');
+const TT = loadExtension('common.js', 'tiktok-rows.js').CrossChatTikTokRows;
 const ROWS = require('../fixtures/tiktok_rows.json').rows;
 
 for (const row of ROWS) {

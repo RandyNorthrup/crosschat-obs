@@ -4,10 +4,9 @@
 // Run: node --test "tests/js/*.test.mjs"
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
+import { loadExtension } from './extension-files.mjs';
 
-const require = createRequire(import.meta.url);
-const W = require('../../extension/windows.js');
+const W = loadExtension('windows.js').CrossChatWindows;
 
 const CHAT = 'http://127.0.0.1:4466/';
 const TIKTOK = 'https://www.tiktok.com/@someone/live';
@@ -138,12 +137,39 @@ test('closing the chat closes every chat window CrossChat opened, and only those
     { id: 7, type: 'app', tabs: [tab(70, CHAT + 'studio')] },        // the Theme Studio is not the chat window
     { id: 8, type: 'app', tabs: [tab(80, 'http://127.0.0.1:4477/')] }, // the demo, on its own port
   ]);
-  let later;
-  const answer = await W.job({ action: 'close', role: 'chat' }, { id: 50, windowId: 5 }, b, (ms) => { later = ms; return Promise.resolve(); });
+  let later, timeUp;
+  const answer = await W.job({ action: 'close', role: 'chat' }, { id: 50, windowId: 5 }, b, (ms) => { later = ms; return new Promise((r) => { timeUp = r; }); });
   assert.deepEqual(answer, { ok: true, windows: [5, 6] });
-  assert.equal(later, W.CLOSE_DELAY);                     // its answer leaves the chat window before that window goes
+  assert.equal(later, W.CLOSE_LATEST);
+  assert.deepEqual(b.did, []);                            // its answer has to reach the hub before that window goes
+  assert.deepEqual(await W.job({ action: 'answered', role: 'chat' }, { id: 50, windowId: 5 }, b, now), { ok: true });
+  assert.deepEqual(b.did, [['remove', 5], ['remove', 6]]);
+  timeUp();                                               // the time running out after that does nothing more
   await new Promise((r) => setTimeout(r, 0));
   assert.deepEqual(b.did, [['remove', 5], ['remove', 6]]);
+});
+
+test('the chat window goes the moment its page says the answer has reached the hub, not after a fixed wait', async () => {
+  const b = browser([{ id: 5, type: 'app', tabs: [tab(50, CHAT)] }]);
+  const never = () => new Promise(() => {});
+  await W.job({ action: 'close', role: 'chat' }, { id: 50, windowId: 5 }, b, never);
+  assert.deepEqual(b.did, []);
+  await W.job({ action: 'answered', role: 'chat' }, { id: 50, windowId: 5 }, b, never);
+  assert.deepEqual(b.did, [['remove', 5]]);
+});
+
+test('a page that never says so (an older one, or one that lost the hub) is closed after a while anyway', async () => {
+  const b = browser([{ id: 5, type: 'app', tabs: [tab(50, CHAT)] }]);
+  await W.job({ action: 'close', role: 'chat' }, { id: 50, windowId: 5 }, b, now);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(b.did, [['remove', 5]]);
+  assert.ok(W.CLOSE_LATEST >= 1000 && W.CLOSE_LATEST <= 10000);
+});
+
+test('"answered" with nothing being closed closes nothing', async () => {
+  const b = everyday();
+  assert.deepEqual(await W.job({ action: 'answered', role: 'chat' }, { id: 50, windowId: 5 }, b, now), { ok: true });
+  assert.deepEqual(b.did, []);
 });
 
 test('a platform page the hub just opened is found by its address among the new windows, and placed', async () => {

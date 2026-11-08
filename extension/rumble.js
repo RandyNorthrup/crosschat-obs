@@ -7,21 +7,9 @@
 // asks CrossChat which chat is the streamer's, and does nothing in any other. It never presses the Rant button (Rants
 // cost money) and never touches the Rumble login.
 (() => {
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const ask = (type, data) => new Promise((r) => {
-    try { chrome.runtime.sendMessage({ type, data }, (a) => r(chrome.runtime.lastError ? null : a)); } catch (e) { r(null); }
-  });
-  const clean = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+  const { clean, ask, waitFor } = globalThis.CrossChatCommon;
   const chatHere = () => (/^\/chat\/popup\/(\d+)/.exec(location.pathname) || [])[1] || '';
   const mine = async () => { const answer = await ask('rm-check'); return !!(answer && answer.chat && answer.chat === chatHere()); };
-  async function until(find, ms) {
-    for (let waited = 0; waited <= ms; waited += 100) {
-      const found = find();
-      if (found) return found;
-      await sleep(100);
-    }
-    return null;
-  }
 
   async function say(text) {
     if (!(await mine())) return { ok: false, why: "this isn't your live's Rumble chat" };
@@ -36,17 +24,13 @@
       box.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
     }
     box.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: ' ' }));
-    const send = await until(() => {
+    const send = await waitFor(() => {
       const b = document.querySelector('button.chat--send[name="send"]');    // (never the Rant button next to it)
       return b && !b.disabled ? b : null;
-    }, 1500);
+    }, 1500, 100);
     if (!send) return { ok: false, why: 'Rumble would not take the message' };
     send.click();
-    for (let i = 0; i < 25; i++) {
-      await sleep(200);
-      if (!box.isConnected || box.value === '') return { ok: true };
-    }
-    return { ok: false, why: 'Rumble did not send it' };
+    return (await waitFor(() => !box.isConnected || box.value === '', 5000, 200)) ? { ok: true } : { ok: false, why: 'Rumble did not send it' };
   }
 
   // The menu entry for each action: Rumble's own buttons in its "Moderate this comment" menu.
@@ -80,17 +64,17 @@
     if (!row) return { ok: false, why: 'that message is no longer in the Rumble chat window' };
     const before = notice();
     row.querySelector('.js-moderate-btn').click();
-    const button = await until(() => [...document.querySelectorAll(BUTTON[action])].find((b) => b.offsetParent !== null) || null, 3000);
+    const button = await waitFor(() => [...document.querySelectorAll(BUTTON[action])].find((b) => b.offsetParent !== null) || null, 3000, 100);
     if (!button) return { ok: false, why: 'Rumble showed no moderation menu (is this the account that is live?)' };
     // Rumble asks "Would you like to delete this message?" with the browser's own question box; rumble-confirm.js (which
     // runs in the page itself) answers yes to that one question, once, for this click only.
     if (action === 'delete') document.dispatchEvent(new CustomEvent('crosschat-rumble-confirm'));
     button.click();
     if (action === 'delete') {
-      const gone = await until(() => !row.isConnected || /removed by moderator/i.test(row.textContent), 5000);
+      const gone = await waitFor(() => !row.isConnected || /removed by moderator/i.test(row.textContent), 5000, 100);
       return gone ? { ok: true } : { ok: false, why: 'Rumble did not delete it' };
     }
-    const said = await until(() => { const n = notice(); return n && n !== before ? n : null; }, 5000);
+    const said = await waitFor(() => { const n = notice(); return n && n !== before ? n : null; }, 5000, 100);
     if (said && /fail|error|not allowed|can't|cannot/i.test(said)) return { ok: false, why: said.slice(0, 160) };
     return said ? { ok: true } : { ok: false, why: 'Rumble did not confirm the mute' };
   }

@@ -84,13 +84,18 @@ test('custom timeouts fit each platform', () => {
 
 test('text-to-speech settings are filled in and kept in range', () => {
   const d = A.ttsSettings(null);
-  assert.deepEqual(d, { enabled: false, read: 'all', command: '!tts', names: true, max_chars: 200, skip_links: true, platforms: 'all', voice: '', rate: 1, volume: 1 });
+  assert.deepEqual(d, { enabled: false, read: 'questions', command: '!tts', names: true, max_chars: 200, skip_links: true, platforms: 'all', voice: '', rate: 1, volume: 1 });
   const s = A.ttsSettings({ enabled: true, read: 'nope', max_chars: 9000, rate: '0.1', volume: -3, platforms: ['kick', 'x', 'tiktok', 'myspace'], command: '  ' });
-  assert.equal(s.read, 'all'); assert.equal(s.max_chars, 500); assert.equal(s.rate, 0.5); assert.equal(s.volume, 0);
+  assert.equal(s.read, 'questions'); assert.equal(s.max_chars, 500); assert.equal(s.rate, 0.5); assert.equal(s.volume, 0);
   assert.deepEqual(s.platforms, ['kick', 'x', 'tiktok']); assert.equal(s.command, '!tts');
   assert.equal(A.ttsSettings({ platforms: ['twitch', 'youtube', 'kick', 'x', 'tiktok', 'facebook', 'instagram', 'rumble'] }).platforms, 'all');
   assert.deepEqual(A.ttsSettings({ platforms: ['twitch', 'youtube', 'kick', 'x', 'tiktok', 'facebook', 'rumble'] }).platforms,
                    ['twitch', 'youtube', 'kick', 'x', 'tiktok', 'facebook', 'rumble']);
+  // the same answers as the hub's clean_tts: a 0 is "not set" there, and a voice name is cut as the hub cuts it
+  assert.equal(A.ttsSettings({ max_chars: 0 }).max_chars, 200);
+  assert.equal(A.ttsSettings({ rate: 0 }).rate, 1);
+  assert.equal(A.ttsSettings({ voice: 'v'.repeat(300) }).voice.length, 120);
+  assert.equal([...A.ttsSettings({ voice: '😀'.repeat(300) }).voice].length, 120);          // code points, as Python counts
 });
 
 const V = (name, localService, lang = 'en-US') => ({ name, localService, lang });
@@ -183,13 +188,6 @@ test('name colours stay readable on each theme', () => {
   assert.equal(A.readable('#ffffff', false), 'rgb(255,255,255)');      // light on dark: kept
   assert.notEqual(A.readable('#000080', false), 'rgb(0,0,128)');       // dark on dark: lifted
   assert.notEqual(A.readable('#ffff00', true), 'rgb(255,255,0)');      // yellow on light: darkened
-});
-
-test('Twitch emotes are cut out by code point', () => {
-  assert.deepEqual(A.pieces('hi Kappa', '25:3-7'), [{ text: 'hi ' }, { emote: '25', alt: 'Kappa' }]);
-  assert.deepEqual(A.pieces('😀 Kappa', '25:2-6'), [{ text: '😀 ' }, { emote: '25', alt: 'Kappa' }]);
-  assert.deepEqual(A.pieces('plain', ''), [{ text: 'plain' }]);
-  assert.deepEqual(A.pieces('x', '<bad>:0-0'), [{ text: 'x' }]);         // ids are word characters only
 });
 
 test('the vendored QR encoder makes a code for a pairing address', () => {

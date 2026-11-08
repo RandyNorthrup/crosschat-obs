@@ -7,7 +7,7 @@
 (() => {
   const T = window.CrossChatTheme, I = window.CrossChatIcons, F = window.CrossChatFeed, doc = document;
   const q = new URLSearchParams(location.search);
-  const WIDGET = (/\/overlay\/(chat|featured|viewers|alerts)\b/.exec(location.pathname) || [])[1] || q.get('widget') || 'chat';
+  const WIDGET = (/\/overlay\/(chat|featured|viewers|alerts)\b/.exec(location.pathname) || [])[1] || 'chat';
   const PREVIEW = q.has('preview'), DEMO = PREVIEW || q.has('demo'), STILL = q.get('demo') === 'still';
   const SHORT = { twitch: 'TW', youtube: 'YT', kick: 'K', x: 'X', tiktok: 'TT', facebook: 'FB', instagram: 'IG', rumble: 'RM' };
   const BADGES = { broadcaster: 'host', owner: 'host', moderator: 'mod', vip: 'vip', subscriber: 'sub', founder: 'sub', member: 'member', verified: '✓' };
@@ -17,6 +17,7 @@
 
   let theme = T.merge({}), shown = 'all', live = false, primed = false, emotes = new Map();
   let themed = false, early = [];                  // chat that came before the theme (and so its delay) was known
+  let configured;                                  // overlay.platforms in config.json, once the hub has said
 
   // ---- theme ----------------------------------------------------------------------------------------
   // Address overrides, for one OBS source that differs a little from its theme (documented in docs/THEMES.md).
@@ -33,7 +34,7 @@
   function useTheme(raw) {
     theme = T.merge(raw || {}, overrides());
     T.apply(theme, doc);
-    shown = T.wanted(theme.chat.platforms, q.get('platforms'));
+    shown = T.wanted(theme.chat.platforms, q.get('platforms'), configured);
     redraw();
     themed = true;
     const waiting = early; early = [];
@@ -45,8 +46,9 @@
   async function loadTheme() {
     if (PREVIEW) return;
     try {
-      const name = q.get('theme') || (await getJSON('/themes')).default || 'classic';
-      useTheme(await getJSON('/themes/' + encodeURIComponent(name)));
+      const settings = await getJSON('/settings');
+      configured = (settings.overlay || {}).platforms;
+      useTheme(await getJSON('/themes/' + encodeURIComponent(q.get('theme') || settings.theme || 'classic')));
     } catch (e) {
       useTheme({});                                // no hub (or no such theme): the built-in look
     }
@@ -119,13 +121,31 @@
     return el;
   }
 
+  // How long el's own animation runs (ms), 0 when it has none (a theme's custom CSS can switch it off).
+  function animationTime(el) {
+    const s = getComputedStyle(el), seconds = (list) => String(list || '').split(',').map((v) => parseFloat(v) || 0);
+    const durations = seconds(s.animationDuration), delays = seconds(s.animationDelay);
+    return Math.max(0, ...String(s.animationName || 'none').split(',').map((name, i) => (name.trim() === 'none' ? 0
+      : (durations[i % durations.length] + delays[i % delays.length]) * 1000)));
+  }
+
   function leave(el, then) {
     if (!el) { if (then) then(); return; }
     if (el.classList.contains('cc-out')) return;
     const none = WIDGET === 'chat' && theme.chat.animationOut === 'none';
     if (none) { el.remove(); if (then) then(); return; }
     el.classList.remove('cc-new'); el.classList.add('cc-out');
-    setTimeout(() => { el.remove(); if (then) then(); }, 620);
+    const time = animationTime(el);
+    let timer = 0;
+    const gone = () => {
+      clearTimeout(timer);
+      el.removeEventListener('animationend', ended); el.removeEventListener('animationcancel', ended);
+      el.remove(); if (then) then();
+    };
+    const ended = (e) => { if (e.target === el && !e.pseudoElement) gone(); };   // (not a child's, nor the alert's ::before)
+    if (!time) { gone(); return; }
+    el.addEventListener('animationend', ended); el.addEventListener('animationcancel', ended);
+    timer = setTimeout(gone, time + 200);            // a page OBS has hidden runs no animation, and the message still has to go
   }
 
   // ---- chat feed ------------------------------------------------------------------------------------------
