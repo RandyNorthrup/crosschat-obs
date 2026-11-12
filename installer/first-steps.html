@@ -20,6 +20,7 @@
   table { border-collapse: collapse; margin-top: 8px; width: 100%; }
   td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
   .note { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  a { color: var(--accent); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -40,9 +41,10 @@
     </li>
     <li>
       <h2>Add the browser extension</h2>
-      In Chrome or Edge: open <code>chrome://extensions</code> (or <code>edge://extensions</code>), switch on <b>Developer mode</b>,
-      press <b>Load unpacked</b> and pick<br>
-      <code>%LOCALAPPDATA%\CrossChat\extension</code><br>
+      In Chrome, open <a href="https://chromewebstore.google.com/detail/crosschat/bnjoldkacppoejikoiccgkblbajbenhj">CrossChat on the Chrome Web Store</a> and press <b>Add to Chrome</b>.
+      In Edge, press <b>Allow extensions from other stores</b> on that page first. It updates by itself from then on.<br>
+      <span class="note">Without the store: open <code>chrome://extensions</code> (or <code>edge://extensions</code>), switch on <b>Developer mode</b>,
+      press <b>Load unpacked</b> and pick <code>%LOCALAPPDATA%\CrossChat\extension</code>.</span><br>
       <span class="note">Twitch, YouTube, Kick and Rumble chat and the on-stream widgets work without it. Reading X, TikTok, Facebook and Instagram needs it, as do replies everywhere except Twitch and Kick, and X Live. It reads no logins.</span>
     </li>
     <li>

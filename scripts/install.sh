@@ -324,6 +324,7 @@ fi
 # ---- the two steps that need you --------------------------------------------------------------------------
 LUA="$APP/obs/crosschat.lua"
 EXTENSION="$APP/extension"
+STORE='https://chromewebstore.google.com/detail/crosschat/bnjoldkacppoejikoiccgkblbajbenhj'
 if [ "$LINUX" = 1 ]; then
     copied=0                    # the script's path on the clipboard, with whichever tool this desktop has
     if [ -n "${WAYLAND_DISPLAY:-}" ] && command -v wl-copy >/dev/null 2>&1 && printf '%s' "$LUA" | wl-copy 2>/dev/null; then copied=1
@@ -339,10 +340,12 @@ if [ "$LINUX" = 1 ]; then
     fi
     say "       $LUA"
     say '     OBS from Flathub sees this folder too: the same path works there.'
-    say '  2. Chrome, Chromium, Edge or Brave: open chrome://extensions, switch on Developer mode, press'
-    say '     "Load unpacked" and pick this folder (Ctrl+L works there too):'
+    say '  2. The browser extension, from the Chrome Web Store (Chrome, Chromium or Brave; in Edge, allow extensions'
+    say '     from other stores first):'
+    say "       $STORE"
+    say '     Or load it unpacked: chrome://extensions > Developer mode > Load unpacked, and pick this folder:'
     say "       $EXTENSION"
-    say '     (Needed for replying from the chat window and for X. Reading chat and the on-stream widgets work without it.)'
+    say '     (Needed for X, TikTok, Facebook and Instagram chat, for replies except on Twitch and Kick, and for X Live.)'
     say ''
     say '  On-stream widgets: in OBS add a Browser Source with one of these addresses:'
     say '       http://127.0.0.1:4466/overlay/chat       450 x 800'
@@ -355,8 +358,16 @@ if [ "$LINUX" = 1 ]; then
     if [ "$obs_running" = 1 ]; then
         note '  OBS is open: after adding the script, it starts by itself. Already added? Press "Start the hub again" in Tools > Scripts.'
     fi
-    if [ "$QUIET" != 1 ] && { [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; } && confirm 'Open the extension folder now?'; then
-        xdg-open "$EXTENSION" >/dev/null 2>&1 || true
+    if [ "$QUIET" != 1 ] && { [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; } && confirm 'Open the extension in the Chrome Web Store now?'; then
+        opened=0                                  # in a browser the store works in, when there is one
+        for browser in google-chrome google-chrome-stable chromium chromium-browser brave-browser microsoft-edge; do
+            if command -v "$browser" >/dev/null 2>&1; then
+                (nohup "$browser" "$STORE" >/dev/null 2>&1 &)
+                opened=1
+                break
+            fi
+        done
+        [ "$opened" = 1 ] || xdg-open "$STORE" >/dev/null 2>&1 || true
     fi
 else
     printf '%s' "$LUA" | pbcopy 2>/dev/null || true
@@ -364,10 +375,12 @@ else
     say '  1. OBS: Tools > Scripts > + and pick this file. Its path is on your clipboard: in the file window press'
     say '     Cmd+Shift+G, paste, Return.'
     say "       $LUA"
-    say '  2. Chrome (or Edge): open chrome://extensions (edge://extensions), switch on Developer mode, press'
-    say '     "Load unpacked" and pick this folder (Cmd+Shift+G works there too):'
+    say '  2. The browser extension, from the Chrome Web Store (in Edge, allow extensions from other stores first):'
+    say "       $STORE"
+    say '     Or load it unpacked: chrome://extensions > Developer mode > Load unpacked, and pick this folder'
+    say '     (Cmd+Shift+G works there too):'
     say "       $EXTENSION"
-    say '     (Needed for replying from the chat window and for X. Reading chat and the on-stream widgets work without it.)'
+    say '     (Needed for X, TikTok, Facebook and Instagram chat, for replies except on Twitch and Kick, and for X Live.)'
     say ''
     say '  On-stream widgets: in OBS add a Browser Source with one of these addresses:'
     say '       http://127.0.0.1:4466/overlay/chat       450 x 800'
@@ -381,6 +394,8 @@ else
     if [ "$obs_running" = 1 ]; then
         note '  OBS is open: after adding the script, it starts by itself. Already added? Press "Start the hub again" in Tools > Scripts.'
     fi
-    if [ "$QUIET" != 1 ] && confirm 'Show the extension folder in Finder now?'; then open -R "$EXTENSION"; fi
+    if [ "$QUIET" != 1 ] && confirm 'Open the extension in the Chrome Web Store now?'; then
+        open -a 'Google Chrome' "$STORE" 2>/dev/null || open -a 'Microsoft Edge' "$STORE" 2>/dev/null || open "$STORE" || true
+    fi
 fi
 printf '\033[32mCrossChat %s is installed.\033[0m\n' "$VERSION"

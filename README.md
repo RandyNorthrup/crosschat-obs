@@ -4,6 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/RandyNorthrup/crosschat-obs/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/RandyNorthrup/crosschat-obs?label=release&color=e3a57b"></a>
+  <a href="https://chromewebstore.google.com/detail/crosschat/bnjoldkacppoejikoiccgkblbajbenhj"><img alt="Chrome Web Store" src="https://img.shields.io/chrome-web-store/v/bnjoldkacppoejikoiccgkblbajbenhj?label=Chrome%20Web%20Store&color=4285F4"></a>
   <a href="https://github.com/RandyNorthrup/crosschat-obs/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/RandyNorthrup/crosschat-obs/total?label=downloads&color=2b9c9a"></a>
   <a href="https://github.com/RandyNorthrup/crosschat-obs/actions/workflows/ci.yml"><img alt="Checks" src="https://img.shields.io/github/actions/workflow/status/RandyNorthrup/crosschat-obs/ci.yml?branch=main&label=checks"></a>
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4">
@@ -165,13 +166,12 @@ CrossChat doesn't send your video anywhere. Your streaming app does that. To str
    - turns on OBS's WebSocket server if it's off (it asks first);
    - adds a **CrossChat** folder to the Start menu, and CrossChat to *Settings → Apps*.
 
-   Running a newer one later updates CrossChat and keeps your settings, themes, sign-ins and chat history. After an update, open `chrome://extensions` (or `edge://extensions`) and press the reload arrow on CrossChat: the browser keeps running the old extension until you do, and the chat window says so if it's too old to work. From 1.7.2 the setup program is code-signed by **Randy Northrup** (Azure Artifact Signing). A newly signed program can still get a "Windows protected your PC" notice until Windows has seen enough downloads of it: choose **More info**, check the publisher says Randy Northrup, then **Run anyway**. Details, silent install and how it's built: [docs/INSTALLER.md](docs/INSTALLER.md).
+   Running a newer one later updates CrossChat and keeps your settings, themes, sign-ins and chat history. The extension from the Chrome Web Store updates by itself. If you loaded it unpacked instead, press its reload arrow in `chrome://extensions` (or `edge://extensions`) after an update: the browser keeps running the old extension until you do, and the chat window says so if it's too old to work. From 1.7.2 the setup program is code-signed by **Randy Northrup** (Azure Artifact Signing). A newly signed program can still get a "Windows protected your PC" notice until Windows has seen enough downloads of it: choose **More info**, check the publisher says Randy Northrup, then **Run anyway**. Details, silent install and how it's built: [docs/INSTALLER.md](docs/INSTALLER.md).
 2. **Set your channels:** Start menu → CrossChat → **Open chat** → **Settings**.
 3. **Add the script to OBS:** *Tools → Scripts → +*, then pick `%LOCALAPPDATA%\CrossChat\obs\crosschat.lua`. Setup puts this path on your clipboard.
-4. **Add the extension** to Chrome or Edge:
-   1. Open `chrome://extensions` (or `edge://extensions`).
-   2. Switch on **Developer mode**.
-   3. Press **Load unpacked** and pick `%LOCALAPPDATA%\CrossChat\extension`.
+4. **Add the extension:** open **[CrossChat on the Chrome Web Store](https://chromewebstore.google.com/detail/crosschat/bnjoldkacppoejikoiccgkblbajbenhj)** in Chrome and press **Add to Chrome**. In Edge, press **Allow extensions from other stores** on that page first, then add it the same way. It updates by itself from then on.
+
+   Without the store: `chrome://extensions` (or `edge://extensions`) → switch on **Developer mode** → **Load unpacked** → pick `%LOCALAPPDATA%\CrossChat\extension`. That copy matches the app you installed, and needs its reload arrow pressed after each update.
 
    Twitch, YouTube, Kick and Rumble chat and the on-stream widgets work without the extension. Reading X, TikTok, Facebook and Instagram needs it, as do replies everywhere except Twitch and Kick, and X Live.
 5. **Add the widgets you want** to your scenes as Browser Sources:
@@ -255,7 +255,7 @@ You need macOS 15 (or a recent macOS), OBS Studio 28 or newer, Chrome, Edge or C
 2. **Run `Install.command` from Terminal.** macOS won't open it with a double-click, because the download isn't signed by Apple. Open Terminal (*Applications → Utilities → Terminal*), type `bash ` with a space after it, drag `Install.command` from the unpacked folder into the Terminal window and press Return.
    It installs to `~/Library/Application Support/CrossChat`, sets up its own Python environment with checksum-verified packages, asks the same questions as on Windows, and makes a **CrossChat** folder of small apps (Open chat, Theme Studio, Try the demo, Go live on X, Uninstall) in the Applications folder *of your home folder*: in Finder, **Go → Home**, then **Applications → CrossChat**.
 3. **Add the script to OBS:** *Tools → Scripts → +*, press **Cmd+Shift+G**, paste the path the installer put on your clipboard (`~/Library/Application Support/CrossChat/obs/crosschat.lua`) and press Return.
-4. **Add the extension:** `chrome://extensions` → **Developer mode** → **Load unpacked** → **Cmd+Shift+G** → `~/Library/Application Support/CrossChat/extension`.
+4. **Add the extension:** **[CrossChat on the Chrome Web Store](https://chromewebstore.google.com/detail/crosschat/bnjoldkacppoejikoiccgkblbajbenhj)** → **Add to Chrome** (Chrome, Chromium, or Edge after **Allow extensions from other stores**). Or load it unpacked: `chrome://extensions` → **Developer mode** → **Load unpacked** → **Cmd+Shift+G** → `~/Library/Application Support/CrossChat/extension`.
 5. **Widgets:** the same Browser Source addresses as on Windows.
 
 What's different on a Mac:
@@ -295,7 +295,7 @@ You need a 64-bit Linux desktop, Python 3.10 or newer with its `venv` module (Ub
 2. **Run the installer** in a terminal: `cd CrossChat-<version>-linux` and `bash scripts/install.sh`.
    It installs to `~/.local/share/CrossChat` (readable by your account only), sets up its own Python environment with checksum-verified packages, asks the same questions as on Windows, and adds **CrossChat: Open chat**, **Theme Studio**, **Try the demo**, **Go live on X** and **Uninstall CrossChat** to your desktop's app menu.
 3. **Add the script to OBS:** *Tools → Scripts → +*, press **Ctrl+L**, type or paste `~/.local/share/CrossChat/obs/crosschat.lua` (the installer puts the full path on your clipboard when `wl-copy`, `xclip` or `xsel` is there) and press Enter. OBS from Flathub sees that folder too; there the script starts the hub outside OBS's sandbox with `flatpak-spawn` (the OBS Flatpak is allowed to).
-4. **Add the extension:** `chrome://extensions` → **Developer mode** → **Load unpacked** → **Ctrl+L** → `~/.local/share/CrossChat/extension`.
+4. **Add the extension:** **[CrossChat on the Chrome Web Store](https://chromewebstore.google.com/detail/crosschat/bnjoldkacppoejikoiccgkblbajbenhj)** → **Add to Chrome** (Chrome, Chromium, Brave, or Edge after **Allow extensions from other stores**). Or load it unpacked: `chrome://extensions` → **Developer mode** → **Load unpacked** → **Ctrl+L** → `~/.local/share/CrossChat/extension`.
 5. **Widgets:** the same Browser Source addresses as on Windows.
 
 What's different on Linux:

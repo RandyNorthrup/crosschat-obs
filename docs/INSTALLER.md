@@ -20,7 +20,7 @@
 
 If OBS is open with CrossChat running, setup stops CrossChat, replaces its files and starts it again for that OBS.
 
-Then reload the extension: `chrome://extensions` (or `edge://extensions`) → the reload arrow on CrossChat. The browser keeps running the old extension until then, and the chat window shows a notice if it's too old to work.
+The extension from the Chrome Web Store updates by itself. One loaded unpacked needs reloading: `chrome://extensions` (or `edge://extensions`) → the reload arrow on CrossChat. The browser keeps running the old extension until then, and the chat window shows a notice if it's too old to work.
 
 ## Uninstalling
 

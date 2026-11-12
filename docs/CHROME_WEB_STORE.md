@@ -2,7 +2,7 @@
 
 For whoever publishes CrossChat's browser extension. Everything the [developer dashboard](https://chrome.google.com/webstore/devconsole) asks for is here, ready to paste.
 
-**Listing:** item ID `bnjoldkacppoejikoiccgkblbajbenhj`, submitted for review on 8 November 2026, rejected that day for listing platform names in the description (see [Things a reviewer may question](#things-a-reviewer-may-question)), and submitted again the same day with the description below. Its address once approved: https://chromewebstore.google.com/detail/bnjoldkacppoejikoiccgkblbajbenhj
+**Listing:** item ID `bnjoldkacppoejikoiccgkblbajbenhj`, submitted for review on 8 November 2026, rejected that day for listing platform names in the description (see [Things a reviewer may question](#things-a-reviewer-may-question)), and submitted again the same day with the description below. Version 1.8.0 was approved and is public: https://chromewebstore.google.com/detail/crosschat/bnjoldkacppoejikoiccgkblbajbenhj. Version 1.9.0 was submitted on 11 November 2026; 1.8.0 stays live until it passes.
 
 ## Build the upload
 
@@ -91,11 +91,14 @@ The **Additional instructions** box takes at most 500 characters. Username and p
 Needs the free CrossChat app on the same computer. It works on the tester's own live streams, so no account is supplied. To see it connect, with made-up chat and nothing posted: install Python 3.10+, download github.com/RandyNorthrup/crosschat-obs, run pip install -r hub/requirements.txt, then python hub/hub.py --demo. Open http://127.0.0.1:4466/ in the browser with the extension and send a reply: the demo shows it as sent. The extension has no interface of its own.
 ```
 
-## Once it is approved
+## A new version
 
-1. Copy the listing's address, `https://chromewebstore.google.com/detail/<id>`.
-2. Replace the **Load unpacked** steps with that link in `README.md` (Install, Mac, Linux), `installer/first-steps.html` and `scripts/install.ps1`, and the matching lines in `scripts/install.sh`.
-3. Edge users can install from the Chrome Web Store too, after allowing extensions from other stores.
+1. Build the upload (above). Its `version` must be higher than the published one.
+2. Dashboard → CrossChat → *Package* → **Upload new package** → the zip.
+3. Check the *Privacy* tab still matches the code: a new host or a new kind of data needs its justification updated.
+4. **Submit for review**, with "publish automatically" on. The published version stays live until the new one passes.
+
+The install steps in `README.md`, the wiki, `installer/first-steps.html`, `scripts/install.ps1` and `scripts/install.sh` link to the listing, with **Load unpacked** as the alternative. Edge users install from the Chrome Web Store after allowing extensions from other stores.
 
 ## Things a reviewer may question
 

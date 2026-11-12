@@ -170,27 +170,33 @@ test("a chat page that says its chat has come goes ahead at once, no polling and
   assert.equal(sent.filter((s) => s.message.type === 'yt-ready').length, 1);
 });
 
+// These wait far longer than a test runs (FOREVER), so only the page's word can end it: a short real timer here lost the
+// race to a busy machine now and then. Each ends with the right word, so no timer is left behind.
+const FOREVER = 600000;
+
 test("word from another tab or another live doesn't end the wait", async () => {
   const { BG, says } = browser([], { ready: false });
   let done = false;
-  const opened = BG.youtubeChatPage(VIDEO, 30).then((tabs) => { done = true; return tabs; });
+  const opened = BG.youtubeChatPage(VIDEO, FOREVER).then((tabs) => { done = true; return tabs; });
   await tick();
   says({ type: 'yt-chat-ready', data: { video: VIDEO } }, { url: OURS, tab: { id: 999 } });
   says({ type: 'yt-chat-ready', data: { video: 'another1234' } }, { url: OURS, tab: { id: 100 } });
   await tick();
   assert.equal(done, false);
-  await opened;
-  assert.equal(done, true);
+  says({ type: 'yt-chat-ready', data: { video: VIDEO } }, { url: OURS, tab: { id: 100 } });
+  assert.deepEqual((await opened).map((t) => t.id), [100]);
 });
 
 test('only a YouTube chat page can say so', async () => {
   const { BG, says } = browser([], { ready: false });
   let done = false;
-  BG.youtubeChatPage(VIDEO, 30).then(() => { done = true; });
+  const opened = BG.youtubeChatPage(VIDEO, FOREVER).then(() => { done = true; });
   await tick();
   says({ type: 'yt-chat-ready', data: { video: VIDEO } }, { url: 'https://www.tiktok.com/@x/live', tab: { id: 100 } });
   await tick();
   assert.equal(done, false);
+  says({ type: 'yt-chat-ready', data: { video: VIDEO } }, { url: OURS, tab: { id: 100 } });
+  await opened;
 });
 
 test('reply limits count characters as the hub does, so emoji are not counted twice', async () => {

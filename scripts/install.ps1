@@ -197,16 +197,18 @@ if ($restartFor -and $restartFor -match '--obs-pid (\d+)' -and (Get-Process -Id 
 # ---- the two steps that need you --------------------------------------------------------------------------
 $lua = Join-Path $App 'obs\crosschat.lua'
 $extension = Join-Path $App 'extension'
+$store = 'https://chromewebstore.google.com/detail/crosschat/bnjoldkacppoejikoiccgkblbajbenhj'
 Set-Clipboard -Value $lua
 Write-Host ''
 Write-Host '  Two steps left, about a minute:' -ForegroundColor Green
 Write-Host ''
 Write-Host '  1. OBS: Tools > Scripts > + and pick this file (its path is on your clipboard):' -ForegroundColor White
 Write-Host "       $lua"
-Write-Host '  2. Chrome (or Edge): open chrome://extensions (edge://extensions), switch on Developer mode,' -ForegroundColor White
-Write-Host '     press "Load unpacked" and pick this folder:'
+Write-Host '  2. The browser extension, from the Chrome Web Store (in Edge, allow extensions from other stores first):' -ForegroundColor White
+Write-Host "       $store"
+Write-Host '     Or load it unpacked: chrome://extensions > Developer mode > Load unpacked, and pick this folder:'
 Write-Host "       $extension"
-Write-Host '     (Needed for replying from the chat window and for X. Reading chat and the on-stream widgets work without it.)'
+Write-Host '     (Needed for X, TikTok, Facebook and Instagram chat, for replies except on Twitch and Kick, and for X Live.)'
 Write-Host ''
 Write-Host '  On-stream widgets: in OBS add a Browser Source with one of these addresses:' -ForegroundColor White
 Write-Host '       http://127.0.0.1:4466/overlay/chat       450 x 800'
@@ -216,5 +218,9 @@ Write-Host '       http://127.0.0.1:4466/overlay/alerts     800 x 300'
 Write-Host '  Restyle them in Start menu > CrossChat > Theme Studio.'
 Write-Host ''
 if ($obsRunning) { Say '  OBS is open: after adding the script, it starts by itself. Already added? Press "Start the hub again" in Tools > Scripts.' Yellow }
-if (-not $Quiet -and (Yes 'Open the extension folder now?')) { Start-Process explorer.exe $extension }
+if (-not $Quiet -and (Yes 'Open the extension in the Chrome Web Store now?')) {
+    # In Chrome or Edge when there is one: the store page only offers to add it there, whatever the default browser is.
+    $browser = @('chrome', 'msedge') | Where-Object { Get-Item "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\$_.exe", "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\$_.exe" -ErrorAction SilentlyContinue } | Select-Object -First 1
+    if ($browser) { Start-Process $browser $store } else { Start-Process $store }
+}
 Say "CrossChat $Version is installed." Green
