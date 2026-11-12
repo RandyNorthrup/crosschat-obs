@@ -62,7 +62,7 @@ local shell32 = WINDOWS and ffi.load("shell32") or nil
 local user32 = WINDOWS and ffi.load("user32") or nil
 local SEP = WINDOWS and "\\" or "/"
 
-local VERSION = "1.9.0"
+local VERSION = "1.9.1"
 local DEFAULT_PORT = 4466
 local python_setting = ""
 local hotkeys = {}

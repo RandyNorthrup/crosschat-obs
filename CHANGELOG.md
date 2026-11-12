@@ -4,7 +4,7 @@ All notable changes to CrossChat are listed here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
-## [Unreleased]
+## [1.9.1] - 2026-11-11
 
 ### Changed
 
@@ -388,8 +388,8 @@ First public release.
 - Overlays are served by the hub over `http://127.0.0.1`. OBS 33 blocks local-file overlays from reaching the hub.
 - Fonts are Windows' own: Segoe UI Variable and Cascadia Mono.
 
-[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.9.0...HEAD
-[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.9.0...HEAD
+[Unreleased]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.9.1...HEAD
+[1.9.1]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.7.2...v1.8.0
 [1.7.2]: https://github.com/RandyNorthrup/crosschat-obs/compare/v1.7.1...v1.7.2

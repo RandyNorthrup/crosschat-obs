@@ -100,7 +100,7 @@ Your own overlay pages get the chat as viewers see it: `msg`, `delete`, `purge`,
 
 | Request | Answer |
 |---|---|
-| `GET /version` | `{"version": "1.9.0"}` |
+| `GET /version` | `{"version": "1.9.1"}` |
 | `GET /settings` | `overlay` from `config.json` (the chat widget uses `overlay.platforms`) and the default theme's name |
 | `GET /themes` | `{"default", "themes": [...]}` |
 | `GET /themes/<name>` | One theme |
